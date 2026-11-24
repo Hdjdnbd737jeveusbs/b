@@ -76,7 +76,7 @@ final class SearchViewModel {
             return
         }
 
-        searchTask = Task { @MainActor [weak searchTask] in
+        searchTask = Task { @MainActor [weak self] in
             do {
                 try await Task.sleep(for: debounceInterval)
             } catch {
@@ -85,8 +85,8 @@ final class SearchViewModel {
             }
 
             // Double-check this is still the current task
-            guard !Task.isCancelled else { return }
-            await search()
+            guard let self, !Task.isCancelled else { return }
+            await self.search()
         }
     }
 }

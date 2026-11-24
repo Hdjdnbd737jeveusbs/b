@@ -1,8 +1,11 @@
 import SwiftUI
 import SwiftData
 import AVKit
+import AVFoundation
 #if canImport(KSPlayer)
 import KSPlayer
+#else
+import Combine
 #endif
 
 // MARK: - Player View
@@ -11,6 +14,10 @@ struct PlayerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State var viewModel: PlayerViewModel
+
+    #if canImport(KSPlayer)
+    @StateObject private var ksCoordinator = KSVideoPlayer.Coordinator()
+    #endif
 
     // MARK: - Init
 
@@ -80,6 +87,9 @@ struct PlayerView: View {
             )
         }
         .onDisappear {
+            #if canImport(KSPlayer)
+            ksCoordinator.resetPlayer()
+            #endif
             viewModel.cleanup()
         }
         .onPlayPauseCommand {
@@ -110,17 +120,50 @@ struct PlayerView: View {
     @ViewBuilder
     private var ksPlayerView: some View {
         if let url = viewModel.streamURL {
-            KSVideoPlayerView(url: url, options: playerOptions) { player in
-                // Configure player callbacks
-                player.delegate = KSPlayerDelegateAdapter(viewModel: viewModel)
-            }
-            .ignoresSafeArea()
+            KSVideoPlayer(coordinator: ksCoordinator, url: url, options: playerOptions)
+                .onStateChanged { layer, state in
+                    Task { @MainActor in
+                        handleKSPlayerState(layer: layer, state: state)
+                    }
+                }
+                .onPlay { currentTime, totalTime in
+                    Task { @MainActor in
+                        viewModel.onTimeUpdate(current: currentTime, total: totalTime)
+                    }
+                }
+                .onFinish { _, _ in
+                    Task { @MainActor in
+                        viewModel.isPlaying = false
+                        viewModel.saveProgress()
+                    }
+                }
+                .onBufferChanged { _, _ in }
+                .onChange(of: viewModel.isPlaying) { _, shouldPlay in
+                    guard let layer = ksCoordinator.playerLayer else { return }
+                    if shouldPlay && !layer.player.isPlaying {
+                        layer.play()
+                    } else if !shouldPlay && layer.player.isPlaying {
+                        layer.pause()
+                    }
+                }
+                .onChange(of: viewModel.seekTrigger) { _, targetTime in
+                    guard let targetTime else { return }
+                    ksCoordinator.seek(time: targetTime)
+                    viewModel.seekTrigger = nil
+                }
+                .onChange(of: viewModel.selectedAudioTrackId) { _, trackId in
+                    selectKSPlayerTrack(trackId: trackId, mediaType: .audio)
+                }
+                .onChange(of: viewModel.selectedSubtitleTrackId) { _, trackId in
+                    selectKSPlayerTrack(trackId: trackId, mediaType: .subtitle)
+                }
+                .ignoresSafeArea()
         }
     }
 
     private var playerOptions: KSOptions {
+        KSOptions.isAutoPlay = true
         let options = KSOptions()
-        options.isAutoPlay = true
         options.hardwareDecode = true
         options.isAccurateSeek = true
         // Start from resume point
@@ -128,6 +171,68 @@ struct PlayerView: View {
             options.startPlayTime = TimeInterval(viewModel.resumeFromTime)
         }
         return options
+    }
+
+    @MainActor
+    private func handleKSPlayerState(layer: KSPlayerLayer, state: KSPlayerState) {
+        switch state {
+        case .buffering:
+            viewModel.onBufferingStarted()
+        case .bufferFinished:
+            viewModel.onBufferingEnded()
+        case .readyToPlay:
+            let duration = layer.player.duration
+            loadKSPlayerTracks(from: layer.player)
+            viewModel.onPlaybackReady(duration: duration)
+        case .paused:
+            viewModel.isPlaying = false
+        case .playedToTheEnd:
+            viewModel.isPlaying = false
+            viewModel.saveProgress()
+        default:
+            break
+        }
+    }
+
+    @MainActor
+    private func loadKSPlayerTracks(from player: MediaPlayerProtocol) {
+        let audioTracks = player.tracks(mediaType: .audio).map { track in
+            MediaTrack(
+                id: Int(track.trackID),
+                name: track.name,
+                language: track.languageCode,
+                isDefault: track.isEnabled
+            )
+        }
+        viewModel.availableAudioTracks = audioTracks
+        if let activeAudio = audioTracks.first(where: { $0.isDefault }) {
+            viewModel.selectedAudioTrackId = activeAudio.id
+        }
+
+        let subTracks = player.tracks(mediaType: .subtitle).map { track in
+            MediaTrack(
+                id: Int(track.trackID),
+                name: track.name,
+                language: track.languageCode,
+                isDefault: track.isEnabled
+            )
+        }
+        viewModel.availableSubtitleTracks = subTracks
+    }
+
+    @MainActor
+    private func selectKSPlayerTrack(trackId: Int, mediaType: AVFoundation.AVMediaType) {
+        guard let player = ksCoordinator.playerLayer?.player else { return }
+        let tracks = player.tracks(mediaType: mediaType)
+        if trackId == -1 {
+            for track in tracks {
+                track.isEnabled = false
+            }
+            return
+        }
+        if let target = tracks.first(where: { Int($0.trackID) == trackId }) {
+            player.select(track: target)
+        }
     }
     #endif
 
@@ -248,6 +353,13 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
         } else {
             controller.player?.pause()
         }
+
+        if let targetTime = viewModel.seekTrigger {
+            controller.player?.seek(to: CMTime(seconds: targetTime, preferredTimescale: 1))
+            Task { @MainActor in
+                viewModel.seekTrigger = nil
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -256,47 +368,6 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
 
     class Coordinator {
         var cancellables = Set<AnyCancellable>()
-    }
-}
-
-import Combine
-#endif
-
-// MARK: - KSPlayer Delegate Adapter
-
-#if canImport(KSPlayer)
-final class KSPlayerDelegateAdapter: KSPlayerLayerDelegate {
-    private let viewModel: PlayerViewModel
-
-    init(viewModel: PlayerViewModel) {
-        self.viewModel = viewModel
-    }
-
-    func player(layer: KSPlayerLayer, state: KSPlayerState) {
-        Task { @MainActor in
-            switch state {
-            case .buffering:
-                viewModel.onBufferingStarted()
-            case .bufferFinished:
-                viewModel.onBufferingEnded()
-            case .readyToPlay:
-                let duration = layer.player.duration
-                viewModel.onPlaybackReady(duration: duration)
-            case .paused:
-                viewModel.isPlaying = false
-            case .playedToTheEnd:
-                viewModel.isPlaying = false
-                viewModel.saveProgress()
-            default:
-                break
-            }
-        }
-    }
-
-    func player(layer: KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
-        Task { @MainActor in
-            viewModel.onTimeUpdate(current: currentTime, total: totalTime)
-        }
     }
 }
 #endif

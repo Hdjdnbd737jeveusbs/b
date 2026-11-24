@@ -34,6 +34,7 @@ final class PlayerViewModel {
     var currentTime: Double = 0
     var totalDuration: Double = 0
     var playbackRate: Double = 1.0
+    var seekTrigger: Double?
 
     // MARK: - Track Selection
 
@@ -183,7 +184,9 @@ final class PlayerViewModel {
     }
 
     func seek(to time: Double) {
-        currentTime = max(0, min(time, totalDuration))
+        let target = max(0, min(time, totalDuration))
+        currentTime = target
+        seekTrigger = target
         resetHUDTimer()
     }
 

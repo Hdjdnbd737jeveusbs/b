@@ -312,9 +312,14 @@ final class SubtitleService {
             }
 
             // Attempt UTF-8, Windows-1256 (Arabic), or Latin-1
+            let windows1256Encoding = String.Encoding(
+                rawValue: CFStringConvertEncodingToNSStringEncoding(
+                    CFStringEncoding(CFStringEncodings.windowsArabic.rawValue)
+                )
+            )
             if let str = String(data: downloadData, encoding: .utf8) {
                 rawContent = str
-            } else if let str = String(data: downloadData, encoding: String.Encoding(rawValue: 0x80000456)) { // Windows-1256 Arabic
+            } else if let str = String(data: downloadData, encoding: windows1256Encoding) {
                 rawContent = str
             } else if let str = String(data: downloadData, encoding: .isoLatin1) {
                 rawContent = str
@@ -395,8 +400,8 @@ final class SubtitleService {
 
                     status = inflate(&stream, Z_NO_FLUSH)
                     let bytesWritten = chunkSize - Int(stream.avail_out)
-                    if bytesWritten > 0 {
-                        outputData.append(rawOut.bindMemory(to: UInt8.self).prefix(bytesWritten))
+                    if bytesWritten > 0, let outBytes = rawOut.baseAddress?.assumingMemoryBound(to: UInt8.self) {
+                        outputData.append(outBytes, count: bytesWritten)
                     }
                 }
 

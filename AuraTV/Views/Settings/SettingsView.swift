@@ -168,7 +168,7 @@ struct SettingsView: View {
                         VStack(spacing: 16) {
                             HStack(spacing: 20) {
                                 Button(action: {
-                                    if let data = viewModel.exportWatchHistory(context: modelContext) {
+                                    if viewModel.exportWatchHistory(context: modelContext) != nil {
                                         exportSuccess = true
                                     }
                                 }) {
