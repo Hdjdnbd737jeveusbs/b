@@ -6,6 +6,7 @@ struct SeriesView: View {
     @State private var viewModel = SeriesViewModel()
     @State private var focusedSeries: TMDBSeries?
     @FocusState private var focusedCategory: SeriesCategory?
+    @FocusState private var focusedSeriesId: Int?
 
     private let columns = [
         GridItem(.adaptive(minimum: 360, maximum: 400), spacing: 28)
@@ -28,15 +29,17 @@ struct SeriesView: View {
                     LazyVGrid(columns: columns, spacing: 32) {
                         ForEach(viewModel.series(for: viewModel.selectedCategory)) { series in
                             SeriesCardView(series: series)
-                                .onHover { isHovered in
-                                    if isHovered { focusedSeries = series }
-                                }
+                                .focused($focusedSeriesId, equals: series.id)
                         }
                     }
                     .padding(.horizontal, 50)
                     .padding(.bottom, 60)
                 }
             }
+        }
+        .onChange(of: focusedSeriesId) { _, newId in
+            guard let newId else { return }
+            focusedSeries = viewModel.series(for: viewModel.selectedCategory).first { $0.id == newId }
         }
         .task {
             await viewModel.loadSeries()

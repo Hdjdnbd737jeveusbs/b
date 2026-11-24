@@ -6,6 +6,7 @@ struct MoviesView: View {
     @State private var viewModel = MoviesViewModel()
     @State private var focusedMovie: TMDBMovie?
     @FocusState private var focusedCategory: MovieCategory?
+    @FocusState private var focusedMovieId: Int?
 
     private let columns = [
         GridItem(.adaptive(minimum: 200, maximum: 230), spacing: 28)
@@ -28,15 +29,17 @@ struct MoviesView: View {
                     LazyVGrid(columns: columns, spacing: 32) {
                         ForEach(viewModel.movies(for: viewModel.selectedCategory)) { movie in
                             PosterCardView(movie: movie)
-                                .onHover { isHovered in
-                                    if isHovered { focusedMovie = movie }
-                                }
+                                .focused($focusedMovieId, equals: movie.id)
                         }
                     }
                     .padding(.horizontal, 50)
                     .padding(.bottom, 60)
                 }
             }
+        }
+        .onChange(of: focusedMovieId) { _, newId in
+            guard let newId else { return }
+            focusedMovie = viewModel.movies(for: viewModel.selectedCategory).first { $0.id == newId }
         }
         .task {
             await viewModel.loadMovies()
