@@ -1,0 +1,565 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1001 /* AuraTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001 /* AuraTVApp.swift */; };
+		1002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002 /* ContentView.swift */; };
+		1003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2003 /* Assets.xcassets */; };
+		1004 /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2004 /* Color+Theme.swift */; };
+		1005 /* View+Focus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2005 /* View+Focus.swift */; };
+		1006 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2006 /* AppSettings.swift */; };
+		1007 /* TMDBModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2007 /* TMDBModels.swift */; };
+		1008 /* WatchHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2008 /* WatchHistory.swift */; };
+		1009 /* WatchlistItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2009 /* WatchlistItem.swift */; };
+		1010 /* TMDBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2010 /* TMDBService.swift */; };
+		1011 /* DetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2011 /* DetailViewModel.swift */; };
+		1012 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2012 /* HomeViewModel.swift */; };
+		1013 /* MoviesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2013 /* MoviesViewModel.swift */; };
+		1014 /* SearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2014 /* SearchViewModel.swift */; };
+		1015 /* SeriesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2015 /* SeriesViewModel.swift */; };
+		1016 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2016 /* SettingsViewModel.swift */; };
+		1017 /* BadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2017 /* BadgeView.swift */; };
+		1018 /* CastCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2018 /* CastCardView.swift */; };
+		1019 /* EpisodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2019 /* EpisodeCardView.swift */; };
+		1020 /* MediaRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020 /* MediaRowView.swift */; };
+		1021 /* PosterCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2021 /* PosterCardView.swift */; };
+		1022 /* SeriesCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2022 /* SeriesCardView.swift */; };
+		1023 /* CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2023 /* CollectionsView.swift */; };
+		1024 /* MovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2024 /* MovieDetailView.swift */; };
+		1025 /* SeriesDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2025 /* SeriesDetailView.swift */; };
+		1026 /* ContinueWatchingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2026 /* ContinueWatchingRow.swift */; };
+		1027 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2027 /* HomeView.swift */; };
+		1028 /* SpotlightCarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2028 /* SpotlightCarouselView.swift */; };
+		1029 /* MoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2029 /* MoviesView.swift */; };
+		1030 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030 /* SearchView.swift */; };
+		1031 /* SeriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2031 /* SeriesView.swift */; };
+		1032 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2032 /* SettingsView.swift */; };
+		1033 /* AIOStreamsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2034 /* AIOStreamsModels.swift */; };
+		1034 /* AIOStreamsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2035 /* AIOStreamsService.swift */; };
+		1035 /* PlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2036 /* PlayerViewModel.swift */; };
+		1036 /* StreamPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2037 /* StreamPickerSheet.swift */; };
+		1037 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2038 /* PlayerView.swift */; };
+		1038 /* LoadingOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2039 /* LoadingOverlayView.swift */; };
+		1039 /* PlayerHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2040 /* PlayerHUDView.swift */; };
+		1040 /* SubtitleModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2041 /* SubtitleModels.swift */; };
+		1041 /* SubtitleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2042 /* SubtitleService.swift */; };
+		1042 /* SubtitleProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2043 /* SubtitleProcessor.swift */; };
+		1043 /* SubtitleSyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2044 /* SubtitleSyncEngine.swift */; };
+		1044 /* SubtitleOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2045 /* SubtitleOverlayView.swift */; };
+		1045 /* SubtitleSyncSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2046 /* SubtitleSyncSheet.swift */; };
+		1046 /* SubtitleStyleSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2047 /* SubtitleStyleSheet.swift */; };
+		B003 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* KSPlayer */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0001 /* AuraTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AuraTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2001 /* AuraTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuraTVApp.swift; sourceTree = "<group>"; };
+		2002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		2003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2004 /* Color+Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Theme.swift"; sourceTree = "<group>"; };
+		2005 /* View+Focus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Focus.swift"; sourceTree = "<group>"; };
+		2006 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		2007 /* TMDBModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBModels.swift; sourceTree = "<group>"; };
+		2008 /* WatchHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchHistory.swift; sourceTree = "<group>"; };
+		2009 /* WatchlistItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistItem.swift; sourceTree = "<group>"; };
+		2010 /* TMDBService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBService.swift; sourceTree = "<group>"; };
+		2011 /* DetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailViewModel.swift; sourceTree = "<group>"; };
+		2012 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
+		2013 /* MoviesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesViewModel.swift; sourceTree = "<group>"; };
+		2014 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
+		2015 /* SeriesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViewModel.swift; sourceTree = "<group>"; };
+		2016 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
+		2017 /* BadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeView.swift; sourceTree = "<group>"; };
+		2018 /* CastCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CastCardView.swift; sourceTree = "<group>"; };
+		2019 /* EpisodeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeCardView.swift; sourceTree = "<group>"; };
+		2020 /* MediaRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaRowView.swift; sourceTree = "<group>"; };
+		2021 /* PosterCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosterCardView.swift; sourceTree = "<group>"; };
+		2022 /* SeriesCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCardView.swift; sourceTree = "<group>"; };
+		2023 /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionsView.swift; sourceTree = "<group>"; };
+		2024 /* MovieDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieDetailView.swift; sourceTree = "<group>"; };
+		2025 /* SeriesDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesDetailView.swift; sourceTree = "<group>"; };
+		2026 /* ContinueWatchingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueWatchingRow.swift; sourceTree = "<group>"; };
+		2027 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		2028 /* SpotlightCarouselView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightCarouselView.swift; sourceTree = "<group>"; };
+		2029 /* MoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesView.swift; sourceTree = "<group>"; };
+		2030 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		2031 /* SeriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesView.swift; sourceTree = "<group>"; };
+		2032 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2033 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2034 /* AIOStreamsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIOStreamsModels.swift; sourceTree = "<group>"; };
+		2035 /* AIOStreamsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIOStreamsService.swift; sourceTree = "<group>"; };
+		2036 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
+		2037 /* StreamPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamPickerSheet.swift; sourceTree = "<group>"; };
+		2038 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		2039 /* LoadingOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingOverlayView.swift; sourceTree = "<group>"; };
+		2040 /* PlayerHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerHUDView.swift; sourceTree = "<group>"; };
+		2041 /* SubtitleModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleModels.swift; sourceTree = "<group>"; };
+		2042 /* SubtitleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleService.swift; sourceTree = "<group>"; };
+		2043 /* SubtitleProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleProcessor.swift; sourceTree = "<group>"; };
+		2044 /* SubtitleSyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSyncEngine.swift; sourceTree = "<group>"; };
+		2045 /* SubtitleOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlayView.swift; sourceTree = "<group>"; };
+		2046 /* SubtitleSyncSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSyncSheet.swift; sourceTree = "<group>"; };
+		2047 /* SubtitleStyleSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleSheet.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B003 /* KSPlayer in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4000 /* Main Group */ = {
+			isa = PBXGroup;
+			children = (
+				4001 /* AuraTV */,
+				4007 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4001 /* AuraTV */ = {
+			isa = PBXGroup;
+			children = (
+				2001 /* AuraTVApp.swift */,
+				2002 /* ContentView.swift */,
+				2033 /* Info.plist */,
+				2003 /* Assets.xcassets */,
+				4002 /* Components */,
+				4003 /* Extensions */,
+				4004 /* Models */,
+				4005 /* Services */,
+				4006 /* ViewModels */,
+				4008 /* Views */,
+			);
+			path = AuraTV;
+			sourceTree = "<group>";
+		};
+		4002 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				2017 /* BadgeView.swift */,
+				2018 /* CastCardView.swift */,
+				2019 /* EpisodeCardView.swift */,
+				2020 /* MediaRowView.swift */,
+				2021 /* PosterCardView.swift */,
+				2022 /* SeriesCardView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		4003 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				2004 /* Color+Theme.swift */,
+				2005 /* View+Focus.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		4004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2006 /* AppSettings.swift */,
+				2007 /* TMDBModels.swift */,
+				2008 /* WatchHistory.swift */,
+				2009 /* WatchlistItem.swift */,
+				2034 /* AIOStreamsModels.swift */,
+				2041 /* SubtitleModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		4005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				2010 /* TMDBService.swift */,
+				2035 /* AIOStreamsService.swift */,
+				2042 /* SubtitleService.swift */,
+				2043 /* SubtitleProcessor.swift */,
+				2044 /* SubtitleSyncEngine.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		4006 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				2011 /* DetailViewModel.swift */,
+				2012 /* HomeViewModel.swift */,
+				2013 /* MoviesViewModel.swift */,
+				2014 /* SearchViewModel.swift */,
+				2015 /* SeriesViewModel.swift */,
+				2016 /* SettingsViewModel.swift */,
+				2036 /* PlayerViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		4007 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0001 /* AuraTV.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4008 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				4009 /* Home */,
+				4010 /* Movies */,
+				4011 /* Series */,
+				4012 /* Detail */,
+				4013 /* Search */,
+				4014 /* Collections */,
+				4015 /* Settings */,
+				4016 /* Player */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		4009 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				2027 /* HomeView.swift */,
+				2028 /* SpotlightCarouselView.swift */,
+				2026 /* ContinueWatchingRow.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		4010 /* Movies */ = {
+			isa = PBXGroup;
+			children = (
+				2029 /* MoviesView.swift */,
+			);
+			path = Movies;
+			sourceTree = "<group>";
+		};
+		4011 /* Series */ = {
+			isa = PBXGroup;
+			children = (
+				2031 /* SeriesView.swift */,
+			);
+			path = Series;
+			sourceTree = "<group>";
+		};
+		4012 /* Detail */ = {
+			isa = PBXGroup;
+			children = (
+				2024 /* MovieDetailView.swift */,
+				2025 /* SeriesDetailView.swift */,
+			);
+			path = Detail;
+			sourceTree = "<group>";
+		};
+		4013 /* Search */ = {
+			isa = PBXGroup;
+			children = (
+				2030 /* SearchView.swift */,
+			);
+			path = Search;
+			sourceTree = "<group>";
+		};
+		4014 /* Collections */ = {
+			isa = PBXGroup;
+			children = (
+				2023 /* CollectionsView.swift */,
+			);
+			path = Collections;
+			sourceTree = "<group>";
+		};
+		4015 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				2032 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		4016 /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				2037 /* StreamPickerSheet.swift */,
+				2038 /* PlayerView.swift */,
+				2039 /* LoadingOverlayView.swift */,
+				2040 /* PlayerHUDView.swift */,
+				2045 /* SubtitleOverlayView.swift */,
+				2046 /* SubtitleSyncSheet.swift */,
+				2047 /* SubtitleStyleSheet.swift */,
+			);
+			path = Player;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5001 /* AuraTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6001 /* Build configuration list for PBXNativeTarget "AuraTV" */;
+			buildPhases = (
+				7001 /* Sources */,
+				3001 /* Frameworks */,
+				8001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AuraTV;
+			packageProductDependencies = (
+				B002 /* KSPlayer */,
+			);
+			productName = AuraTV;
+			productReference = 0001 /* AuraTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					5001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 6000 /* Build configuration list for PBXProject "AuraTV" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 4000 /* Main Group */;
+			packageReferences = (
+				B001 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+			);
+			productRefGroup = 4007 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5001 /* AuraTV */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1003 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		7001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1001 /* AuraTVApp.swift in Sources */,
+				1002 /* ContentView.swift in Sources */,
+				1004 /* Color+Theme.swift in Sources */,
+				1005 /* View+Focus.swift in Sources */,
+				1006 /* AppSettings.swift in Sources */,
+				1007 /* TMDBModels.swift in Sources */,
+				1008 /* WatchHistory.swift in Sources */,
+				1009 /* WatchlistItem.swift in Sources */,
+				1010 /* TMDBService.swift in Sources */,
+				1011 /* DetailViewModel.swift in Sources */,
+				1012 /* HomeViewModel.swift in Sources */,
+				1013 /* MoviesViewModel.swift in Sources */,
+				1014 /* SearchViewModel.swift in Sources */,
+				1015 /* SeriesViewModel.swift in Sources */,
+				1016 /* SettingsViewModel.swift in Sources */,
+				1017 /* BadgeView.swift in Sources */,
+				1018 /* CastCardView.swift in Sources */,
+				1019 /* EpisodeCardView.swift in Sources */,
+				1020 /* MediaRowView.swift in Sources */,
+				1021 /* PosterCardView.swift in Sources */,
+				1022 /* SeriesCardView.swift in Sources */,
+				1023 /* CollectionsView.swift in Sources */,
+				1024 /* MovieDetailView.swift in Sources */,
+				1025 /* SeriesDetailView.swift in Sources */,
+				1026 /* ContinueWatchingRow.swift in Sources */,
+				1027 /* HomeView.swift in Sources */,
+				1028 /* SpotlightCarouselView.swift in Sources */,
+				1029 /* MoviesView.swift in Sources */,
+				1030 /* SearchView.swift in Sources */,
+				1031 /* SeriesView.swift in Sources */,
+				1032 /* SettingsView.swift in Sources */,
+				1033 /* AIOStreamsModels.swift in Sources */,
+				1034 /* AIOStreamsService.swift in Sources */,
+				1035 /* PlayerViewModel.swift in Sources */,
+				1036 /* StreamPickerSheet.swift in Sources */,
+				1037 /* PlayerView.swift in Sources */,
+				1038 /* LoadingOverlayView.swift in Sources */,
+				1039 /* PlayerHUDView.swift in Sources */,
+				1040 /* SubtitleModels.swift in Sources */,
+				1041 /* SubtitleService.swift in Sources */,
+				1042 /* SubtitleProcessor.swift in Sources */,
+				1043 /* SubtitleSyncEngine.swift in Sources */,
+				1044 /* SubtitleOverlayView.swift in Sources */,
+				1045 /* SubtitleSyncSheet.swift in Sources */,
+				1046 /* SubtitleStyleSheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		9001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		9002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = "wholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
+		9003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AuraTV/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.auratv.AuraTV;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		9004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AuraTV/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.auratv.AuraTV;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6000 /* Build configuration list for PBXProject "AuraTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9001 /* Debug */,
+				9002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6001 /* Build configuration list for PBXNativeTarget "AuraTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9003 /* Debug */,
+				9004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B001 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B002 /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B001 /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+	};
+	rootObject = 0000 /* Project object */;
+}

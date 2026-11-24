@@ -1,0 +1,37 @@
+name: tvOS Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build AuraTV (tvOS)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Xcode environment & schemes
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcodebuild -project AuraTV.xcodeproj -list
+
+      - name: Resolve Swift Package Manager dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project AuraTV.xcodeproj \
+            -scheme AuraTV \
+            -destination 'generic/platform=tvOS'
+
+      - name: Build AuraTV for tvOS
+        run: |
+          xcodebuild build \
+            -project AuraTV.xcodeproj \
+            -scheme AuraTV \
+            -destination 'generic/platform=tvOS' \
+            CODE_SIGNING_ALLOWED=NO
