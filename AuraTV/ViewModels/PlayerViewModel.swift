@@ -439,6 +439,7 @@ final class PlayerViewModel {
 
     // MARK: - Cleanup
 
+    @MainActor
     func cleanup() {
         hudHideTimer?.invalidate()
         hudHideTimer = nil
