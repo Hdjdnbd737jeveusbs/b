@@ -4,7 +4,7 @@ import SwiftData
 @Model
 class AppSettings {
     @Attribute(.unique) var id: String = "default"
-    var tmdbApiKey: String = ""
+    var tmdbApiKey: String = "d767cb12181edaa01840442c704329be"
     var aioStreamsUrl: String = ""
     var preferredQuality: String = "4K"
     var preferredLanguage: String = "en"
@@ -27,7 +27,7 @@ class AppSettings {
 
     init(
         id: String = "default",
-        tmdbApiKey: String = "",
+        tmdbApiKey: String = "d767cb12181edaa01840442c704329be",
         aioStreamsUrl: String = "",
         preferredQuality: String = "4K",
         preferredLanguage: String = "en",

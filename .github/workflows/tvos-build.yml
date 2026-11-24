@@ -138,50 +138,45 @@ jobs:
             || /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
           echo "Bundle ID: $BUNDLE_ID"
 
-          # Launch the app
-          xcrun simctl launch "$DEVICE_UDID" "$BUNDLE_ID"
-          sleep 5
+          # Helper: navigate down in the vertical sidebar and select a tab, then screenshot.
+          # Uses "booted" alias so we don't need to track UDID per command.
+          nav_and_shoot() {
+            local label="$1"
+            local file="$2"
+            xcrun simctl io booted sendkey down 2>/dev/null || true
+            sleep 1
+            xcrun simctl io booted sendkey select 2>/dev/null || true
+            # Wait for TMDB images to load
+            sleep 4
+            xcrun simctl io booted screenshot "$file"
+            echo "Captured $label -> $file"
+          }
 
-          # Screenshot 1 — Home tab (default landing screen)
-          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/01_Home.png
-          echo "Captured Home screenshot"
-          sleep 1
+          # Launch the app and wait for TMDB home posters to load
+          xcrun simctl launch booted "$BUNDLE_ID"
+          sleep 6
 
-          # Navigate to Movies tab (press right arrow via HID events)
-          # tvOS remote navigation: use simctl io keyboard / AppleScript
-          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
-          sleep 2
-          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
-          sleep 3
-          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/02_Movies.png
-          echo "Captured Movies screenshot"
-          sleep 1
+          # 01 — Home tab (the default landing screen, already selected on launch)
+          xcrun simctl io booted screenshot screenshots/01_Home.png
+          echo "Captured Home -> screenshots/01_Home.png"
 
-          # Navigate to Series tab
-          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
-          sleep 2
-          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
-          sleep 3
-          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/03_Series.png
-          echo "Captured Series screenshot"
-          sleep 1
+          # The vertical sidebar order: Home → Search → Series → Movies → Collections → Settings
+          # We navigate down from Home through each entry in sequence.
 
-          # Navigate to Search tab
-          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
-          sleep 2
-          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
-          sleep 3
-          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/04_Search.png
-          echo "Captured Search screenshot"
-          sleep 1
+          # 02 — Search (1 down from Home)
+          nav_and_shoot "Search" screenshots/02_Search.png
 
-          # Navigate to Settings tab
-          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
-          sleep 2
-          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
-          sleep 3
-          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/05_Settings.png
-          echo "Captured Settings screenshot"
+          # 03 — Series (2 down from Home)
+          nav_and_shoot "Series" screenshots/03_Series.png
+
+          # 04 — Movies (3 down from Home)
+          nav_and_shoot "Movies" screenshots/04_Movies.png
+
+          # 05 — Collections (4 down from Home)
+          nav_and_shoot "Collections" screenshots/05_Collections.png
+
+          # 06 — Settings (5 down from Home)
+          nav_and_shoot "Settings" screenshots/06_Settings.png
 
           echo "All screenshots captured:"
           ls -lh screenshots/

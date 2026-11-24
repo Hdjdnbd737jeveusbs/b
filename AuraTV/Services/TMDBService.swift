@@ -44,7 +44,8 @@ final class TMDBService {
     private let imageBaseURL = "https://image.tmdb.org/t/p/"
 
     /// The API key used for all requests. Set from AppSettings via the UI layer.
-    var apiKey: String = ""
+    /// Falls back to the built-in default key so the app works out of the box.
+    var apiKey: String = "d767cb12181edaa01840442c704329be"
 
     // MARK: Private
 
