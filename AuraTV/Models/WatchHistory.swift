@@ -39,12 +39,12 @@ class WatchHistory {
         }
     }
 
-    // MARK: - Convenience Init
+    // MARK: - Init
 
-    convenience init(
-        tmdbId: Int,
-        mediaType: String,
-        title: String,
+    init(
+        tmdbId: Int = 0,
+        mediaType: String = "movie",
+        title: String = "",
         posterPath: String? = nil,
         backdropPath: String? = nil,
         currentTime: Double = 0,
@@ -56,7 +56,6 @@ class WatchHistory {
         lastWatched: Date = Date(),
         isCompleted: Bool = false
     ) {
-        self.init()
         self.tmdbId = tmdbId
         self.mediaType = mediaType
         self.title = title

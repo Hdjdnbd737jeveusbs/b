@@ -23,9 +23,9 @@ class AppSettings {
     var fixReversedPunctuation: Bool = true
     var autoSyncSubtitles: Bool = false
 
-    // MARK: - Convenience Init
+    // MARK: - Init
 
-    convenience init(
+    init(
         id: String = "default",
         tmdbApiKey: String = "",
         aioStreamsUrl: String = "",
@@ -44,7 +44,6 @@ class AppSettings {
         fixReversedPunctuation: Bool = true,
         autoSyncSubtitles: Bool = false
     ) {
-        self.init()
         self.id = id
         self.tmdbApiKey = tmdbApiKey
         self.aioStreamsUrl = aioStreamsUrl

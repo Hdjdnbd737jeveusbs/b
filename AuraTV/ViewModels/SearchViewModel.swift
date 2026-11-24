@@ -76,9 +76,10 @@ final class SearchViewModel {
             return
         }
 
+        let delay = debounceInterval
         searchTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(for: debounceInterval)
+                try await Task.sleep(for: delay)
             } catch {
                 // Task was cancelled during debounce — do nothing
                 return

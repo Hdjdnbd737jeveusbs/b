@@ -10,17 +10,16 @@ class WatchlistItem {
     var backdropPath: String?
     var addedDate: Date = Date()
 
-    // MARK: - Convenience Init
+    // MARK: - Init
 
-    convenience init(
-        tmdbId: Int,
-        mediaType: String,
-        title: String,
+    init(
+        tmdbId: Int = 0,
+        mediaType: String = "movie",
+        title: String = "",
         posterPath: String? = nil,
         backdropPath: String? = nil,
         addedDate: Date = Date()
     ) {
-        self.init()
         self.tmdbId = tmdbId
         self.mediaType = mediaType
         self.title = title
