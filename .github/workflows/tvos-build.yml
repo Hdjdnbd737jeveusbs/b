@@ -35,3 +35,161 @@ jobs:
             -scheme AuraTV \
             -destination 'generic/platform=tvOS' \
             CODE_SIGNING_ALLOWED=NO
+
+  screenshots:
+    name: Simulator Screenshots (tvOS)
+    runs-on: macos-15
+    timeout-minutes: 45
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Swift Package Manager dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project AuraTV.xcodeproj \
+            -scheme AuraTV \
+            -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
+
+      - name: Build AuraTV for tvOS Simulator
+        run: |
+          xcodebuild build \
+            -project AuraTV.xcodeproj \
+            -scheme AuraTV \
+            -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Find simulator runtime & boot Apple TV 4K
+        run: |
+          # List available tvOS simulator runtimes
+          xcrun simctl list runtimes
+          xcrun simctl list devices
+
+          # Pick the first available Apple TV 4K simulator device
+          DEVICE_UDID=$(xcrun simctl list devices available -j \
+            | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          for runtime, devices in d['devices'].items():
+              if 'tvOS' not in runtime:
+                  continue
+              for dev in devices:
+                  if 'Apple TV 4K' in dev['name'] and dev['isAvailable']:
+                      print(dev['udid'])
+                      exit()
+          " 2>/dev/null || echo "")
+
+          if [ -z "$DEVICE_UDID" ]; then
+            # Create one if none found
+            RUNTIME=$(xcrun simctl list runtimes -j \
+              | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          for r in reversed(d['runtimes']):
+              if 'tvOS' in r.get('name','') and r.get('isAvailable', False):
+                  print(r['identifier'])
+                  exit()
+          ")
+            echo "Creating Apple TV 4K simulator on runtime $RUNTIME"
+            DEVICE_UDID=$(xcrun simctl create 'AuraTV-CI-TV' \
+              'com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K' \
+              "$RUNTIME")
+          fi
+
+          echo "Using simulator UDID: $DEVICE_UDID"
+          echo "DEVICE_UDID=$DEVICE_UDID" >> $GITHUB_ENV
+
+          # Boot the simulator
+          xcrun simctl boot "$DEVICE_UDID" || true
+          # Wait until booted
+          until xcrun simctl list devices | grep "$DEVICE_UDID" | grep -q Booted; do
+            echo "Waiting for simulator to boot..."
+            sleep 3
+          done
+          echo "Simulator booted."
+
+      - name: Locate built .app bundle
+        run: |
+          APP_PATH=$(find build/DerivedData -name 'AuraTV.app' \
+            -path '*iphonesimulator*' -o \
+            -name 'AuraTV.app' -path '*appletvsimulator*' \
+            | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find build/DerivedData -name 'AuraTV.app' | head -n 1)
+          fi
+          echo "App bundle: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+      - name: Install AuraTV on simulator
+        run: |
+          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+
+      - name: Launch AuraTV and capture screenshots
+        run: |
+          mkdir -p screenshots
+
+          # Get the app's bundle ID from Info.plist
+          BUNDLE_ID=$(defaults read "$APP_PATH/Info.plist" CFBundleIdentifier 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
+          echo "Bundle ID: $BUNDLE_ID"
+
+          # Launch the app
+          xcrun simctl launch "$DEVICE_UDID" "$BUNDLE_ID"
+          sleep 5
+
+          # Screenshot 1 — Home tab (default landing screen)
+          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/01_Home.png
+          echo "Captured Home screenshot"
+          sleep 1
+
+          # Navigate to Movies tab (press right arrow via HID events)
+          # tvOS remote navigation: use simctl io keyboard / AppleScript
+          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
+          sleep 2
+          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
+          sleep 3
+          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/02_Movies.png
+          echo "Captured Movies screenshot"
+          sleep 1
+
+          # Navigate to Series tab
+          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
+          sleep 2
+          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
+          sleep 3
+          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/03_Series.png
+          echo "Captured Series screenshot"
+          sleep 1
+
+          # Navigate to Search tab
+          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
+          sleep 2
+          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
+          sleep 3
+          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/04_Search.png
+          echo "Captured Search screenshot"
+          sleep 1
+
+          # Navigate to Settings tab
+          xcrun simctl io "$DEVICE_UDID" sendkey right 2>/dev/null || true
+          sleep 2
+          xcrun simctl io "$DEVICE_UDID" sendkey select 2>/dev/null || true
+          sleep 3
+          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/05_Settings.png
+          echo "Captured Settings screenshot"
+
+          echo "All screenshots captured:"
+          ls -lh screenshots/
+
+      - name: Upload screenshots as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AuraTV-Screenshots
+          path: screenshots/
+          if-no-files-found: error
+          retention-days: 30
