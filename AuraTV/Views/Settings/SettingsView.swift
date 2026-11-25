@@ -373,7 +373,7 @@ struct SettingsView: View {
             return [
                 SummaryTileItem(label: "Version", value: "1.0.0"),
                 SummaryTileItem(label: "Platform", value: "tvOS 18"),
-                SummaryTileItem(label: "Engine", value: "KSPlayer + FFmpeg"),
+                SummaryTileItem(label: "Engine", value: "AetherEngine"),
                 SummaryTileItem(label: "Design", value: "Dark Cinema")
             ]
         }
@@ -650,7 +650,7 @@ struct SettingsView: View {
         case .about:
             infoRow(title: "Application", value: "AuraTV 1.0.0")
             infoRow(title: "Target Platform", value: "Apple TV 4K (tvOS 18+)")
-            infoRow(title: "Media Playback", value: "KSPlayer (4K HDR10+ / Dolby Vision)")
+            infoRow(title: "Media Playback", value: "AetherEngine (4K HDR10+ / Dolby Vision / TrueHD)")
             infoRow(title: "Metadata & Streams", value: "TMDB v3 • AIOStreams • Wyzie / SubDL")
         }
     }

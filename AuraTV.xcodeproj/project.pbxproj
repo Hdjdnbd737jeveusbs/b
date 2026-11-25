@@ -57,7 +57,7 @@
 		1048 /* SeriesPosterCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2049 /* SeriesPosterCardView.swift */; };
 		1049 /* CustomArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050 /* CustomArtwork.swift */; };
 		1050 /* ChangeArtworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2051 /* ChangeArtworkView.swift */; };
-		B003 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* KSPlayer */; };
+		B003 /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* AetherEngine */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -120,7 +120,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B003 /* KSPlayer in Frameworks */,
+				B003 /* AetherEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -330,7 +330,7 @@
 			);
 			name = AuraTV;
 			packageProductDependencies = (
-				B002 /* KSPlayer */,
+				B002 /* AetherEngine */,
 			);
 			productName = AuraTV;
 			productReference = 0001 /* AuraTV.app */;
@@ -361,7 +361,7 @@
 			);
 			mainGroup = 4000 /* Main Group */;
 			packageReferences = (
-				B001 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				B001 /* XCRemoteSwiftPackageReference "AetherEngine" */,
 			);
 			productRefGroup = 4007 /* Products */;
 			projectDirPath = "";
@@ -558,21 +558,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		B001 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+		B001 /* XCRemoteSwiftPackageReference "AetherEngine" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
+			repositoryURL = "https://github.com/superuser404notfound/AetherEngine.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.3.0;
+				minimumVersion = 7.47.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B002 /* KSPlayer */ = {
+		B002 /* AetherEngine */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B001 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
+			package = B001 /* XCRemoteSwiftPackageReference "AetherEngine" */;
+			productName = AetherEngine;
 		};
 /* End XCSwiftPackageProductDependency section */
 

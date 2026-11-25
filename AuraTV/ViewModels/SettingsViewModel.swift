@@ -45,7 +45,7 @@ final class SettingsViewModel {
     // Playback
     var resumePlaybackBehavior: String = "Ask"
     var nextEpisodeBehavior: String = "On · 10 s"
-    var playerEngineName: String = "KSPlayer"
+    var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
 
     // Skip Intro & Credits
@@ -83,7 +83,7 @@ final class SettingsViewModel {
     static let moviesLayoutOptions = ["Grid", "List"]
     static let resumeOptions = ["Ask", "Resume", "Start Over"]
     static let nextEpisodeOptions = ["On · 10 s", "On · 5 s", "Off"]
-    static let playerEngineOptions = ["KSPlayer", "AVPlayer"]
+    static let playerEngineOptions = ["AetherEngine", "AVPlayer"]
     static let audioModeOptions = ["Dolby Digital Plus 5.1", "Stereo"]
     static let subtitleAutoOptions = ["Preferred Languages", "Always On", "Off"]
     static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
@@ -142,7 +142,7 @@ final class SettingsViewModel {
 
                 resumePlaybackBehavior = settings.resumePlaybackBehavior
                 nextEpisodeBehavior = settings.nextEpisodeBehavior
-                playerEngineName = settings.playerEngineName
+                playerEngineName = Self.playerEngineOptions.contains(settings.playerEngineName) ? settings.playerEngineName : "AetherEngine"
                 audioOutputMode = settings.audioOutputMode
 
                 skipIntroMode = settings.skipIntroMode

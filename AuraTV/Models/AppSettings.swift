@@ -28,7 +28,7 @@ class AppSettings {
     // MARK: - Playback Settings
     var resumePlaybackBehavior: String = "Ask"
     var nextEpisodeBehavior: String = "On · 10 s"
-    var playerEngineName: String = "KSPlayer"
+    var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
 
     // MARK: - Skip Intro & Credits
@@ -73,7 +73,7 @@ class AppSettings {
         secondarySubtitleLanguage: String = "en",
         resumePlaybackBehavior: String = "Ask",
         nextEpisodeBehavior: String = "On · 10 s",
-        playerEngineName: String = "KSPlayer",
+        playerEngineName: String = "AetherEngine",
         audioOutputMode: String = "Dolby Digital Plus 5.1",
         skipIntroMode: String = "Skip After Delay",
         skipRecapMode: String = "Skip After Delay",

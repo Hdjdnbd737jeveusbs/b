@@ -54,6 +54,10 @@ struct AuraTVApp: App {
                     settings.tmdbApiKey = TMDBService.shared.apiKey
                     try? context.save()
                 }
+                if !SettingsViewModel.playerEngineOptions.contains(settings.playerEngineName) {
+                    settings.playerEngineName = "AetherEngine"
+                    try? context.save()
+                }
                 AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
                 SubtitleService.shared.subdlApiKey = settings.subdlApiKey
                 SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey

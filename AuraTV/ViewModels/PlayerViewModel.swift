@@ -1,9 +1,7 @@
 import Foundation
 import SwiftData
 import Observation
-#if canImport(KSPlayer)
-import KSPlayer
-#endif
+import CoreGraphics
 
 // MARK: - Audio/Subtitle Track Model
 
@@ -36,6 +34,10 @@ final class PlayerViewModel {
     var playbackRate: Double = 1.0
     var seekTrigger: Double?
     var isPreviewMode: Bool = false
+    var playerEngineName: String = "AetherEngine"
+    var audioOutputMode: String = "Dolby Digital Plus 5.1"
+    var playbackError: String?
+    var videoDynamicRangeBadge: String?
 
     // MARK: - Streams & Quality
 
@@ -68,6 +70,8 @@ final class PlayerViewModel {
     var selectedExternalSubtitle: SubtitleTrackItem?
     var activeCues: [SubtitleCue] = []
     var currentSubtitleCue: SubtitleCue?
+    var activeEmbeddedTextCue: SubtitleCue?
+    var currentBitmapSubtitle: CGImage?
     var referenceEmbeddedCues: [SubtitleCue] = []
     var subtitleSyncSettings: SubtitleSyncSettings = .defaultSettings
     var subtitleStyle: SubtitleStyle = .defaultStyle
@@ -241,6 +245,13 @@ final class PlayerViewModel {
         self.onPlayNextEpisode = onPlayNextEpisode
         self.isBuffering = true
         self.isPlaying = false
+        self.playbackError = nil
+        self.videoDynamicRangeBadge = nil
+        self.activeEmbeddedTextCue = nil
+        self.currentBitmapSubtitle = nil
+        self.availableAudioTracks = []
+        self.availableSubtitleTracks = []
+        self.selectedSubtitleTrackId = -1
         self.currentTime = resumeFrom
         self.skipIntroDismissed = false
         self.skipCreditsDismissed = false
@@ -380,6 +391,9 @@ final class PlayerViewModel {
 
     func switchStream(_ stream: StremioStream) {
         guard let urlStr = stream.url, let url = URL(string: urlStr) else { return }
+        playbackError = nil
+        activeEmbeddedTextCue = nil
+        currentBitmapSubtitle = nil
         selectedStream = stream
         resumeFromTime = currentTime
         streamURL = url
@@ -432,6 +446,49 @@ final class PlayerViewModel {
 
     func selectSubtitleTrack(_ trackId: Int) {
         selectedSubtitleTrackId = trackId
+        if trackId < 0 {
+            activeEmbeddedTextCue = nil
+            currentBitmapSubtitle = nil
+            if selectedExternalSubtitle == nil && !isPreviewMode {
+                currentSubtitleCue = nil
+            }
+        }
+    }
+
+    @MainActor
+    func updateEmbeddedSubtitle(text: String?, bitmap: CGImage?) {
+        guard selectedExternalSubtitle == nil, selectedSubtitleTrackId >= 0 else {
+            activeEmbeddedTextCue = nil
+            currentBitmapSubtitle = nil
+            return
+        }
+
+        currentBitmapSubtitle = bitmap
+
+        if let text, !text.isEmpty {
+            let isArabic = text.unicodeScalars.contains { scalar in
+                (0x0600...0x06FF).contains(scalar.value) ||
+                (0x0750...0x077F).contains(scalar.value) ||
+                (0x08A0...0x08FF).contains(scalar.value) ||
+                (0xFB50...0xFDFF).contains(scalar.value) ||
+                (0xFE70...0xFEFF).contains(scalar.value)
+            }
+            let cue = SubtitleCue(
+                id: -selectedSubtitleTrackId - 1,
+                startTime: currentTime,
+                endTime: currentTime + 1.0,
+                text: text,
+                processedText: nil,
+                isArabic: isArabic
+            )
+            activeEmbeddedTextCue = cue
+            currentSubtitleCue = cue
+        } else {
+            activeEmbeddedTextCue = nil
+            if activeCues.isEmpty && !isPreviewMode {
+                currentSubtitleCue = nil
+            }
+        }
     }
 
     // MARK: - HUD Management
@@ -479,7 +536,9 @@ final class PlayerViewModel {
     }
 
     func onPlaybackReady(duration: Double) {
-        totalDuration = duration
+        if duration > 0 {
+            totalDuration = duration
+        }
         isBuffering = false
 
         if resumeFromTime > 0 {
@@ -503,6 +562,8 @@ final class PlayerViewModel {
             currentSubtitleCue = activeCues.first { cue in
                 cue.isActive(at: current, offset: offset)
             }
+        } else if let embeddedCue = activeEmbeddedTextCue {
+            currentSubtitleCue = embeddedCue
         } else if !isPreviewMode {
             currentSubtitleCue = nil
         }
@@ -556,10 +617,14 @@ final class PlayerViewModel {
 
         guard let track else {
             activeCues = []
-            if !isPreviewMode { currentSubtitleCue = nil }
+            if !isPreviewMode && activeEmbeddedTextCue == nil { currentSubtitleCue = nil }
             selectedSubtitleTrackId = -1
             return
         }
+
+        selectedSubtitleTrackId = -1
+        activeEmbeddedTextCue = nil
+        currentBitmapSubtitle = nil
 
         do {
             let cues = try await SubtitleService.shared.loadAndParseCues(for: track)
@@ -635,6 +700,10 @@ final class PlayerViewModel {
             skipCreditsMode = settings.skipCreditsMode
             skipDelaySeconds = settings.skipDelaySeconds
             nextEpisodeBehavior = settings.nextEpisodeBehavior
+            playerEngineName = SettingsViewModel.playerEngineOptions.contains(settings.playerEngineName)
+                ? settings.playerEngineName
+                : "AetherEngine"
+            audioOutputMode = settings.audioOutputMode
 
             SubtitleService.shared.subdlApiKey = settings.subdlApiKey
             SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey

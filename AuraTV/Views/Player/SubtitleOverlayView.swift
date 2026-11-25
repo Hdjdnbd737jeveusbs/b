@@ -1,9 +1,11 @@
 import SwiftUI
+import CoreGraphics
 
 // MARK: - Subtitle Overlay View (Positioned Cleanly Above Scrubber Bar)
 
 struct SubtitleOverlayView: View {
     let currentCue: SubtitleCue?
+    var bitmapCue: CGImage? = nil
     let style: SubtitleStyle
     let fixRTL: Bool
     let fixReversedPunctuation: Bool
@@ -40,6 +42,14 @@ struct SubtitleOverlayView: View {
                     // Keep subtitles clearly above the scrubber bar whenever HUD is visible
                     .padding(.bottom, isHUDVisible ? max(CGFloat(style.bottomOffset), 132) : CGFloat(style.bottomOffset))
                     .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+            } else if let cgImage = bitmapCue {
+                Image(decorative: cgImage, scale: 1.0)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 1400, maxHeight: 260)
+                    .padding(.horizontal, 80)
+                    .padding(.bottom, isHUDVisible ? max(CGFloat(style.bottomOffset), 132) : CGFloat(style.bottomOffset))
+                    .transition(.opacity.animation(.easeInOut(duration: 0.12)))
             }
         }
         .ignoresSafeArea()
