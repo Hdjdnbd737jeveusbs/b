@@ -369,7 +369,9 @@ final class PlayerViewModel {
     func skipCredits() {
         skipCreditsDismissed = true
         if nextEpisode != nil {
-            playNextEpisodeNow()
+            Task { @MainActor in
+                playNextEpisodeNow()
+            }
         } else {
             seek(to: max(currentTime, totalDuration - 2))
         }
