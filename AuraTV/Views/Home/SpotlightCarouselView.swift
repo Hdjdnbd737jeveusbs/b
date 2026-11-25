@@ -66,7 +66,7 @@ struct SpotlightCarouselView: View {
             ZStack(alignment: .bottomLeading) {
                 // Full-bleed background artwork
                 backdropImage(for: currentItem, width: nil, height: 640)
-                    .frame(maxWidth: .infinity, height: 640)
+                    .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
                     .clipped()
 
                 // Left-side vignette for legible white text & logo
@@ -356,7 +356,8 @@ struct SpotlightCarouselView: View {
     private var heroPlaceholder: some View {
         Rectangle()
             .fill(Color.auraSurface)
-            .frame(maxWidth: .infinity, height: style == .ambient ? 640 : 500)
+            .frame(maxWidth: .infinity)
+            .frame(height: style == .ambient ? 640 : 500)
             .overlay {
                 ProgressView()
                     .tint(.white.opacity(0.5))
