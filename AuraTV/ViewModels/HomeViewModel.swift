@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Observation
+import os
 
 @Observable
 final class HomeViewModel {
@@ -17,35 +18,61 @@ final class HomeViewModel {
     // MARK: - Dependencies
 
     private let service = TMDBService.shared
+    private var activeLoadTask: Task<Void, Never>?
+    private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "Home")
 
     // MARK: - Load All
 
     @MainActor
-    func loadAll(context: ModelContext) async {
-        guard !isLoading else { return }
-        isLoading = true
-        error = nil
+    func loadAll(context: ModelContext, force: Bool = false) async {
+        loadContinueWatching(context: context)
 
-        do {
-            async let moviesResponse = service.fetchTrendingMovies(page: 1)
-            async let seriesResponse = service.fetchTrendingSeries(page: 1)
-
-            let (movies, series) = try await (moviesResponse, seriesResponse)
-
-            trendingMovies = movies.results
-            trendingSeries = series.results
-
-            // Top 7 trending movies for the hero carousel
-            spotlightItems = Array(movies.results.prefix(7))
-
-            // Load continue watching from SwiftData
-            loadContinueWatching(context: context)
-        } catch {
-            self.error = error.localizedDescription
-            print("[HomeViewModel] TMDB fetch failed: \(error)")
+        if !force && !trendingMovies.isEmpty && !trendingSeries.isEmpty {
+            return
         }
 
-        isLoading = false
+        if let activeLoadTask {
+            await activeLoadTask.value
+            return
+        }
+
+        isLoading = trendingMovies.isEmpty
+        error = nil
+
+        // Run inside an unstructured Task so SwiftUI .task cancellation
+        // (e.g. during TabView / NavigationStack layout updates) does not cancel
+        // the in-flight TMDB requests with NSURLErrorCancelled (-999).
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.isLoading = false
+                self.activeLoadTask = nil
+            }
+
+            Self.logger.notice("Fetching TMDB trending movies and series...")
+            do {
+                async let moviesResponse = self.service.fetchTrendingMovies(page: 1)
+                async let seriesResponse = self.service.fetchTrendingSeries(page: 1)
+
+                let (movies, series) = try await (moviesResponse, seriesResponse)
+
+                self.trendingMovies = movies.results
+                self.trendingSeries = series.results
+
+                // Top 7 trending movies for the hero carousel
+                self.spotlightItems = Array(movies.results.prefix(7))
+
+                Self.logger.notice("Loaded \(movies.results.count) trending movies and \(series.results.count) trending series")
+                print("[HomeViewModel] Loaded \(movies.results.count) trending movies and \(series.results.count) trending series")
+            } catch {
+                self.error = error.localizedDescription
+                Self.logger.error("TMDB fetch failed: \(error.localizedDescription, privacy: .public)")
+                print("[HomeViewModel] TMDB fetch failed: \(error)")
+            }
+        }
+
+        activeLoadTask = task
+        await task.value
     }
 
     // MARK: - Continue Watching
@@ -71,6 +98,6 @@ final class HomeViewModel {
 
     @MainActor
     func refresh(context: ModelContext) async {
-        await loadAll(context: context)
+        await loadAll(context: context, force: true)
     }
 }

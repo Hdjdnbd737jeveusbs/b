@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import os
 
 @main
 struct AuraTVApp: App {
+    private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "App")
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -54,6 +56,7 @@ struct AuraTVApp: App {
                 AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
                 SubtitleService.shared.subdlApiKey = settings.subdlApiKey
                 SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
+                Self.logger.notice("Loaded existing AppSettings (TMDB key present: \(!TMDBService.shared.apiKey.isEmpty))")
             } else {
                 // First launch – no AppSettings row yet.
                 // Insert one carrying the built-in default key so Settings shows it.
@@ -62,9 +65,11 @@ struct AuraTVApp: App {
                 context.insert(defaults)
                 try? context.save()
                 // TMDBService.shared.apiKey already equals the default; nothing to override.
+                Self.logger.notice("First launch - inserted default AppSettings")
                 print("[AuraTV] First launch – inserted default AppSettings (TMDB key: \(TMDBService.shared.apiKey.prefix(8))...)")
             }
         } catch {
+            Self.logger.error("Failed to load AppSettings: \(error.localizedDescription, privacy: .public)")
             print("[AuraTV] Failed to load AppSettings: \(error)")
         }
     }

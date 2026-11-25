@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 enum MovieCategory: String, CaseIterable, Identifiable {
     case popular = "Popular"
@@ -40,46 +41,70 @@ final class MoviesViewModel {
     // MARK: - Dependencies
 
     private let service = TMDBService.shared
+    private var activeLoadTask: Task<Void, Never>?
+    private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "Movies")
 
     // MARK: - Initial Load
 
     /// Loads the first page of all categories.
     @MainActor
-    func loadMovies() async {
-        guard !isLoading else { return }
-        isLoading = true
-        error = nil
-
-        do {
-            async let popular = service.fetchPopularMovies(page: 1)
-            async let topRated = service.fetchTopRatedMovies(page: 1)
-            async let nowPlaying = service.fetchNowPlayingMovies(page: 1)
-            async let upcoming = service.fetchUpcomingMovies(page: 1)
-
-            let (popularRes, topRatedRes, nowPlayingRes, upcomingRes) =
-                try await (popular, topRated, nowPlaying, upcoming)
-
-            popularMovies = popularRes.results
-            popularPage = popularRes.page
-            popularTotalPages = popularRes.totalPages
-
-            topRatedMovies = topRatedRes.results
-            topRatedPage = topRatedRes.page
-            topRatedTotalPages = topRatedRes.totalPages
-
-            nowPlayingMovies = nowPlayingRes.results
-            nowPlayingPage = nowPlayingRes.page
-            nowPlayingTotalPages = nowPlayingRes.totalPages
-
-            upcomingMovies = upcomingRes.results
-            upcomingPage = upcomingRes.page
-            upcomingTotalPages = upcomingRes.totalPages
-        } catch {
-            self.error = error.localizedDescription
-            print("[MoviesViewModel] TMDB fetch failed: \(error)")
+    func loadMovies(force: Bool = false) async {
+        if !force && !popularMovies.isEmpty {
+            return
         }
 
-        isLoading = false
+        if let activeLoadTask {
+            await activeLoadTask.value
+            return
+        }
+
+        isLoading = popularMovies.isEmpty
+        error = nil
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.isLoading = false
+                self.activeLoadTask = nil
+            }
+
+            Self.logger.notice("Fetching TMDB movies categories...")
+            do {
+                async let popular = self.service.fetchPopularMovies(page: 1)
+                async let topRated = self.service.fetchTopRatedMovies(page: 1)
+                async let nowPlaying = self.service.fetchNowPlayingMovies(page: 1)
+                async let upcoming = self.service.fetchUpcomingMovies(page: 1)
+
+                let (popularRes, topRatedRes, nowPlayingRes, upcomingRes) =
+                    try await (popular, topRated, nowPlaying, upcoming)
+
+                self.popularMovies = popularRes.results
+                self.popularPage = popularRes.page
+                self.popularTotalPages = popularRes.totalPages
+
+                self.topRatedMovies = topRatedRes.results
+                self.topRatedPage = topRatedRes.page
+                self.topRatedTotalPages = topRatedRes.totalPages
+
+                self.nowPlayingMovies = nowPlayingRes.results
+                self.nowPlayingPage = nowPlayingRes.page
+                self.nowPlayingTotalPages = nowPlayingRes.totalPages
+
+                self.upcomingMovies = upcomingRes.results
+                self.upcomingPage = upcomingRes.page
+                self.upcomingTotalPages = upcomingRes.totalPages
+
+                Self.logger.notice("Loaded \(popularRes.results.count) popular, \(topRatedRes.results.count) topRated, \(nowPlayingRes.results.count) nowPlaying, \(upcomingRes.results.count) upcoming movies")
+                print("[MoviesViewModel] Loaded \(popularRes.results.count) popular movies")
+            } catch {
+                self.error = error.localizedDescription
+                Self.logger.error("TMDB movies fetch failed: \(error.localizedDescription, privacy: .public)")
+                print("[MoviesViewModel] TMDB fetch failed: \(error)")
+            }
+        }
+
+        activeLoadTask = task
+        await task.value
     }
 
     // MARK: - Load More (Pagination)

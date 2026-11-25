@@ -1,21 +1,29 @@
 import SwiftUI
 import SwiftData
+import os
 
 // MARK: - Content View (Native Glass Sidebar Navigation)
 
 struct ContentView: View {
-    /// Reads the `-screenshotTab <name>` launch argument so the CI screenshot
-    /// script can relaunch the app directly onto any tab without remote navigation.
-    @State private var selectedTab: AppTab = {
+    private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "Navigation")
+
+    /// Reads `-screenshotTab <name>` from launch arguments (or NSArgumentDomain)
+    /// so CI screenshot automation can open directly onto any tab.
+    private static func initialTabFromArguments() -> AppTab {
         let args = ProcessInfo.processInfo.arguments
         if let idx = args.firstIndex(of: "-screenshotTab"),
            args.indices.contains(idx + 1),
            let tab = AppTab(rawValue: args[idx + 1].capitalized) {
-            print("[AuraTV] screenshotTab override → \(tab.rawValue)")
+            return tab
+        }
+        if let udTab = UserDefaults.standard.string(forKey: "screenshotTab"),
+           let tab = AppTab(rawValue: udTab.capitalized) {
             return tab
         }
         return .home
-    }()
+    }
+
+    @State private var selectedTab: AppTab = ContentView.initialTabFromArguments()
 
     enum AppTab: String, Hashable, CaseIterable {
         case search = "Search"
@@ -94,5 +102,14 @@ struct ContentView: View {
             .tag(AppTab.settings)
         }
         .tabViewStyle(.sidebarAdaptable)
+        .onAppear {
+            let requested = Self.initialTabFromArguments()
+            if selectedTab != requested {
+                selectedTab = requested
+            }
+            let activeTab = selectedTab.rawValue
+            Self.logger.notice("ContentView active tab: \(activeTab, privacy: .public)")
+            print("[AuraTV] ContentView active tab: \(activeTab)")
+        }
     }
 }

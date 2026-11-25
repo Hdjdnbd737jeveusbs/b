@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 enum SeriesCategory: String, CaseIterable, Identifiable {
     case popular = "Popular"
@@ -40,46 +41,70 @@ final class SeriesViewModel {
     // MARK: - Dependencies
 
     private let service = TMDBService.shared
+    private var activeLoadTask: Task<Void, Never>?
+    private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "Series")
 
     // MARK: - Initial Load
 
     /// Loads the first page of all categories.
     @MainActor
-    func loadSeries() async {
-        guard !isLoading else { return }
-        isLoading = true
-        error = nil
-
-        do {
-            async let popular = service.fetchPopularSeries(page: 1)
-            async let topRated = service.fetchTopRatedSeries(page: 1)
-            async let airingToday = service.fetchAiringTodaySeries(page: 1)
-            async let onTheAir = service.fetchOnTheAirSeries(page: 1)
-
-            let (popularRes, topRatedRes, airingTodayRes, onTheAirRes) =
-                try await (popular, topRated, airingToday, onTheAir)
-
-            popularSeries = popularRes.results
-            popularPage = popularRes.page
-            popularTotalPages = popularRes.totalPages
-
-            topRatedSeries = topRatedRes.results
-            topRatedPage = topRatedRes.page
-            topRatedTotalPages = topRatedRes.totalPages
-
-            airingTodaySeries = airingTodayRes.results
-            airingTodayPage = airingTodayRes.page
-            airingTodayTotalPages = airingTodayRes.totalPages
-
-            onTheAirSeries = onTheAirRes.results
-            onTheAirPage = onTheAirRes.page
-            onTheAirTotalPages = onTheAirRes.totalPages
-        } catch {
-            self.error = error.localizedDescription
-            print("[SeriesViewModel] TMDB fetch failed: \(error)")
+    func loadSeries(force: Bool = false) async {
+        if !force && !popularSeries.isEmpty {
+            return
         }
 
-        isLoading = false
+        if let activeLoadTask {
+            await activeLoadTask.value
+            return
+        }
+
+        isLoading = popularSeries.isEmpty
+        error = nil
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.isLoading = false
+                self.activeLoadTask = nil
+            }
+
+            Self.logger.notice("Fetching TMDB series categories...")
+            do {
+                async let popular = self.service.fetchPopularSeries(page: 1)
+                async let topRated = self.service.fetchTopRatedSeries(page: 1)
+                async let airingToday = self.service.fetchAiringTodaySeries(page: 1)
+                async let onTheAir = self.service.fetchOnTheAirSeries(page: 1)
+
+                let (popularRes, topRatedRes, airingTodayRes, onTheAirRes) =
+                    try await (popular, topRated, airingToday, onTheAir)
+
+                self.popularSeries = popularRes.results
+                self.popularPage = popularRes.page
+                self.popularTotalPages = popularRes.totalPages
+
+                self.topRatedSeries = topRatedRes.results
+                self.topRatedPage = topRatedRes.page
+                self.topRatedTotalPages = topRatedRes.totalPages
+
+                self.airingTodaySeries = airingTodayRes.results
+                self.airingTodayPage = airingTodayRes.page
+                self.airingTodayTotalPages = airingTodayRes.totalPages
+
+                self.onTheAirSeries = onTheAirRes.results
+                self.onTheAirPage = onTheAirRes.page
+                self.onTheAirTotalPages = onTheAirRes.totalPages
+
+                Self.logger.notice("Loaded \(popularRes.results.count) popular, \(topRatedRes.results.count) topRated, \(airingTodayRes.results.count) airingToday, \(onTheAirRes.results.count) onTheAir series")
+                print("[SeriesViewModel] Loaded \(popularRes.results.count) popular series")
+            } catch {
+                self.error = error.localizedDescription
+                Self.logger.error("TMDB series fetch failed: \(error.localizedDescription, privacy: .public)")
+                print("[SeriesViewModel] TMDB fetch failed: \(error)")
+            }
+        }
+
+        activeLoadTask = task
+        await task.value
     }
 
     // MARK: - Load More (Pagination)

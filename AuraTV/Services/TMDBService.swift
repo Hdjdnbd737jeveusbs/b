@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 // MARK: - Errors
 
@@ -49,6 +50,7 @@ final class TMDBService {
 
     // MARK: Private
 
+    private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "TMDB")
     private let session: URLSession
     private let decoder: JSONDecoder
 
@@ -187,17 +189,20 @@ final class TMDBService {
         do {
             (data, response) = try await session.data(from: url)
         } catch {
+            Self.logger.error("Network error for \(endpoint, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw TMDBError.networkError(error)
         }
 
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
+            Self.logger.error("HTTP \(httpResponse.statusCode) for \(endpoint, privacy: .public)")
             throw TMDBError.httpError(statusCode: httpResponse.statusCode)
         }
 
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
+            Self.logger.error("Decoding error for \(endpoint, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw TMDBError.decodingError(error)
         }
     }
