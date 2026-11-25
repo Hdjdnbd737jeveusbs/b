@@ -81,6 +81,7 @@ private struct ContinueWatchingCard: View {
             .animation(.easeOut(duration: 0.18), value: isFocused)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .focused($isFocused)
     }
 

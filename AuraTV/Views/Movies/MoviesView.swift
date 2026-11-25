@@ -89,7 +89,7 @@ struct MoviesView: View {
 
     @ViewBuilder
     private var categoryBar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 22) {
             ForEach(MovieCategory.allCases) { category in
                 let isSelected = viewModel.selectedCategory == category
                 let isFocused = focusedCategory == category
@@ -101,23 +101,25 @@ struct MoviesView: View {
                 }) {
                     Text(category.rawValue)
                         .font(.system(size: 19, weight: isSelected ? .bold : .medium))
-                        .foregroundStyle(isSelected ? Color.black : Color.white)
+                        .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
                         .padding(.horizontal, 26)
                         .padding(.vertical, 12)
                         .background(
-                            isSelected
+                            (isSelected || isFocused)
                             ? Color.white
-                            : Color.white.opacity(isFocused ? 0.22 : 0.1)
+                            : Color.white.opacity(0.1)
                         )
                         .clipShape(Capsule())
                         .overlay(
                             Capsule()
-                                .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
+                                .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2 : 1)
                         )
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .focusEffectDisabled()
                 .focused($focusedCategory, equals: category)
-                .scaleEffect(isFocused ? 1.06 : 1.0)
+                .scaleEffect(isFocused ? 1.05 : 1.0)
                 .animation(.easeOut(duration: 0.16), value: focusedCategory)
             }
         }

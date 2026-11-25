@@ -73,15 +73,22 @@ struct EpisodeCardView: View {
                 }
                 .frame(width: 360, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.07 : 1.0)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
+                    .frame(width: 360, height: 202),
+                alignment: .top
+            )
+            .scaleEffect(isFocused ? 1.06 : 1.0)
             .shadow(
-                color: isFocused ? Color.auraAccent.opacity(0.4) : Color.black.opacity(0.3),
+                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.35),
                 radius: isFocused ? 18 : 6,
                 y: isFocused ? 8 : 3
             )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(.easeOut(duration: 0.18), value: isFocused)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .focused($isFocused)
     }
 

@@ -86,8 +86,16 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.horizontal, 75)
-            .padding(.top, 82)
+            .padding(.top, 96)
             .padding(.bottom, 50)
+        }
+        .defaultFocus($focusedCategory, .playback)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                if !isEditingCategory && focusedCategory == nil {
+                    focusedCategory = selectedCategory
+                }
+            }
         }
         .task {
             viewModel.loadSettings(context: modelContext)
@@ -154,6 +162,7 @@ struct SettingsView: View {
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .focusEffectDisabled()
                         .focused($focusedCategory, equals: category)
                         .scaleEffect(focusedCategory == category ? 1.03 : 1.0)
                         .animation(.easeOut(duration: 0.16), value: focusedCategory)
@@ -392,6 +401,7 @@ struct SettingsView: View {
                     .modifier(SettingsFocusablePillModifier())
                 }
                 .buttonStyle(.plain)
+                .focusEffectDisabled()
 
                 Spacer()
 
@@ -404,6 +414,7 @@ struct SettingsView: View {
                         .modifier(SettingsPrimaryPillModifier())
                 }
                 .buttonStyle(.plain)
+                .focusEffectDisabled()
             }
 
             // Header
@@ -641,6 +652,7 @@ struct SettingsView: View {
             .modifier(SettingsFocusableRowModifier())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
     }
 
     private func toggleSettingRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
@@ -717,6 +729,7 @@ struct SettingsView: View {
             .modifier(SettingsFocusableRowModifier())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
     }
 
     private func infoRow(title: String, value: String) -> some View {

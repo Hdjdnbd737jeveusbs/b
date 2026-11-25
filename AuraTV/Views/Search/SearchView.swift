@@ -54,6 +54,7 @@ struct SearchView: View {
                 }
             }
         }
+        .defaultFocus($isFieldFocused, true)
     }
 
     // MARK: - Results Grid

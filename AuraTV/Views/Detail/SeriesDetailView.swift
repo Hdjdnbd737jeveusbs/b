@@ -351,6 +351,7 @@ struct SeriesDetailView: View {
                 )
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .focused($focusedButton, equals: .play)
             .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
             .animation(.easeOut(duration: 0.18), value: focusedButton)
@@ -416,6 +417,7 @@ struct SeriesDetailView: View {
                 )
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .focused($focusedButton, equals: target)
         .scaleEffect(isFocused ? 1.1 : 1.0)
         .animation(.easeOut(duration: 0.18), value: focusedButton)

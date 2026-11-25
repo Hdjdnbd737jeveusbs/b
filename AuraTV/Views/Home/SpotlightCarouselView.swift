@@ -125,19 +125,11 @@ struct SpotlightCarouselView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
             .clipped()
-            .overlay(alignment: .bottomLeading) {
-                if isHeroFocused {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white)
-                        .frame(width: 4, height: 140)
-                        .padding(.leading, 62)
-                        .padding(.bottom, 40)
-                        .transition(.opacity)
-                }
-            }
+            .scaleEffect(isHeroFocused ? 1.008 : 1.0)
             .animation(.easeOut(duration: 0.2), value: isHeroFocused)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .focused($isHeroFocused)
     }
 
