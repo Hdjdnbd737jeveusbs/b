@@ -104,14 +104,9 @@ jobs:
           echo "Using simulator UDID: $DEVICE_UDID"
           echo "DEVICE_UDID=$DEVICE_UDID" >> $GITHUB_ENV
 
-          # Boot the simulator
-          xcrun simctl boot "$DEVICE_UDID" || true
-          # Wait until booted
-          until xcrun simctl list devices | grep "$DEVICE_UDID" | grep -q Booted; do
-            echo "Waiting for simulator to boot..."
-            sleep 3
-          done
-          echo "Simulator booted."
+          # Boot the simulator and wait until PineBoard/FrontBoard/installd are fully ready
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+          echo "Simulator booted and ready."
 
       - name: Locate built .app bundle
         run: |
@@ -128,6 +123,7 @@ jobs:
       - name: Install AuraTV on simulator
         run: |
           xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+          sleep 3
 
       - name: Launch AuraTV and capture screenshots
         run: |
@@ -160,8 +156,14 @@ jobs:
             xcrun simctl terminate booted "$BUNDLE_ID" 2>/dev/null || true
             sleep 1
 
-            # Plain simctl launch returns immediately with PID (no PTY hang)
-            xcrun simctl launch booted "$BUNDLE_ID" -screenshotTab "$tab_name"
+            # Plain simctl launch returns immediately with PID (retry briefly if FrontBoard is still indexing)
+            for attempt in 1 2 3; do
+              if xcrun simctl launch booted "$BUNDLE_ID" -screenshotTab "$tab_name"; then
+                break
+              fi
+              echo "Launch attempt $attempt failed, retrying in 3s..."
+              sleep 3
+            done
 
             # Wait for SwiftData bootstrap + TMDB fetch + AsyncImage rendering
             sleep "$wait_secs"
