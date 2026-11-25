@@ -42,6 +42,7 @@ final class HomeViewModel {
             loadContinueWatching(context: context)
         } catch {
             self.error = error.localizedDescription
+            print("[HomeViewModel] TMDB fetch failed: \(error)")
         }
 
         isLoading = false

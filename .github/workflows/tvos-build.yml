@@ -138,15 +138,31 @@ jobs:
             || /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
           echo "Bundle ID: $BUNDLE_ID"
 
-          # Helper: navigate down in the vertical sidebar and select a tab, then screenshot.
-          # Uses "booted" alias so we don't need to track UDID per command.
-          nav_and_shoot() {
-            local label="$1"
-            local file="$2"
-            xcrun simctl io booted sendkey down 2>/dev/null || true
+          # -----------------------------------------------------------------
+          # Sidebar navigation strategy for tvOS 18 .sidebarAdaptable TabView
+          #
+          # The sidebar is a vertical list. When content is focused the sidebar
+          # collapses; pressing `menu` returns focus to the sidebar. We then
+          # press `down` once to highlight the next tab and `select` to enter it.
+          # For Search (which is ABOVE Home in the tab order) we press `up`.
+          #
+          # Key codes accepted by `xcrun simctl io booted sendkey`:
+          #   up / down / left / right / select / menu / play / back
+          # -----------------------------------------------------------------
+
+          sidebar_nav() {
+            local direction="$1"   # "up" or "down"
+            local label="$2"
+            local file="$3"
+            # Return focus to the sidebar
+            xcrun simctl io booted sendkey menu 2>/dev/null || true
             sleep 1
+            # Move highlight within sidebar
+            xcrun simctl io booted sendkey "$direction" 2>/dev/null || true
+            sleep 0.5
+            # Confirm selection (open the tab's content)
             xcrun simctl io booted sendkey select 2>/dev/null || true
-            # Wait for TMDB images to load
+            # Wait for TMDB network images to render
             sleep 4
             xcrun simctl io booted screenshot "$file"
             echo "Captured $label -> $file"
@@ -156,27 +172,40 @@ jobs:
           xcrun simctl launch booted "$BUNDLE_ID"
           sleep 6
 
-          # 01 — Home tab (the default landing screen, already selected on launch)
+          # 01 — Home tab (default landing screen; sidebar starts focused here)
           xcrun simctl io booted screenshot screenshots/01_Home.png
           echo "Captured Home -> screenshots/01_Home.png"
 
-          # The vertical sidebar order: Home → Search → Series → Movies → Collections → Settings
-          # We navigate down from Home through each entry in sequence.
+          # Sidebar order (tvOS .sidebarAdaptable, top-to-bottom):
+          #   Search  ← one up from Home
+          #   Home    ← selected on launch
+          #   Series  ← one down
+          #   Movies  ← two down
+          #   Collections ← three down
+          #   Settings    ← four down
 
-          # 02 — Search (1 down from Home)
-          nav_and_shoot "Search" screenshots/02_Search.png
+          # 02 — Search (press menu to refocus sidebar, then up from Home)
+          sidebar_nav "up"   "Search"      screenshots/02_Search.png
 
-          # 03 — Series (2 down from Home)
-          nav_and_shoot "Series" screenshots/03_Series.png
+          # Return to Home before continuing downward
+          xcrun simctl io booted sendkey menu 2>/dev/null || true
+          sleep 0.5
+          xcrun simctl io booted sendkey down 2>/dev/null || true
+          sleep 0.5
+          xcrun simctl io booted sendkey select 2>/dev/null || true
+          sleep 2  # brief re-centre, no screenshot needed
 
-          # 04 — Movies (3 down from Home)
-          nav_and_shoot "Movies" screenshots/04_Movies.png
+          # 03 — Series (one down from Home)
+          sidebar_nav "down" "Series"      screenshots/03_Series.png
 
-          # 05 — Collections (4 down from Home)
-          nav_and_shoot "Collections" screenshots/05_Collections.png
+          # 04 — Movies (one more down from Series)
+          sidebar_nav "down" "Movies"      screenshots/04_Movies.png
 
-          # 06 — Settings (5 down from Home)
-          nav_and_shoot "Settings" screenshots/06_Settings.png
+          # 05 — Collections (one more down from Movies)
+          sidebar_nav "down" "Collections" screenshots/05_Collections.png
+
+          # 06 — Settings (one more down from Collections)
+          sidebar_nav "down" "Settings"    screenshots/06_Settings.png
 
           echo "All screenshots captured:"
           ls -lh screenshots/

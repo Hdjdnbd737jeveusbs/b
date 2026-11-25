@@ -36,11 +36,36 @@ struct AuraTVApp: App {
     private func loadAPIKeyFromSettings() {
         let context = sharedModelContainer.mainContext
         let descriptor = FetchDescriptor<AppSettings>()
-        if let settings = try? context.fetch(descriptor).first {
-            TMDBService.shared.apiKey = settings.tmdbApiKey
-            AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
-            SubtitleService.shared.subdlApiKey = settings.subdlApiKey
-            SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
+
+        do {
+            let all = try context.fetch(descriptor)
+            if let settings = all.first {
+                // Existing row: use persisted key only if the user has set one;
+                // otherwise fall back to the built-in default already on TMDBService.
+                if !settings.tmdbApiKey.isEmpty {
+                    TMDBService.shared.apiKey = settings.tmdbApiKey
+                }
+                // Always keep the row's key in sync with the service default
+                // so Settings shows the correct value.
+                if settings.tmdbApiKey.isEmpty {
+                    settings.tmdbApiKey = TMDBService.shared.apiKey
+                    try? context.save()
+                }
+                AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
+                SubtitleService.shared.subdlApiKey = settings.subdlApiKey
+                SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
+            } else {
+                // First launch – no AppSettings row yet.
+                // Insert one carrying the built-in default key so Settings shows it.
+                let defaults = AppSettings()
+                // AppSettings.init() already sets tmdbApiKey = default key.
+                context.insert(defaults)
+                try? context.save()
+                // TMDBService.shared.apiKey already equals the default; nothing to override.
+                print("[AuraTV] First launch – inserted default AppSettings (TMDB key: \(TMDBService.shared.apiKey.prefix(8))...)")
+            }
+        } catch {
+            print("[AuraTV] Failed to load AppSettings: \(error)")
         }
     }
 }

@@ -76,6 +76,7 @@ final class MoviesViewModel {
             upcomingTotalPages = upcomingRes.totalPages
         } catch {
             self.error = error.localizedDescription
+            print("[MoviesViewModel] TMDB fetch failed: \(error)")
         }
 
         isLoading = false

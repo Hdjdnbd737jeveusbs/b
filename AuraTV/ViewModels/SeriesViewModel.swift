@@ -76,6 +76,7 @@ final class SeriesViewModel {
             onTheAirTotalPages = onTheAirRes.totalPages
         } catch {
             self.error = error.localizedDescription
+            print("[SeriesViewModel] TMDB fetch failed: \(error)")
         }
 
         isLoading = false
