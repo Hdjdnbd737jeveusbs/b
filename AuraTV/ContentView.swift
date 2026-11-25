@@ -4,7 +4,18 @@ import SwiftData
 // MARK: - Content View (Native Glass Sidebar Navigation)
 
 struct ContentView: View {
-    @State private var selectedTab: AppTab = .home
+    /// Reads the `-screenshotTab <name>` launch argument so the CI screenshot
+    /// script can relaunch the app directly onto any tab without remote navigation.
+    @State private var selectedTab: AppTab = {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "-screenshotTab"),
+           args.indices.contains(idx + 1),
+           let tab = AppTab(rawValue: args[idx + 1].capitalized) {
+            print("[AuraTV] screenshotTab override → \(tab.rawValue)")
+            return tab
+        }
+        return .home
+    }()
 
     enum AppTab: String, Hashable, CaseIterable {
         case search = "Search"

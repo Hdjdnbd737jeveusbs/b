@@ -134,80 +134,88 @@ jobs:
           mkdir -p screenshots
 
           # Get the app's bundle ID from Info.plist
-          BUNDLE_ID=$(defaults read "$APP_PATH/Info.plist" CFBundleIdentifier 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
           echo "Bundle ID: $BUNDLE_ID"
 
-          # -----------------------------------------------------------------
-          # Sidebar navigation strategy for tvOS 18 .sidebarAdaptable TabView
+          # ----------------------------------------------------------------
+          # Deterministic tab-by-tab screenshot strategy
           #
-          # The sidebar is a vertical list. When content is focused the sidebar
-          # collapses; pressing `menu` returns focus to the sidebar. We then
-          # press `down` once to highlight the next tab and `select` to enter it.
-          # For Search (which is ABOVE Home in the tab order) we press `up`.
+          # We terminate and relaunch the app for each tab using the
+          # `-screenshotTab <name>` launch argument, which ContentView reads
+          # from ProcessInfo.processInfo.arguments and sets as the initial tab.
+          # This avoids all sendkey / remote navigation unreliability.
           #
-          # Key codes accepted by `xcrun simctl io booted sendkey`:
-          #   up / down / left / right / select / menu / play / back
-          # -----------------------------------------------------------------
+          # For each tab we:
+          #   1. Terminate any running instance
+          #   2. Launch with --console-pty so TMDB log lines appear in CI output
+          #   3. Sleep to allow SwiftData init + TMDB network fetch + AsyncImage decode
+          #   4. Capture screenshot
+          #   5. Print the last 60 lines of app logs to confirm TMDB loaded data
+          # ----------------------------------------------------------------
 
-          sidebar_nav() {
-            local direction="$1"   # "up" or "down"
-            local label="$2"
-            local file="$3"
-            # Return focus to the sidebar
-            xcrun simctl io booted sendkey menu 2>/dev/null || true
+          capture_tab() {
+            local tab_name="$1"     # matches AppTab.rawValue (e.g. "Home")
+            local out_file="$2"
+            local wait_secs="${3:-9}"  # default 9s for TMDB + AsyncImage
+
+            echo ""
+            echo "=== Capturing tab: $tab_name ==="
+
+            # Terminate existing instance (ignore error if not running)
+            xcrun simctl terminate "$DEVICE_UDID" "$BUNDLE_ID" 2>/dev/null || true
             sleep 1
-            # Move highlight within sidebar
-            xcrun simctl io booted sendkey "$direction" 2>/dev/null || true
-            sleep 0.5
-            # Confirm selection (open the tab's content)
-            xcrun simctl io booted sendkey select 2>/dev/null || true
-            # Wait for TMDB network images to render
-            sleep 4
-            xcrun simctl io booted screenshot "$file"
-            echo "Captured $label -> $file"
+
+            # Launch app onto the target tab, capturing stdout/stderr
+            xcrun simctl launch \
+              --console-pty \
+              "$DEVICE_UDID" \
+              "$BUNDLE_ID" \
+              -screenshotTab "$tab_name" \
+              2>&1 | head -5 || true
+
+            # Wait for SwiftData bootstrap + TMDB fetch + AsyncImage rendering
+            sleep "$wait_secs"
+
+            # Grab the screenshot
+            xcrun simctl io "$DEVICE_UDID" screenshot "$out_file"
+            echo "Wrote screenshot: $out_file ($(du -h "$out_file" | cut -f1))"
+
+            # Tail app console log for TMDB diagnostics (last 30 lines)
+            echo "--- app log tail for $tab_name ---"
+            xcrun simctl spawn "$DEVICE_UDID" log show \
+              --predicate 'process == "AuraTV"' \
+              --style compact \
+              --last 30s \
+              2>/dev/null | tail -40 || true
+            echo "--- end log tail ---"
           }
 
-          # Launch the app and wait for TMDB home posters to load
-          xcrun simctl launch booted "$BUNDLE_ID"
-          sleep 6
+          # Warm up: launch once onto Home so SwiftData & TMDB are primed
+          # and the second Home screenshot has fully-loaded posters.
+          echo "=== Warm-up launch (Home) ==="
+          xcrun simctl launch --console-pty "$DEVICE_UDID" "$BUNDLE_ID" \
+            -screenshotTab Home 2>&1 | head -3 || true
+          sleep 12   # generous: SwiftData cold start + TMDB trending fetch + AsyncImage
 
-          # 01 — Home tab (default landing screen; sidebar starts focused here)
-          xcrun simctl io booted screenshot screenshots/01_Home.png
-          echo "Captured Home -> screenshots/01_Home.png"
+          xcrun simctl io "$DEVICE_UDID" screenshot screenshots/01_Home.png
+          echo "Wrote screenshot: 01_Home.png ($(du -h screenshots/01_Home.png | cut -f1))"
+          echo "--- app log (Home warm-up) ---"
+          xcrun simctl spawn "$DEVICE_UDID" log show \
+            --predicate 'process == "AuraTV"' \
+            --style compact \
+            --last 15s \
+            2>/dev/null | tail -60 || true
+          echo "--- end log ---"
 
-          # Sidebar order (tvOS .sidebarAdaptable, top-to-bottom):
-          #   Search  ← one up from Home
-          #   Home    ← selected on launch
-          #   Series  ← one down
-          #   Movies  ← two down
-          #   Collections ← three down
-          #   Settings    ← four down
+          # Capture each remaining tab (terminate+relaunch per tab)
+          capture_tab "Search"      screenshots/02_Search.png      7
+          capture_tab "Series"      screenshots/03_Series.png      9
+          capture_tab "Movies"      screenshots/04_Movies.png      9
+          capture_tab "Collections" screenshots/05_Collections.png 7
+          capture_tab "Settings"    screenshots/06_Settings.png    5
 
-          # 02 — Search (press menu to refocus sidebar, then up from Home)
-          sidebar_nav "up"   "Search"      screenshots/02_Search.png
-
-          # Return to Home before continuing downward
-          xcrun simctl io booted sendkey menu 2>/dev/null || true
-          sleep 0.5
-          xcrun simctl io booted sendkey down 2>/dev/null || true
-          sleep 0.5
-          xcrun simctl io booted sendkey select 2>/dev/null || true
-          sleep 2  # brief re-centre, no screenshot needed
-
-          # 03 — Series (one down from Home)
-          sidebar_nav "down" "Series"      screenshots/03_Series.png
-
-          # 04 — Movies (one more down from Series)
-          sidebar_nav "down" "Movies"      screenshots/04_Movies.png
-
-          # 05 — Collections (one more down from Movies)
-          sidebar_nav "down" "Collections" screenshots/05_Collections.png
-
-          # 06 — Settings (one more down from Collections)
-          sidebar_nav "down" "Settings"    screenshots/06_Settings.png
-
-          echo "All screenshots captured:"
+          echo ""
+          echo "=== All screenshots ==="
           ls -lh screenshots/
 
       - name: Upload screenshots as artifact
