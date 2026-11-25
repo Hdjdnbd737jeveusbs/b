@@ -55,6 +55,8 @@
 		1046 /* SubtitleStyleSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2047 /* SubtitleStyleSheet.swift */; };
 		1047 /* TitleLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2048 /* TitleLogoView.swift */; };
 		1048 /* SeriesPosterCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2049 /* SeriesPosterCardView.swift */; };
+		1049 /* CustomArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050 /* CustomArtwork.swift */; };
+		1050 /* ChangeArtworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2051 /* ChangeArtworkView.swift */; };
 		B003 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* KSPlayer */; };
 /* End PBXBuildFile section */
 
@@ -109,6 +111,8 @@
 		2047 /* SubtitleStyleSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleSheet.swift; sourceTree = "<group>"; };
 		2048 /* TitleLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleLogoView.swift; sourceTree = "<group>"; };
 		2049 /* SeriesPosterCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesPosterCardView.swift; sourceTree = "<group>"; };
+		2050 /* CustomArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomArtwork.swift; sourceTree = "<group>"; };
+		2051 /* ChangeArtworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeArtworkView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,6 +185,7 @@
 				2009 /* WatchlistItem.swift */,
 				2034 /* AIOStreamsModels.swift */,
 				2041 /* SubtitleModels.swift */,
+				2050 /* CustomArtwork.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -265,6 +270,7 @@
 			children = (
 				2024 /* MovieDetailView.swift */,
 				2025 /* SeriesDetailView.swift */,
+				2051 /* ChangeArtworkView.swift */,
 			);
 			path = Detail;
 			sourceTree = "<group>";
@@ -429,6 +435,8 @@
 				1046 /* SubtitleStyleSheet.swift in Sources */,
 				1047 /* TitleLogoView.swift in Sources */,
 				1048 /* SeriesPosterCardView.swift in Sources */,
+				1049 /* CustomArtwork.swift in Sources */,
+				1050 /* ChangeArtworkView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

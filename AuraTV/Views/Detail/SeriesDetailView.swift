@@ -7,6 +7,8 @@ struct SeriesDetailView: View {
     let tmdbId: Int
 
     @Environment(\.modelContext) private var modelContext
+    @Query private var settingsList: [AppSettings]
+    @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = DetailViewModel()
     @FocusState private var focusedButton: SeriesButton?
 
@@ -14,7 +16,9 @@ struct SeriesDetailView: View {
     @State private var showStreamPicker = false
     @State private var showPlayer = false
     @State private var showMoreOptions = false
+    @State private var showChangeArtwork = false
     @State private var availableStreams: [StremioStream] = []
+    @State private var selectedStream: StremioStream?
     @State private var isLoadingStreams = false
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
@@ -23,6 +27,39 @@ struct SeriesDetailView: View {
     @State private var pendingEpisodeTitle: String?
     @State private var pendingEpisodeStillPath: String?
     @State private var seriesImdbId: String?
+
+    private var customArtwork: CustomArtwork? {
+        let key = CustomArtwork.makeKey(tmdbId: tmdbId, mediaType: "series")
+        return artworkOverrides.first { $0.key == key }
+    }
+
+    private var effectivePosterPath: String? {
+        customArtwork?.customPosterPath ?? viewModel.seriesDetail?.posterPath
+    }
+
+    private var effectiveBackdropPath: String? {
+        customArtwork?.customBackdropPath ?? viewModel.seriesDetail?.backdropPath ?? effectivePosterPath
+    }
+
+    private var effectiveLogoPath: String? {
+        customArtwork?.customLogoPath ?? viewModel.logoPath
+    }
+
+    private var preferredQuality: String {
+        settingsList.first?.preferredQuality ?? "4K"
+    }
+
+    private func effectiveResumeTime(forSeason season: Int, episode: Int) -> Double {
+        if settingsList.first?.resumePlaybackBehavior == "Start Over" {
+            return 0
+        }
+        guard let progress = viewModel.watchProgress,
+              progress.seasonNumber == season,
+              progress.episodeNumber == episode else {
+            return 0
+        }
+        return progress.currentTime
+    }
 
     enum SeriesButton: Hashable {
         case play
@@ -81,19 +118,35 @@ struct SeriesDetailView: View {
             StreamPickerSheet(
                 title: streamPickerTitle,
                 streams: availableStreams,
+                selectedStream: selectedStream,
+                preferredQuality: preferredQuality,
                 onSelect: { stream in
+                    selectedStream = stream
                     if let urlString = stream.url, let url = URL(string: urlString) {
+                        let s = pendingEpisodeSeason ?? 1
+                        let e = pendingEpisodeNumber ?? 1
                         startPlayback(
                             url: url,
-                            season: pendingEpisodeSeason ?? 1,
-                            episode: pendingEpisodeNumber ?? 1,
+                            stream: stream,
+                            season: s,
+                            episode: e,
                             episodeTitle: pendingEpisodeTitle,
                             stillPath: pendingEpisodeStillPath,
-                            resumeFrom: (viewModel.watchProgress?.seasonNumber == pendingEpisodeSeason && viewModel.watchProgress?.episodeNumber == pendingEpisodeNumber) ? (viewModel.watchProgress?.currentTime ?? 0) : 0
+                            resumeFrom: effectiveResumeTime(forSeason: s, episode: e)
                         )
                     }
                 },
                 onDismiss: { showStreamPicker = false }
+            )
+        }
+        .sheet(isPresented: $showChangeArtwork) {
+            ChangeArtworkView(
+                tmdbId: tmdbId,
+                mediaType: "series",
+                title: viewModel.seriesDetail?.name ?? "Series",
+                defaultPosterPath: viewModel.seriesDetail?.posterPath,
+                defaultBackdropPath: viewModel.seriesDetail?.backdropPath,
+                defaultLogoPath: viewModel.logoPath
             )
         }
         .fullScreenCover(isPresented: $showPlayer) {
@@ -103,13 +156,16 @@ struct SeriesDetailView: View {
             Button("Choose Stream Source...") {
                 playSeries(forcePicker: true)
             }
+            Button("Change Artwork...") {
+                showChangeArtwork = true
+            }
             Button(viewModel.isWatched ? "Mark as Unwatched" : "Mark as Watched") {
                 viewModel.toggleWatched(
                     tmdbId: tmdbId,
                     mediaType: "series",
                     title: viewModel.seriesDetail?.name ?? "",
-                    posterPath: viewModel.seriesDetail?.posterPath,
-                    backdropPath: viewModel.seriesDetail?.backdropPath,
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
                     context: modelContext
                 )
             }
@@ -149,7 +205,7 @@ struct SeriesDetailView: View {
     private func backdropLayer(geometry: GeometryProxy) -> some View {
         let height = geometry.size.height * 0.78
         ZStack(alignment: .topTrailing) {
-            if let path = viewModel.seriesDetail?.backdropPath ?? viewModel.seriesDetail?.posterPath,
+            if let path = effectiveBackdropPath,
                let url = TMDBService.shared.imageURL(path: path, size: "original") {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -211,7 +267,7 @@ struct SeriesDetailView: View {
                 title: detail.name,
                 mediaType: "tv",
                 tmdbId: detail.id,
-                preloadedLogoPath: viewModel.logoPath,
+                preloadedLogoPath: effectiveLogoPath,
                 maxWidth: 560,
                 maxHeight: 145,
                 fallbackFontSize: 58,
@@ -365,8 +421,8 @@ struct SeriesDetailView: View {
                     tmdbId: tmdbId,
                     mediaType: "series",
                     title: viewModel.seriesDetail?.name ?? "",
-                    posterPath: viewModel.seriesDetail?.posterPath,
-                    backdropPath: viewModel.seriesDetail?.backdropPath,
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
                     context: modelContext
                 )
             }
@@ -380,8 +436,8 @@ struct SeriesDetailView: View {
                     tmdbId: tmdbId,
                     mediaType: "series",
                     title: viewModel.seriesDetail?.name ?? "",
-                    posterPath: viewModel.seriesDetail?.posterPath,
-                    backdropPath: viewModel.seriesDetail?.backdropPath,
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
                     context: modelContext
                 )
             }
@@ -572,7 +628,14 @@ struct SeriesDetailView: View {
         )
     }
 
-    private func fetchAndPlayEpisode(season: Int, episode: Int, title: String?, stillPath: String?, forcePicker: Bool = false) {
+    private func fetchAndPlayEpisode(
+        season: Int,
+        episode: Int,
+        title: String?,
+        stillPath: String?,
+        forcePicker: Bool = false,
+        autoPlayBest: Bool = false
+    ) {
         pendingEpisodeSeason = season
         pendingEpisodeNumber = episode
         pendingEpisodeTitle = title
@@ -589,19 +652,26 @@ struct SeriesDetailView: View {
                 let streams = try await AIOStreamsService.shared.fetchStreamsForEpisode(
                     tmdbId: tmdbId,
                     season: season,
-                    episode: episode
+                    episode: episode,
+                    preferredQuality: preferredQuality
                 )
                 availableStreams = streams
+                let best = AIOStreamsService.shared.bestStream(matching: preferredQuality, in: streams)
+                selectedStream = best
                 isLoadingStreams = false
 
-                if !forcePicker && streams.count == 1, let url = URL(string: streams[0].url ?? "") {
+                if (!forcePicker && streams.count == 1) || autoPlayBest,
+                   let chosen = best ?? streams.first,
+                   let urlString = chosen.url,
+                   let url = URL(string: urlString) {
                     startPlayback(
                         url: url,
+                        stream: chosen,
                         season: season,
                         episode: episode,
                         episodeTitle: title,
                         stillPath: stillPath,
-                        resumeFrom: (viewModel.watchProgress?.seasonNumber == season && viewModel.watchProgress?.episodeNumber == episode) ? (viewModel.watchProgress?.currentTime ?? 0) : 0
+                        resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
                     )
                 } else {
                     showStreamPicker = true
@@ -615,6 +685,7 @@ struct SeriesDetailView: View {
 
     private func startPlayback(
         url: URL,
+        stream: StremioStream? = nil,
         season: Int,
         episode: Int,
         episodeTitle: String?,
@@ -622,12 +693,17 @@ struct SeriesDetailView: View {
         resumeFrom: Double = 0
     ) {
         let detail = viewModel.seriesDetail
+        let nextEp = viewModel.seasonDetail?.episodes?.first(where: {
+            $0.seasonNumber == season && $0.episodeNumber == episode + 1
+        })
+
         playerViewModel = PlayerViewModel()
         playerViewModel.configure(
             url: url,
             title: detail?.name ?? "Series",
-            backdropPath: detail?.backdropPath,
-            posterPath: detail?.posterPath,
+            overview: detail?.overview ?? "",
+            backdropPath: effectiveBackdropPath,
+            posterPath: effectivePosterPath,
             tmdbId: tmdbId,
             mediaType: "series",
             seasonNumber: season,
@@ -635,7 +711,22 @@ struct SeriesDetailView: View {
             episodeTitle: episodeTitle,
             episodeStillPath: stillPath,
             resumeFrom: resumeFrom,
-            imdbId: seriesImdbId ?? ""
+            imdbId: seriesImdbId ?? "",
+            availableStreams: availableStreams,
+            selectedStream: stream ?? selectedStream,
+            nextEpisode: nextEp,
+            onPlayNextEpisode: { ep in
+                showPlayer = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    fetchAndPlayEpisode(
+                        season: ep.seasonNumber,
+                        episode: ep.episodeNumber,
+                        title: ep.name,
+                        stillPath: ep.stillPath,
+                        autoPlayBest: true
+                    )
+                }
+            }
         )
         showStreamPicker = false
         showPlayer = true

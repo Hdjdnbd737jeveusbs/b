@@ -73,6 +73,8 @@ final class SettingsViewModel {
     var exportData: Data?
     var statusMessage: String?
     var error: String?
+    var connectionTestStatus: String?
+    var isTestingConnection: Bool = false
 
     // MARK: - Static Option Lists
 
@@ -84,9 +86,9 @@ final class SettingsViewModel {
     static let playerEngineOptions = ["KSPlayer", "AVPlayer"]
     static let audioModeOptions = ["Dolby Digital Plus 5.1", "Stereo"]
     static let subtitleAutoOptions = ["Preferred Languages", "Always On", "Off"]
-    static let subtitleSizeOptions: [Double] = [36, 44, 52, 58]
+    static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
     static let fontWeightOptions = ["Regular", "Medium", "Semibold", "Bold"]
-    static let fontNameOptions = ["System", "Geeza Pro", "SF Arabic", "Helvetica Neue"]
+    static let fontNameOptions = SubtitleProcessor.availableFonts
     static let skipModeOptions = ["Skip After Delay", "Show Button", "Off"]
     static let skipDelayOptions = [3, 5, 8, 10]
     static let artworkLanguageOptions = ["English", "Arabic", "All Languages"]
@@ -370,5 +372,36 @@ final class SettingsViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    @MainActor
+    func clearCustomArtwork(context: ModelContext) {
+        let descriptor = FetchDescriptor<CustomArtwork>()
+        do {
+            let items = try context.fetch(descriptor)
+            for item in items { context.delete(item) }
+            try context.save()
+            statusMessage = "Restored default TMDB artwork for \(items.count) titles."
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    func testAIOStreamsConnection() async {
+        isTestingConnection = true
+        connectionTestStatus = nil
+        AIOStreamsService.shared.manifestURL = aioStreamsUrl
+
+        do {
+            let manifest = try await AIOStreamsService.shared.fetchManifest()
+            let addonName = manifest.name ?? "AIOStreams"
+            let addonVersion = manifest.version ?? "1.0"
+            connectionTestStatus = "Connected to \(addonName) (v\(addonVersion))"
+        } catch {
+            connectionTestStatus = error.localizedDescription
+        }
+
+        isTestingConnection = false
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ContinueWatchingRow: View {
     let items: [WatchHistory]
+    var backdropOverrides: [String: String] = [:]
 
     var body: some View {
         if !items.isEmpty {
@@ -16,7 +17,8 @@ struct ContinueWatchingRow: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 24) {
                         ForEach(items) { item in
-                            ContinueWatchingCard(item: item)
+                            let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
+                            ContinueWatchingCard(item: item, overrideBackdropPath: backdropOverrides[key])
                         }
                     }
                     .padding(.horizontal, 80)
@@ -31,6 +33,7 @@ struct ContinueWatchingRow: View {
 
 private struct ContinueWatchingCard: View {
     let item: WatchHistory
+    var overrideBackdropPath: String? = nil
 
     @FocusState private var isFocused: Bool
 
@@ -110,7 +113,7 @@ private struct ContinueWatchingCard: View {
 
     @ViewBuilder
     private var imageContent: some View {
-        let imagePath = item.episodeStillPath ?? item.backdropPath ?? item.posterPath
+        let imagePath = item.episodeStillPath ?? overrideBackdropPath ?? item.backdropPath ?? item.posterPath
         if let path = imagePath,
            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
             AsyncImage(url: url) { phase in

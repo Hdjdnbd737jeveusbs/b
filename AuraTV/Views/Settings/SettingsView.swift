@@ -64,6 +64,7 @@ private struct SummaryTileItem: Identifiable {
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = SettingsViewModel()
 
     @State private var selectedCategory: SettingsCategory = .playback
@@ -366,7 +367,7 @@ struct SettingsView: View {
             return [
                 SummaryTileItem(label: "Home logos", value: viewModel.includeLogosInHome ? "On" : "Off"),
                 SummaryTileItem(label: "Logo language", value: viewModel.preferredArtworkLanguage),
-                SummaryTileItem(label: "Arabic RTL fix", value: viewModel.fixArabicRTL ? "On" : "Off"),
+                SummaryTileItem(label: "Custom artwork", value: artworkOverrides.isEmpty ? "Default" : "\(artworkOverrides.count) titles"),
                 SummaryTileItem(label: "Auto sync subtitles", value: viewModel.autoSyncSubtitles ? "On" : "Off")
             ]
         case .about:
@@ -493,6 +494,10 @@ struct SettingsView: View {
                 viewModel.subtitleFontSize = viewModel.nextValue(after: viewModel.subtitleFontSize, in: SettingsViewModel.subtitleSizeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            cycleSettingRow(title: "Font Weight", value: viewModel.subtitleFontWeight) {
+                viewModel.subtitleFontWeight = viewModel.nextValue(after: viewModel.subtitleFontWeight, in: SettingsViewModel.fontWeightOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
             toggleSettingRow(
                 title: "Fix Arabic RTL Alignment",
                 subtitle: "Applies proper right-to-left directional embedding to Arabic subtitle lines.",
@@ -588,6 +593,22 @@ struct SettingsView: View {
                 text: $viewModel.openSubtitlesApiKey,
                 isSecure: true
             )
+            actionSettingRow(
+                title: viewModel.isTestingConnection ? "Testing AIOStreams..." : "Test AIOStreams Manifest",
+                icon: "network"
+            ) {
+                viewModel.saveSettings(context: modelContext)
+                Task {
+                    await viewModel.testAIOStreamsConnection()
+                }
+            }
+            if let connectionStatus = viewModel.connectionTestStatus {
+                Text(connectionStatus)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(connectionStatus.hasPrefix("Connected") ? Color.green : Color.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+            }
 
         case .trakt:
             textFieldSettingRow(
@@ -620,6 +641,12 @@ struct SettingsView: View {
                 subtitle: "Aligns downloaded SRT/VTT timing automatically when opening playback.",
                 isOn: $viewModel.autoSyncSubtitles
             )
+            actionSettingRow(
+                title: "Restore All Default Artwork (\(artworkOverrides.count))",
+                icon: "arrow.uturn.backward"
+            ) {
+                viewModel.clearCustomArtwork(context: modelContext)
+            }
 
         case .about:
             infoRow(title: "Application", value: "AuraTV 1.0.0")

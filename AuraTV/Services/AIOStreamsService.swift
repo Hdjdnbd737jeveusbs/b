@@ -15,7 +15,7 @@ enum AIOStreamsError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingManifestURL:
-            return "AIOStreams manifest URL is not configured. Please set it in Settings."
+            return "AIOStreams manifest URL is not configured. Please set it in Settings → Servers & Accounts."
         case .invalidURL:
             return "Invalid AIOStreams URL."
         case .missingIMDbId:
@@ -37,35 +37,22 @@ enum AIOStreamsError: LocalizedError {
 @Observable
 final class AIOStreamsService {
 
-    // MARK: Singleton
-
     static let shared = AIOStreamsService()
 
-    // MARK: Configuration
-
-    /// The base manifest URL set from AppSettings (e.g. "https://addon.example.com/...")
-    /// We strip `/manifest.json` if present to get the base path for stream requests.
     var manifestURL: String = ""
 
-    /// Computed base URL without trailing `/manifest.json`
     var baseURL: String {
         var url = manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Remove trailing slash
         while url.hasSuffix("/") { url = String(url.dropLast()) }
-        // Remove manifest.json suffix
         if url.hasSuffix("/manifest.json") {
             url = String(url.dropLast("/manifest.json".count))
         }
         return url
     }
 
-    // MARK: State
-
     var isLoading: Bool = false
     var streams: [StremioStream] = []
     var error: String?
-
-    // MARK: Private
 
     private let session: URLSession
     private let decoder: JSONDecoder
@@ -81,32 +68,20 @@ final class AIOStreamsService {
 
     // MARK: - Manifest Validation
 
-    /// Fetch and validate the manifest is reachable and valid.
     func fetchManifest() async throws -> StremioManifest {
-        guard !manifestURL.isEmpty else {
+        guard !manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIOStreamsError.missingManifestURL
         }
 
-        let manifestEndpoint: String
-        if manifestURL.hasSuffix("/manifest.json") {
-            manifestEndpoint = manifestURL
-        } else {
-            manifestEndpoint = "\(baseURL)/manifest.json"
-        }
+        let manifestEndpoint = manifestURL.hasSuffix("/manifest.json")
+            ? manifestURL
+            : "\(baseURL)/manifest.json"
 
         guard let url = URL(string: manifestEndpoint) else {
             throw AIOStreamsError.invalidURL
         }
 
-        let data: Data
-        let response: URLResponse
-
-        do {
-            (data, response) = try await session.data(from: url)
-        } catch {
-            throw AIOStreamsError.networkError(error)
-        }
-
+        let (data, response) = try await fetchData(from: url)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw AIOStreamsError.httpError(statusCode: http.statusCode)
         }
@@ -120,30 +95,17 @@ final class AIOStreamsService {
 
     // MARK: - Fetch Streams (Raw)
 
-    /// Fetch streams for a given Stremio-compatible type and ID.
-    /// - Parameters:
-    ///   - type: "movie" or "series"
-    ///   - stremioId: IMDb ID for movies (e.g. "tt1234567"), or "tt1234567:S:E" for episodes
     func fetchStreams(type: String, stremioId: String) async throws -> [StremioStream] {
-        guard !manifestURL.isEmpty else {
+        guard !manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIOStreamsError.missingManifestURL
         }
 
         let endpoint = "\(baseURL)/stream/\(type)/\(stremioId).json"
-
         guard let url = URL(string: endpoint) else {
             throw AIOStreamsError.invalidURL
         }
 
-        let data: Data
-        let response: URLResponse
-
-        do {
-            (data, response) = try await session.data(from: url)
-        } catch {
-            throw AIOStreamsError.networkError(error)
-        }
-
+        let (data, response) = try await fetchData(from: url)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw AIOStreamsError.httpError(statusCode: http.statusCode)
         }
@@ -156,46 +118,41 @@ final class AIOStreamsService {
         }
     }
 
-    // MARK: - High-Level: Fetch Streams for Movie
+    // MARK: - High-Level: Movie & Series
 
-    /// Fetch streams for a movie given its TMDB ID.
-    /// Internally resolves the IMDb ID via TMDB external_ids.
     @MainActor
-    func fetchStreamsForMovie(tmdbId: Int) async throws -> [StremioStream] {
+    func fetchStreamsForMovie(tmdbId: Int, preferredQuality: String = "4K") async throws -> [StremioStream] {
         isLoading = true
         error = nil
         streams = []
-
         defer { isLoading = false }
 
-        // Get IMDb ID
         let externalIds = try await TMDBService.shared.fetchMovieExternalIds(id: tmdbId)
         guard let imdbId = externalIds.imdbId, !imdbId.isEmpty else {
             throw AIOStreamsError.missingIMDbId
         }
 
         let result = try await fetchStreams(type: "movie", stremioId: imdbId)
-        if result.isEmpty {
+        guard !result.isEmpty else {
             throw AIOStreamsError.noStreamsFound
         }
 
-        streams = sortedStreams(result)
+        streams = sortedStreams(result, preferredQuality: preferredQuality)
         return streams
     }
 
-    // MARK: - High-Level: Fetch Streams for Episode
-
-    /// Fetch streams for a series episode given TMDB series ID, season number, and episode number.
-    /// Stremio format: `tt1234567:season:episode`
     @MainActor
-    func fetchStreamsForEpisode(tmdbId: Int, season: Int, episode: Int) async throws -> [StremioStream] {
+    func fetchStreamsForEpisode(
+        tmdbId: Int,
+        season: Int,
+        episode: Int,
+        preferredQuality: String = "4K"
+    ) async throws -> [StremioStream] {
         isLoading = true
         error = nil
         streams = []
-
         defer { isLoading = false }
 
-        // Get IMDb ID
         let externalIds = try await TMDBService.shared.fetchSeriesExternalIds(id: tmdbId)
         guard let imdbId = externalIds.imdbId, !imdbId.isEmpty else {
             throw AIOStreamsError.missingIMDbId
@@ -203,46 +160,73 @@ final class AIOStreamsService {
 
         let stremioId = "\(imdbId):\(season):\(episode)"
         let result = try await fetchStreams(type: "series", stremioId: stremioId)
-        if result.isEmpty {
+        guard !result.isEmpty else {
             throw AIOStreamsError.noStreamsFound
         }
 
-        streams = sortedStreams(result)
+        streams = sortedStreams(result, preferredQuality: preferredQuality)
         return streams
     }
 
-    // MARK: - Sorting
+    // MARK: - Auto-Selection & Sorting
 
-    /// Sort streams by quality: 4K first, then 1080p, 720p, etc.
-    /// Within same resolution, cached streams first, then by file size descending.
-    private func sortedStreams(_ streams: [StremioStream]) -> [StremioStream] {
-        streams.sorted { a, b in
+    /// Returns the best playable stream honoring `preferredQuality` ("4K", "1080p", "720p", "480p").
+    func bestStream(matching preferredQuality: String, in candidates: [StremioStream]) -> StremioStream? {
+        sortedStreams(candidates, preferredQuality: preferredQuality)
+            .first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) })
+    }
+
+    func sortedStreams(_ streams: [StremioStream], preferredQuality: String = "4K") -> [StremioStream] {
+        let targetRes = StreamResolution(rawValue: preferredQuality) ?? .uhd4k
+
+        return streams.sorted { a, b in
             let infoA = a.parsedInfo
             let infoB = b.parsedInfo
 
+            // 1. Exact preferred quality tier comes first
+            let matchA = infoA.resolution == targetRes
+            let matchB = infoB.resolution == targetRes
+            if matchA != matchB {
+                return matchA
+            }
+
+            // 2. Otherwise sort descending resolution order (4K -> 1080p -> 720p -> ...)
             if infoA.qualitySortOrder != infoB.qualitySortOrder {
                 return infoA.qualitySortOrder < infoB.qualitySortOrder
             }
 
-            // Cached first
+            // 3. Cached debrid streams first
             if infoA.isCached != infoB.isCached {
                 return infoA.isCached
             }
 
-            return false
+            // 4. REMUX / HDR boost
+            let remuxA = infoA.releaseType == "REMUX"
+            let remuxB = infoB.releaseType == "REMUX"
+            if remuxA != remuxB {
+                return remuxA
+            }
+
+            return (infoA.hdrType != nil) && (infoB.hdrType == nil)
         }
     }
 
-    // MARK: - Grouping
-
-    /// Group streams by resolution for the picker UI.
     func groupedByResolution() -> [(resolution: StreamResolution, streams: [StremioStream])] {
         let grouped = Dictionary(grouping: streams) { $0.parsedInfo.resolution }
-
         let order: [StreamResolution] = [.uhd4k, .fhd1080p, .hd720p, .sd480p, .unknown]
         return order.compactMap { resolution in
             guard let group = grouped[resolution], !group.isEmpty else { return nil }
             return (resolution: resolution, streams: group)
+        }
+    }
+
+    // MARK: - Private Network Helper
+
+    private func fetchData(from url: URL) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(from: url)
+        } catch {
+            throw AIOStreamsError.networkError(error)
         }
     }
 }

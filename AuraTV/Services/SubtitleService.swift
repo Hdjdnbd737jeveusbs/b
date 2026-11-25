@@ -450,7 +450,7 @@ final class SubtitleService {
                 }
             }
 
-            guard let tIndex = timeLineIndex, let match = matchRange else { continue }
+            guard let tIndex = timeLineIndex, matchRange != nil else { continue }
 
             let timeLine = lines[tIndex]
 

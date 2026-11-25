@@ -183,13 +183,15 @@ jobs:
             echo "--- end log tail ---"
           }
 
-          # Capture all 6 tabs deterministically
+          # Capture all 6 tabs + detail & HUD preview screens deterministically
           capture_tab "Home"        screenshots/01_Home.png        12
           capture_tab "Search"      screenshots/02_Search.png      6
           capture_tab "Series"      screenshots/03_Series.png      10
           capture_tab "Movies"      screenshots/04_Movies.png      10
           capture_tab "Collections" screenshots/05_Collections.png 6
           capture_tab "Settings"    screenshots/06_Settings.png    6
+          capture_tab "MovieDetail" screenshots/07_MovieDetail.png 10
+          capture_tab "PlayerHUD"   screenshots/08_PlayerHUD.png   8
 
           echo ""
           echo "=== All screenshots ==="

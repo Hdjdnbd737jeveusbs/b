@@ -162,6 +162,15 @@ final class TMDBService {
         )
     }
 
+    /// Fetch full multi-language artwork sets (posters, backdrops, logos) for ChangeArtworkView.
+    func fetchAllArtwork(mediaType: String, id: Int) async throws -> TMDBImagesResponse {
+        let normalizedType = mediaType == "series" ? "tv" : mediaType
+        return try await request(
+            endpoint: "\(normalizedType)/\(id)/images",
+            queryItems: [.init(name: "include_image_language", value: "en,ar,null")]
+        )
+    }
+
     /// Returns the best raster (non-SVG) transparent TMDB logo path for display in UIImage/AsyncImage.
     func fetchBestLogoPath(mediaType: String, id: Int) async -> String? {
         let normalizedType = mediaType == "series" ? "tv" : mediaType

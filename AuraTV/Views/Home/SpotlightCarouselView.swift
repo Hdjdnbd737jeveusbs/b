@@ -23,6 +23,7 @@ struct SpotlightCarouselView: View {
     var logos: [Int: String] = [:]
     var runtimes: [Int: Int] = [:]
     var certifications: [Int: String] = [:]
+    var customBackdrops: [Int: String] = [:]
     var showLogos: Bool = true
 
     @State private var currentIndex: Int = 0
@@ -302,7 +303,7 @@ struct SpotlightCarouselView: View {
 
     @ViewBuilder
     private func backdropImage(for item: TMDBMovie, width: CGFloat?, height: CGFloat) -> some View {
-        if let path = item.backdropPath ?? item.posterPath,
+        if let path = customBackdrops[item.id] ?? item.backdropPath ?? item.posterPath,
            let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
             AsyncImage(url: url) { phase in
                 switch phase {

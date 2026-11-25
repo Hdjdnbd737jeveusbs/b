@@ -5,7 +5,17 @@ import SwiftData
 
 struct CollectionsView: View {
     @Query(sort: \WatchlistItem.addedDate, order: .reverse) private var watchlist: [WatchlistItem]
+    @Query private var artworkOverrides: [CustomArtwork]
     @Environment(\.modelContext) private var modelContext
+
+    private var posterOverrideMap: [String: String] {
+        Dictionary(
+            artworkOverrides.compactMap { item in
+                item.customPosterPath.map { (item.key, $0) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     private let columns = [
         GridItem(.adaptive(minimum: 210, maximum: 240), spacing: 28)
@@ -39,7 +49,8 @@ struct CollectionsView: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVGrid(columns: columns, spacing: 32) {
                             ForEach(watchlist) { item in
-                                WatchlistCard(item: item)
+                                let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
+                                WatchlistCard(item: item, overridePosterPath: posterOverrideMap[key])
                             }
                         }
                         .padding(.horizontal, 75)
@@ -75,6 +86,7 @@ struct CollectionsView: View {
 
 private struct WatchlistCard: View {
     let item: WatchlistItem
+    var overridePosterPath: String? = nil
 
     @FocusState private var isFocused: Bool
 
@@ -83,7 +95,7 @@ private struct WatchlistCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 // Poster
                 ZStack(alignment: .topTrailing) {
-                    if let path = item.posterPath ?? item.backdropPath,
+                    if let path = overridePosterPath ?? item.posterPath ?? item.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
                         AsyncImage(url: url) { phase in
                             switch phase {
@@ -102,7 +114,7 @@ private struct WatchlistCard: View {
                     }
 
                     // Media badge
-                    Text(item.mediaType.uppercased())
+                    Text(item.mediaType == "series" ? "SERIES" : item.mediaType.uppercased())
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 7)
@@ -110,6 +122,10 @@ private struct WatchlistCard: View {
                         .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
                         .padding(8)
                 }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3.5 : 1)
+                )
 
                 // Title
                 Text(item.title)
@@ -118,15 +134,16 @@ private struct WatchlistCard: View {
                     .lineLimit(1)
                     .frame(width: 220, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.08 : 1.0)
+            .scaleEffect(isFocused ? 1.07 : 1.0)
             .shadow(
-                color: isFocused ? Color.auraAccent.opacity(0.5) : Color.black.opacity(0.3),
+                color: isFocused ? Color.white.opacity(0.22) : Color.black.opacity(0.35),
                 radius: isFocused ? 20 : 6,
                 y: isFocused ? 10 : 3
             )
             .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
         .focused($isFocused)
     }
 

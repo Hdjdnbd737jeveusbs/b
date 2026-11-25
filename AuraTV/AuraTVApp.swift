@@ -10,7 +10,8 @@ struct AuraTVApp: App {
         let schema = Schema([
             WatchHistory.self,
             WatchlistItem.self,
-            AppSettings.self
+            AppSettings.self,
+            CustomArtwork.self
         ])
         let configuration = ModelConfiguration(isStoredInMemoryOnly: false)
         do {

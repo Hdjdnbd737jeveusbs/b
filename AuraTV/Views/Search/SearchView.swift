@@ -32,7 +32,8 @@ struct SearchView: View {
                                 .font(.system(size: 24))
                                 .foregroundStyle(Color.auraSecondaryText)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
                     }
                 }
                 .padding(.horizontal, 24)
@@ -134,6 +135,10 @@ private struct SearchResultCard: View {
                         .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
                         .padding(8)
                 }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3.5 : 1)
+                )
 
                 // Title & Date
                 VStack(alignment: .leading, spacing: 2) {
@@ -150,15 +155,16 @@ private struct SearchResultCard: View {
                 }
                 .frame(width: 220, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.08 : 1.0)
+            .scaleEffect(isFocused ? 1.07 : 1.0)
             .shadow(
-                color: isFocused ? Color.auraAccent.opacity(0.5) : Color.black.opacity(0.3),
+                color: isFocused ? Color.white.opacity(0.22) : Color.black.opacity(0.35),
                 radius: isFocused ? 20 : 6,
                 y: isFocused ? 10 : 3
             )
             .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
         .focused($isFocused)
     }
 

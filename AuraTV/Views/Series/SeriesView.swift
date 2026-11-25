@@ -1,8 +1,10 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Series View (16:9 Title Cards Grid with Safe-Area Clearance)
 
 struct SeriesView: View {
+    @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = SeriesViewModel()
     @State private var focusedSeries: TMDBSeries?
     @FocusState private var focusedCategory: SeriesCategory?
@@ -11,6 +13,15 @@ struct SeriesView: View {
     private let columns = [
         GridItem(.adaptive(minimum: 360, maximum: 400), spacing: 28)
     ]
+
+    private var customBackdrops: [Int: String] {
+        Dictionary(
+            artworkOverrides.filter { $0.mediaType == "series" }.compactMap { item in
+                item.customBackdropPath.map { (item.tmdbId, $0) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -26,8 +37,11 @@ struct SeriesView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVGrid(columns: columns, spacing: 32) {
                         ForEach(viewModel.series(for: viewModel.selectedCategory)) { series in
-                            SeriesCardView(series: series)
-                                .focused($focusedSeriesId, equals: series.id)
+                            SeriesCardView(
+                                series: series,
+                                overrideBackdropPath: customBackdrops[series.id]
+                            )
+                            .focused($focusedSeriesId, equals: series.id)
                         }
                     }
                     .padding(.horizontal, 75)
@@ -52,7 +66,8 @@ struct SeriesView: View {
         ZStack {
             Color.auraBackground.ignoresSafeArea()
 
-            if let path = focusedSeries?.backdropPath ?? viewModel.popularSeries.first?.backdropPath,
+            let targetSeries = focusedSeries ?? viewModel.series(for: viewModel.selectedCategory).first ?? viewModel.popularSeries.first
+            if let path = targetSeries.flatMap({ customBackdrops[$0.id] ?? $0.backdropPath ?? $0.posterPath }),
                let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {

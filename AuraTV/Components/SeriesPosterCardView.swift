@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SeriesPosterCardView: View {
     let series: TMDBSeries
+    var overridePosterPath: String? = nil
     var isWatched: Bool = false
     var showWatchedBadge: Bool = true
 
@@ -12,7 +13,7 @@ struct SeriesPosterCardView: View {
     var body: some View {
         NavigationLink(destination: SeriesDetailView(tmdbId: series.id)) {
             ZStack(alignment: .topTrailing) {
-                if let path = series.posterPath ?? series.backdropPath,
+                if let path = overridePosterPath ?? series.posterPath ?? series.backdropPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w500") {
                     AsyncImage(url: url) { phase in
                         switch phase {

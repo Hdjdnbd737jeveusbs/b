@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SeriesCardView: View {
     let series: TMDBSeries
+    var overrideBackdropPath: String? = nil
 
     @FocusState private var isFocused: Bool
 
@@ -12,7 +13,7 @@ struct SeriesCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 // 16:9 Backdrop with gradient and title
                 ZStack(alignment: .bottomLeading) {
-                    if let path = series.backdropPath ?? series.posterPath,
+                    if let path = overrideBackdropPath ?? series.backdropPath ?? series.posterPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w780") {
                         AsyncImage(url: url) { phase in
                             switch phase {

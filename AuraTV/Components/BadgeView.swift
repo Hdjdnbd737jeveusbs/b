@@ -6,6 +6,7 @@ enum BadgeStyle {
     case outlined
     case filled
     case translucent
+    case darkPill
 }
 
 // MARK: - Badge View
@@ -33,8 +34,8 @@ struct BadgeView: View {
         switch style {
         case .filled:
             return .black
-        case .outlined, .translucent:
-            return .white.opacity(0.85)
+        case .outlined, .translucent, .darkPill:
+            return .white.opacity(0.9)
         }
     }
 
@@ -47,6 +48,8 @@ struct BadgeView: View {
             Color.white.opacity(0.08)
         case .translucent:
             Color.white.opacity(0.18)
+        case .darkPill:
+            Color.black.opacity(0.8)
         }
     }
 
@@ -54,7 +57,7 @@ struct BadgeView: View {
         switch style {
         case .outlined:
             return Color.white.opacity(0.4)
-        case .filled, .translucent:
+        case .filled, .translucent, .darkPill:
             return .clear
         }
     }

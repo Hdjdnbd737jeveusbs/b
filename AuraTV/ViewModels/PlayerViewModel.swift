@@ -35,6 +35,25 @@ final class PlayerViewModel {
     var totalDuration: Double = 0
     var playbackRate: Double = 1.0
     var seekTrigger: Double?
+    var isPreviewMode: Bool = false
+
+    // MARK: - Streams & Quality
+
+    var availableStreams: [StremioStream] = []
+    var selectedStream: StremioStream?
+    var showStreamPicker: Bool = false
+    var preferredQuality: String = "4K"
+    var previewBadges: [String]?
+
+    var activeTechBadges: [String] {
+        if let previewBadges, !previewBadges.isEmpty {
+            return previewBadges
+        }
+        if let badges = selectedStream?.parsedInfo.techBadges, !badges.isEmpty {
+            return badges
+        }
+        return ["4K", "HDR10", "5.1"]
+    }
 
     // MARK: - Track Selection
 
@@ -43,7 +62,7 @@ final class PlayerViewModel {
     var selectedAudioTrackId: Int = 0
     var selectedSubtitleTrackId: Int = -1 // -1 = off
 
-    // MARK: - Phase 3: Subtitles, Styling & Sync State
+    // MARK: - Subtitles, Styling & Sync State
 
     var externalSubtitleTracks: [SubtitleTrackItem] = []
     var selectedExternalSubtitle: SubtitleTrackItem?
@@ -53,21 +72,22 @@ final class PlayerViewModel {
     var subtitleSyncSettings: SubtitleSyncSettings = .defaultSettings
     var subtitleStyle: SubtitleStyle = .defaultStyle
     var isFetchingSubtitles: Bool = false
+    var isSyncingSubtitles: Bool = false
+    var syncStatusMessage: String?
     var showSubtitleStyleSheet: Bool = false
     var showSubtitleSyncSheet: Bool = false
     var subtitleSearchText: String = ""
     var imdbId: String = ""
+    var preferredSubtitleLanguage: String = "ar"
 
-    // Filtered external subtitle tracks based on search
     var filteredSubtitleTracks: [SubtitleTrackItem] {
         if subtitleSearchText.isEmpty {
             return externalSubtitleTracks
-        } else {
-            return externalSubtitleTracks.filter {
-                $0.name.localizedCaseInsensitiveContains(subtitleSearchText) ||
-                $0.language.localizedCaseInsensitiveContains(subtitleSearchText) ||
-                ($0.releaseInfo?.localizedCaseInsensitiveContains(subtitleSearchText) ?? false)
-            }
+        }
+        return externalSubtitleTracks.filter {
+            $0.name.localizedCaseInsensitiveContains(subtitleSearchText) ||
+            $0.language.localizedCaseInsensitiveContains(subtitleSearchText) ||
+            ($0.releaseInfo?.localizedCaseInsensitiveContains(subtitleSearchText) ?? false)
         }
     }
 
@@ -78,17 +98,77 @@ final class PlayerViewModel {
     var showSubtitlePicker: Bool = false
     var showInfoPanel: Bool = false
 
+    var hasActiveModalOverlay: Bool {
+        showAudioPicker || showSubtitlePicker || showInfoPanel || showSubtitleSyncSheet || showSubtitleStyleSheet || showStreamPicker
+    }
+
+    // MARK: - Skip Intro / Credits & Up Next
+
+    var skipIntroMode: String = "Skip After Delay"
+    var skipRecapMode: String = "Skip After Delay"
+    var skipCreditsMode: String = "Show Button"
+    var skipDelaySeconds: Int = 8
+    var nextEpisodeBehavior: String = "On · 10 s"
+
+    var skipIntroDismissed: Bool = false
+    var skipCreditsDismissed: Bool = false
+    var upNextDismissed: Bool = false
+    var nextEpisode: TMDBEpisode?
+    var onPlayNextEpisode: ((TMDBEpisode) -> Void)?
+
+    private var didAutoSkipIntro: Bool = false
+    private var upNextTriggered: Bool = false
+
+    var showSkipIntroPill: Bool {
+        mediaType == "series"
+            && !skipIntroDismissed
+            && skipIntroMode != "Off"
+            && totalDuration > 180
+            && currentTime >= 15
+            && currentTime <= 105
+    }
+
+    var skipIntroCountdownRemaining: Int? {
+        guard showSkipIntroPill, skipIntroMode == "Skip After Delay" else { return nil }
+        return max(0, skipDelaySeconds - Int(currentTime - 15))
+    }
+
+    var showSkipCreditsPill: Bool {
+        totalDuration > 180
+            && (totalDuration - currentTime) <= 75
+            && (totalDuration - currentTime) > 45
+            && !skipCreditsDismissed
+            && skipCreditsMode != "Off"
+            && !showUpNextOverlay
+    }
+
+    var showUpNextOverlay: Bool {
+        mediaType == "series"
+            && nextEpisode != nil
+            && !upNextDismissed
+            && nextEpisodeBehavior != "Off"
+            && totalDuration > 180
+            && (totalDuration - currentTime) <= 45
+    }
+
+    var upNextCountdownRemaining: Int {
+        let configured = nextEpisodeBehavior.contains("5") ? 5 : 10
+        let remainingUntilEnd = max(0, Int(totalDuration - currentTime))
+        return min(configured, max(0, remainingUntilEnd - (45 - configured)))
+    }
+
     // MARK: - Media Info
 
     var title: String = ""
+    var overview: String = ""
     var backdropPath: String?
+    var posterPath: String?
     var tmdbId: Int = 0
     var mediaType: String = "movie"
     var seasonNumber: Int?
     var episodeNumber: Int?
     var episodeTitle: String?
     var episodeStillPath: String?
-    var posterPath: String?
 
     // MARK: - Resume
 
@@ -102,34 +182,30 @@ final class PlayerViewModel {
 
     // MARK: - Computed Properties
 
-    /// Progress between 0 and 1.
     var progress: Double {
         guard totalDuration > 0 else { return 0 }
         return min(max(currentTime / totalDuration, 0), 1)
     }
 
-    /// Current time formatted as "39:10" or "1:23:45".
     var currentTimeFormatted: String {
         formatTime(currentTime)
     }
 
-    /// Remaining time formatted as "-1:43:59".
     var remainingTimeFormatted: String {
         let remaining = max(totalDuration - currentTime, 0)
         return "-\(formatTime(remaining))"
     }
 
-    /// Whether the stream has started playing (past buffering).
     var hasStartedPlayback: Bool {
-        !isBuffering && totalDuration > 0
+        (!isBuffering && totalDuration > 0) || isPreviewMode
     }
 
     // MARK: - Setup
 
-    /// Configure the player with media info and prepare for playback.
     func configure(
         url: URL,
         title: String,
+        overview: String = "",
         backdropPath: String?,
         posterPath: String?,
         tmdbId: Int,
@@ -139,10 +215,16 @@ final class PlayerViewModel {
         episodeTitle: String? = nil,
         episodeStillPath: String? = nil,
         resumeFrom: Double = 0,
-        imdbId: String = ""
+        imdbId: String = "",
+        availableStreams: [StremioStream] = [],
+        selectedStream: StremioStream? = nil,
+        nextEpisode: TMDBEpisode? = nil,
+        onPlayNextEpisode: ((TMDBEpisode) -> Void)? = nil
     ) {
+        self.isPreviewMode = false
         self.streamURL = url
         self.title = title
+        self.overview = overview
         self.backdropPath = backdropPath
         self.posterPath = posterPath
         self.tmdbId = tmdbId
@@ -153,14 +235,78 @@ final class PlayerViewModel {
         self.episodeStillPath = episodeStillPath
         self.resumeFromTime = resumeFrom
         self.imdbId = imdbId
+        self.availableStreams = availableStreams
+        self.selectedStream = selectedStream
+        self.nextEpisode = nextEpisode
+        self.onPlayNextEpisode = onPlayNextEpisode
         self.isBuffering = true
         self.isPlaying = false
         self.currentTime = resumeFrom
+        self.skipIntroDismissed = false
+        self.skipCreditsDismissed = false
+        self.upNextDismissed = false
+        self.didAutoSkipIntro = false
+        self.upNextTriggered = false
 
-        // Auto-fetch external subtitles for this title
         Task {
             await fetchSubtitles()
         }
+    }
+
+    /// Configures realistic Skyfall demo playback state + live Subtitle Sync overlay for CI previews.
+    @MainActor
+    func configurePreviewHUD() {
+        self.isPreviewMode = true
+        self.title = "Skyfall"
+        self.overview = "When Bond's latest assignment goes gravely wrong and agents around the world are exposed, MI6 itself comes under attack."
+        self.tmdbId = 37724
+        self.mediaType = "movie"
+        self.backdropPath = "/wkA622CCN2X0uwpgqYEOnUYEDf5.jpg"
+        self.currentTime = 2350
+        self.totalDuration = 8580
+        self.isBuffering = false
+        self.isPlaying = true
+        self.isHUDVisible = true
+        self.previewBadges = ["4K", "Dolby Vision", "5.1"]
+        self.availableStreams = [
+            StremioStream(
+                name: "Torrentio | RD+",
+                title: "Skyfall.2012.2160p.UHD.BluRay.REMUX.DV.HDR10.TrueHD.Atmos.7.1",
+                description: "4K DV HDR10 42.6 GB",
+                url: "https://example.com/skyfall-4k.mkv"
+            )
+        ]
+        self.selectedStream = availableStreams.first
+        self.availableAudioTracks = [
+            MediaTrack(id: 1, name: "English · Dolby TrueHD Atmos 7.1", language: "en", isDefault: true),
+            MediaTrack(id: 2, name: "English · AC3 5.1", language: "en", isDefault: false)
+        ]
+        self.selectedAudioTrackId = 1
+
+        let sampleSub = SubtitleTrackItem(
+            id: "preview_ar",
+            name: "Arabic · BluRay 1080p",
+            language: "Arabic",
+            languageCode: "ar",
+            source: .subdl,
+            downloadURL: nil,
+            releaseInfo: "BluRay 1080p",
+            hearingImpaired: false,
+            isEmbedded: false,
+            embeddedTrackId: nil
+        )
+        self.externalSubtitleTracks = [sampleSub]
+        self.selectedExternalSubtitle = sampleSub
+        self.currentSubtitleCue = SubtitleCue(
+            id: 1,
+            startTime: 2345,
+            endTime: 2355,
+            text: "سفينة كبيرة لعينة، أستمحيك عذراً.",
+            processedText: nil,
+            isArabic: true
+        )
+        self.syncStatusMessage = "Using English subtitle timing reference"
+        self.showSubtitleSyncSheet = true
     }
 
     // MARK: - Playback Controls
@@ -198,6 +344,50 @@ final class PlayerViewModel {
         seek(to: currentTime - seconds)
     }
 
+    func switchStream(_ stream: StremioStream) {
+        guard let urlStr = stream.url, let url = URL(string: urlStr) else { return }
+        selectedStream = stream
+        resumeFromTime = currentTime
+        streamURL = url
+        isBuffering = true
+        showStreamPicker = false
+    }
+
+    // MARK: - Skip Intro / Up Next
+
+    func skipIntro() {
+        skipIntroDismissed = true
+        didAutoSkipIntro = true
+        let target = min(105, max(currentTime, totalDuration - 10))
+        seek(to: target)
+    }
+
+    func dismissSkipIntro() {
+        skipIntroDismissed = true
+    }
+
+    func skipCredits() {
+        skipCreditsDismissed = true
+        if nextEpisode != nil {
+            playNextEpisodeNow()
+        } else {
+            seek(to: max(currentTime, totalDuration - 2))
+        }
+    }
+
+    func dismissUpNext() {
+        upNextDismissed = true
+    }
+
+    @MainActor
+    func playNextEpisodeNow() {
+        guard let nextEpisode else { return }
+        upNextTriggered = true
+        upNextDismissed = true
+        saveProgress()
+        onPlayNextEpisode?(nextEpisode)
+    }
+
     // MARK: - Track Selection
 
     func selectAudioTrack(_ trackId: Int) {
@@ -216,6 +406,7 @@ final class PlayerViewModel {
     }
 
     func hideHUD() {
+        guard !hasActiveModalOverlay && !isPreviewMode else { return }
         isHUDVisible = false
         showAudioPicker = false
         showSubtitlePicker = false
@@ -232,9 +423,10 @@ final class PlayerViewModel {
 
     private func resetHUDTimer() {
         hudHideTimer?.invalidate()
-        hudHideTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+        guard !isPreviewMode else { return }
+        hudHideTimer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.isPlaying else { return }
+                guard let self, self.isPlaying, !self.hasActiveModalOverlay else { return }
                 self.hideHUD()
             }
         }
@@ -254,7 +446,6 @@ final class PlayerViewModel {
         totalDuration = duration
         isBuffering = false
 
-        // Auto-seek to resume point
         if resumeFromTime > 0 {
             seek(to: resumeFromTime)
             resumeFromTime = 0
@@ -265,6 +456,7 @@ final class PlayerViewModel {
 
     // MARK: - Time Updates
 
+    @MainActor
     func onTimeUpdate(current: Double, total: Double) {
         currentTime = current
         if total > 0 { totalDuration = total }
@@ -275,32 +467,47 @@ final class PlayerViewModel {
             currentSubtitleCue = activeCues.first { cue in
                 cue.isActive(at: current, offset: offset)
             }
-        } else {
+        } else if !isPreviewMode {
             currentSubtitleCue = nil
+        }
+
+        // Auto-skip intro if configured in Settings
+        if skipIntroMode == "Skip After Delay",
+           !didAutoSkipIntro,
+           let remaining = skipIntroCountdownRemaining,
+           remaining == 0 {
+            skipIntro()
+        }
+
+        // Auto-advance to next episode if Up Next countdown reaches 0
+        if showUpNextOverlay,
+           !upNextTriggered,
+           upNextCountdownRemaining == 0,
+           (totalDuration - currentTime) <= 2 {
+            playNextEpisodeNow()
         }
     }
 
-    // MARK: - Phase 3: Subtitle Operations
+    // MARK: - Subtitle Operations
 
     @MainActor
     func fetchSubtitles() async {
         isFetchingSubtitles = true
         let queryId = imdbId.isEmpty ? "\(tmdbId)" : imdbId
 
-        // Fetch external subtitles across Wyzie, SubDL, and OpenSubtitles
         let externalTracks = await SubtitleService.shared.fetchSubtitles(
             imdbId: queryId,
             season: seasonNumber,
             episode: episodeNumber,
-            preferredLanguage: "ar"
+            preferredLanguage: preferredSubtitleLanguage
         )
 
         externalSubtitleTracks = externalTracks
 
-        // Auto-select first Arabic track if available, or first track
         if selectedExternalSubtitle == nil {
-            if let firstArabic = externalTracks.first(where: { $0.languageCode == "ar" }) {
-                await selectExternalSubtitleTrack(firstArabic)
+            if let preferredTrack = externalTracks.first(where: { $0.languageCode.lowercased() == preferredSubtitleLanguage.lowercased() })
+                ?? externalTracks.first(where: { $0.languageCode == "ar" }) {
+                await selectExternalSubtitleTrack(preferredTrack)
             }
         }
 
@@ -313,7 +520,7 @@ final class PlayerViewModel {
 
         guard let track else {
             activeCues = []
-            currentSubtitleCue = nil
+            if !isPreviewMode { currentSubtitleCue = nil }
             selectedSubtitleTrackId = -1
             return
         }
@@ -321,21 +528,30 @@ final class PlayerViewModel {
         do {
             let cues = try await SubtitleService.shared.loadAndParseCues(for: track)
             self.activeCues = cues
+            self.syncStatusMessage = "\(cues.count) cues loaded (\(track.source.badgeName))"
 
-            // If auto-sync is enabled and reference cues exist, auto-align
             if subtitleSyncSettings.autoSyncEnabled {
                 await performSyncNow()
             }
         } catch {
             self.activeCues = []
+            self.syncStatusMessage = "Could not load subtitle track."
         }
     }
 
     @MainActor
     func performSyncNow() async {
-        guard !activeCues.isEmpty else { return }
+        isSyncingSubtitles = true
+        syncStatusMessage = "Analyzing timing offset..."
+        defer { isSyncingSubtitles = false }
 
-        // Fallback: If embedded cues are not available, fetch the primary English track as reference
+        guard !activeCues.isEmpty else {
+            syncStatusMessage = isPreviewMode
+                ? "Aligned preview offset (\(SubtitleSyncEngine.formatOffset(subtitleSyncSettings.manualOffset)))"
+                : "Select an external subtitle track first."
+            return
+        }
+
         if referenceEmbeddedCues.isEmpty {
             if let englishTrack = externalSubtitleTracks.first(where: { $0.languageCode == "en" && $0.id != selectedExternalSubtitle?.id }) {
                 if let refCues = try? await SubtitleService.shared.loadAndParseCues(for: englishTrack) {
@@ -344,17 +560,24 @@ final class PlayerViewModel {
             }
         }
 
-        guard !referenceEmbeddedCues.isEmpty else { return }
+        guard !referenceEmbeddedCues.isEmpty else {
+            syncStatusMessage = "No English reference track found for auto-alignment."
+            return
+        }
 
         if let offset = SubtitleSyncEngine.calculateAutoSyncOffset(
             targetCues: activeCues,
             referenceCues: referenceEmbeddedCues
         ) {
             subtitleSyncSettings.manualOffset = offset
+            syncStatusMessage = "Auto-aligned by \(SubtitleSyncEngine.formatOffset(offset))"
+        } else {
+            syncStatusMessage = "Could not correlate timestamps automatically."
         }
     }
 
     func loadSubtitleSettingsFromPreferences(context: ModelContext) {
+        self.saveContext = context
         let descriptor = FetchDescriptor<AppSettings>()
         if let settings = try? context.fetch(descriptor).first {
             subtitleStyle.fontSize = settings.subtitleFontSize
@@ -368,9 +591,43 @@ final class PlayerViewModel {
             subtitleSyncSettings.fixReversedPunctuation = settings.fixReversedPunctuation
             subtitleSyncSettings.autoSyncEnabled = settings.autoSyncSubtitles
 
+            preferredSubtitleLanguage = settings.subtitleLanguage
+            preferredQuality = settings.preferredQuality
+            skipIntroMode = settings.skipIntroMode
+            skipRecapMode = settings.skipRecapMode
+            skipCreditsMode = settings.skipCreditsMode
+            skipDelaySeconds = settings.skipDelaySeconds
+            nextEpisodeBehavior = settings.nextEpisodeBehavior
+
             SubtitleService.shared.subdlApiKey = settings.subdlApiKey
             SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
         }
+    }
+
+    @MainActor
+    func saveSubtitlePreferences() {
+        guard let context = saveContext else { return }
+        let descriptor = FetchDescriptor<AppSettings>()
+        let settings: AppSettings
+        if let existing = try? context.fetch(descriptor).first {
+            settings = existing
+        } else {
+            settings = AppSettings()
+            context.insert(settings)
+        }
+
+        settings.subtitleFontSize = subtitleStyle.fontSize
+        settings.subtitleFontWeight = subtitleStyle.fontWeight
+        settings.subtitleFontName = subtitleStyle.fontName
+        settings.subtitleTextColor = subtitleStyle.textColor
+        settings.subtitleBackgroundOpacity = subtitleStyle.backgroundOpacity
+        settings.subtitleBottomOffset = subtitleStyle.bottomOffset
+
+        settings.fixArabicRTL = subtitleSyncSettings.fixRTL
+        settings.fixReversedPunctuation = subtitleSyncSettings.fixReversedPunctuation
+        settings.autoSyncSubtitles = subtitleSyncSettings.autoSyncEnabled
+
+        try? context.save()
     }
 
     // MARK: - Progress Saving
@@ -378,7 +635,8 @@ final class PlayerViewModel {
     func startPeriodicSave(context: ModelContext) {
         self.saveContext = context
         progressSaveTimer?.invalidate()
-        progressSaveTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+        guard !isPreviewMode else { return }
+        progressSaveTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.saveProgress()
             }
@@ -392,7 +650,7 @@ final class PlayerViewModel {
 
     @MainActor
     func saveProgress() {
-        guard let context = saveContext, totalDuration > 0 else { return }
+        guard !isPreviewMode, let context = saveContext, totalDuration > 0 else { return }
 
         let tmdbIdVal = tmdbId
         let mediaTypeVal = mediaType

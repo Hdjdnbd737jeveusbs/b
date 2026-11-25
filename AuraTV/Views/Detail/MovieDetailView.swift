@@ -7,6 +7,8 @@ struct MovieDetailView: View {
     let tmdbId: Int
 
     @Environment(\.modelContext) private var modelContext
+    @Query private var settingsList: [AppSettings]
+    @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = DetailViewModel()
     @FocusState private var focusedButton: DetailButton?
 
@@ -14,11 +16,41 @@ struct MovieDetailView: View {
     @State private var showStreamPicker = false
     @State private var showPlayer = false
     @State private var showMoreOptions = false
+    @State private var showChangeArtwork = false
     @State private var availableStreams: [StremioStream] = []
+    @State private var selectedStream: StremioStream?
     @State private var isLoadingStreams = false
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
     @State private var movieImdbId: String?
+
+    private var customArtwork: CustomArtwork? {
+        let key = CustomArtwork.makeKey(tmdbId: tmdbId, mediaType: "movie")
+        return artworkOverrides.first { $0.key == key }
+    }
+
+    private var effectivePosterPath: String? {
+        customArtwork?.customPosterPath ?? viewModel.movieDetail?.posterPath
+    }
+
+    private var effectiveBackdropPath: String? {
+        customArtwork?.customBackdropPath ?? viewModel.movieDetail?.backdropPath ?? effectivePosterPath
+    }
+
+    private var effectiveLogoPath: String? {
+        customArtwork?.customLogoPath ?? viewModel.logoPath
+    }
+
+    private var preferredQuality: String {
+        settingsList.first?.preferredQuality ?? "4K"
+    }
+
+    private var effectiveResumeTime: Double {
+        if settingsList.first?.resumePlaybackBehavior == "Start Over" {
+            return 0
+        }
+        return viewModel.watchProgress?.currentTime ?? 0
+    }
 
     enum DetailButton: Hashable {
         case play
@@ -73,12 +105,25 @@ struct MovieDetailView: View {
             StreamPickerSheet(
                 title: viewModel.movieDetail?.title ?? "Movie",
                 streams: availableStreams,
+                selectedStream: selectedStream,
+                preferredQuality: preferredQuality,
                 onSelect: { stream in
+                    selectedStream = stream
                     if let urlString = stream.url, let url = URL(string: urlString) {
-                        startPlayback(url: url, resumeFrom: viewModel.watchProgress?.currentTime ?? 0)
+                        startPlayback(url: url, stream: stream, resumeFrom: effectiveResumeTime)
                     }
                 },
                 onDismiss: { showStreamPicker = false }
+            )
+        }
+        .sheet(isPresented: $showChangeArtwork) {
+            ChangeArtworkView(
+                tmdbId: tmdbId,
+                mediaType: "movie",
+                title: viewModel.movieDetail?.title ?? "Movie",
+                defaultPosterPath: viewModel.movieDetail?.posterPath,
+                defaultBackdropPath: viewModel.movieDetail?.backdropPath,
+                defaultLogoPath: viewModel.logoPath
             )
         }
         .fullScreenCover(isPresented: $showPlayer) {
@@ -88,13 +133,16 @@ struct MovieDetailView: View {
             Button("Choose Stream Source...") {
                 playMovie(forcePicker: true)
             }
+            Button("Change Artwork...") {
+                showChangeArtwork = true
+            }
             Button(viewModel.isWatched ? "Mark as Unwatched" : "Mark as Watched") {
                 viewModel.toggleWatched(
                     tmdbId: tmdbId,
                     mediaType: "movie",
                     title: viewModel.movieDetail?.title ?? "",
-                    posterPath: viewModel.movieDetail?.posterPath,
-                    backdropPath: viewModel.movieDetail?.backdropPath,
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
                     context: modelContext
                 )
             }
@@ -131,7 +179,7 @@ struct MovieDetailView: View {
     private func backdropLayer(geometry: GeometryProxy) -> some View {
         let height = geometry.size.height * 0.78
         ZStack(alignment: .topTrailing) {
-            if let path = viewModel.movieDetail?.backdropPath ?? viewModel.movieDetail?.posterPath,
+            if let path = effectiveBackdropPath,
                let url = TMDBService.shared.imageURL(path: path, size: "original") {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -195,7 +243,7 @@ struct MovieDetailView: View {
                 title: detail.title,
                 mediaType: "movie",
                 tmdbId: detail.id,
-                preloadedLogoPath: viewModel.logoPath,
+                preloadedLogoPath: effectiveLogoPath,
                 maxWidth: 560,
                 maxHeight: 145,
                 fallbackFontSize: 58,
@@ -355,8 +403,8 @@ struct MovieDetailView: View {
                     tmdbId: tmdbId,
                     mediaType: "movie",
                     title: viewModel.movieDetail?.title ?? "",
-                    posterPath: viewModel.movieDetail?.posterPath,
-                    backdropPath: viewModel.movieDetail?.backdropPath,
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
                     context: modelContext
                 )
             }
@@ -371,8 +419,8 @@ struct MovieDetailView: View {
                     tmdbId: tmdbId,
                     mediaType: "movie",
                     title: viewModel.movieDetail?.title ?? "",
-                    posterPath: viewModel.movieDetail?.posterPath,
-                    backdropPath: viewModel.movieDetail?.backdropPath,
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
                     context: modelContext
                 )
             }
@@ -462,12 +510,17 @@ struct MovieDetailView: View {
                     let ext = try? await TMDBService.shared.fetchMovieExternalIds(id: tmdbId)
                     movieImdbId = ext?.imdbId
                 }
-                let streams = try await AIOStreamsService.shared.fetchStreamsForMovie(tmdbId: tmdbId)
+                let streams = try await AIOStreamsService.shared.fetchStreamsForMovie(
+                    tmdbId: tmdbId,
+                    preferredQuality: preferredQuality
+                )
                 availableStreams = streams
+                let best = AIOStreamsService.shared.bestStream(matching: preferredQuality, in: streams)
+                selectedStream = best
                 isLoadingStreams = false
 
-                if !forcePicker && streams.count == 1, let url = URL(string: streams[0].url ?? "") {
-                    startPlayback(url: url, resumeFrom: viewModel.watchProgress?.currentTime ?? 0)
+                if !forcePicker && streams.count == 1, let single = streams.first, let url = URL(string: single.url ?? "") {
+                    startPlayback(url: url, stream: single, resumeFrom: effectiveResumeTime)
                 } else {
                     showStreamPicker = true
                 }
@@ -487,18 +540,21 @@ struct MovieDetailView: View {
         playMovie()
     }
 
-    private func startPlayback(url: URL, resumeFrom: Double = 0) {
+    private func startPlayback(url: URL, stream: StremioStream? = nil, resumeFrom: Double = 0) {
         let detail = viewModel.movieDetail
         playerViewModel = PlayerViewModel()
         playerViewModel.configure(
             url: url,
             title: detail?.title ?? "Movie",
-            backdropPath: detail?.backdropPath,
-            posterPath: detail?.posterPath,
+            overview: detail?.overview ?? "",
+            backdropPath: effectiveBackdropPath,
+            posterPath: effectivePosterPath,
             tmdbId: tmdbId,
             mediaType: "movie",
             resumeFrom: resumeFrom,
-            imdbId: movieImdbId ?? ""
+            imdbId: movieImdbId ?? "",
+            availableStreams: availableStreams,
+            selectedStream: stream ?? selectedStream
         )
         showStreamPicker = false
         showPlayer = true
