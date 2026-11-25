@@ -152,6 +152,7 @@ struct SubtitleSyncSheet: View {
             .padding(.trailing, 70)
             .padding(.bottom, 64)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .defaultFocus($focusedItem, .earlierSmall)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

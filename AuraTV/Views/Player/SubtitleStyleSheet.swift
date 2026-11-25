@@ -111,6 +111,9 @@ struct SubtitleStyleSheet: View {
                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.75), radius: 28, y: 12)
+        .padding(.trailing, 70)
+        .padding(.bottom, 64)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .defaultFocus($focusedField, .fontSize)
     }
 

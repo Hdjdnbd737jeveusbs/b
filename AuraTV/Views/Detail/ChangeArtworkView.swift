@@ -545,7 +545,7 @@ struct ChangeArtworkView: View {
                             alignment: .leading
                         )
 
-                        Text("2025 • HD • Crime, Drama")
+                        Text("4K • Dolby Vision • \(mediaType == "series" ? "Series" : "Movie")")
                             .font(.system(size: 7.5, weight: .medium))
                             .foregroundStyle(.white.opacity(0.65))
 

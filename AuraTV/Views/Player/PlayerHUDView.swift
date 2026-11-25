@@ -636,6 +636,7 @@ struct PlayerHUDView: View {
             .padding(.trailing, 70)
             .padding(.bottom, 145)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 
     private func subtitleRowLabel(for track: SubtitleTrackItem) -> String {
@@ -694,6 +695,7 @@ struct PlayerHUDView: View {
             .padding(.trailing, 70)
             .padding(.bottom, 145)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 
     // MARK: - Stream & Media Info Popover
@@ -747,6 +749,7 @@ struct PlayerHUDView: View {
             .padding(.trailing, 70)
             .padding(.bottom, 145)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 
     private func infoItem(label: String, value: String) -> some View {

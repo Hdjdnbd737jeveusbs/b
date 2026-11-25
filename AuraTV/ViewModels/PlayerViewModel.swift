@@ -614,6 +614,7 @@ final class PlayerViewModel {
 
     func loadSubtitleSettingsFromPreferences(context: ModelContext) {
         self.saveContext = context
+        guard !isPreviewMode else { return }
         let descriptor = FetchDescriptor<AppSettings>()
         if let settings = try? context.fetch(descriptor).first {
             subtitleStyle.fontSize = settings.subtitleFontSize
