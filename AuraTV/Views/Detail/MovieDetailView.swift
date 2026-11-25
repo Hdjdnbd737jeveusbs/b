@@ -313,7 +313,7 @@ struct MovieDetailView: View {
                         .padding(-4)
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AuraButtonStyle())
             .focusEffectDisabled()
             .focused($focusedButton, equals: .play)
             .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
@@ -338,7 +338,7 @@ struct MovieDetailView: View {
                             .stroke(Color.white.opacity(0.25), lineWidth: 1)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
                 .focused($focusedButton, equals: .rewatch)
                 .scaleEffect(focusedButton == .rewatch ? 1.07 : 1.0)
@@ -408,7 +408,7 @@ struct MovieDetailView: View {
                         .stroke(Color.white.opacity(0.25), lineWidth: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($focusedButton, equals: target)
         .scaleEffect(isFocused ? 1.1 : 1.0)

@@ -116,7 +116,7 @@ struct MoviesView: View {
                         )
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
                 .focused($focusedCategory, equals: category)
                 .scaleEffect(isFocused ? 1.05 : 1.0)

@@ -1,5 +1,16 @@
 import SwiftUI
 
+// MARK: - Custom Platter-Free tvOS Button Style
+
+/// Opts out of UIKit's default tvOS white focus platter so custom cards,
+/// hero banners, and pills render strictly with their own focus borders/scales.
+struct AuraButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.88 : 1.0)
+    }
+}
+
 // MARK: - tvOS Focus Helpers
 
 extension View {

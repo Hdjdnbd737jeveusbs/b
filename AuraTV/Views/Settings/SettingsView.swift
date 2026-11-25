@@ -161,7 +161,7 @@ struct SettingsView: View {
                             )
                             .clipShape(Capsule())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AuraButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCategory, equals: category)
                         .scaleEffect(focusedCategory == category ? 1.03 : 1.0)
@@ -400,7 +400,7 @@ struct SettingsView: View {
                     }
                     .modifier(SettingsFocusablePillModifier())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
 
                 Spacer()
@@ -413,7 +413,7 @@ struct SettingsView: View {
                         .font(.system(size: 16, weight: .bold))
                         .modifier(SettingsPrimaryPillModifier())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
             }
 
@@ -651,7 +651,7 @@ struct SettingsView: View {
             .padding(.vertical, 18)
             .modifier(SettingsFocusableRowModifier())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
     }
 
@@ -728,7 +728,7 @@ struct SettingsView: View {
             .padding(.vertical, 18)
             .modifier(SettingsFocusableRowModifier())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
     }
 

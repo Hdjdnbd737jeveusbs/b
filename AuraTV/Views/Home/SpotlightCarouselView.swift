@@ -128,7 +128,7 @@ struct SpotlightCarouselView: View {
             .scaleEffect(isHeroFocused ? 1.008 : 1.0)
             .animation(.easeOut(duration: 0.2), value: isHeroFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isHeroFocused)
     }
@@ -198,7 +198,8 @@ struct SpotlightCarouselView: View {
                         )
                         .animation(.easeOut(duration: 0.2), value: isHeroFocused)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(AuraButtonStyle())
+                    .focusEffectDisabled()
                     .focused($isHeroFocused)
 
                     // Next Peeking Card on the right edge

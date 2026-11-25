@@ -57,7 +57,7 @@ struct CastCardView: View {
             .scaleEffect(isFocused ? 1.07 : 1.0)
             .animation(.easeOut(duration: 0.18), value: isFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
     }

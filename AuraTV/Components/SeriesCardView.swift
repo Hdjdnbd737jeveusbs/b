@@ -82,7 +82,7 @@ struct SeriesCardView: View {
             )
             .animation(.easeOut(duration: 0.18), value: isFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
     }
