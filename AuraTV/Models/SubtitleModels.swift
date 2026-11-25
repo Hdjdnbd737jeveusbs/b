@@ -97,8 +97,8 @@ struct SubtitleStyle: Codable, Hashable {
     var fontWeight: String = "Bold"
     var fontName: String = "System"
     var textColor: String = "White"
-    var backgroundOpacity: Double = 0.35
-    var bottomOffset: Double = 60.0
+    var backgroundOpacity: Double = 0.0
+    var bottomOffset: Double = 56.0
 
     static let defaultStyle = SubtitleStyle()
 

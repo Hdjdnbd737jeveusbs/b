@@ -1,23 +1,20 @@
 import SwiftUI
 
-// MARK: - Player HUD View (Dark Cinema Glassmorphic HUD)
+// MARK: - Player HUD View (Clean Cinema HUD — Reference-Matching)
 
 struct PlayerHUDView: View {
     @Bindable var viewModel: PlayerViewModel
 
+    @State private var isSearchFieldActive: Bool = false
     @FocusState private var focusedControl: HUDControl?
     @FocusState private var focusedTrackId: String?
 
     enum HUDControl: Hashable {
-        case playPause
-        case skipBack
-        case skipForward
         case timeline
-        case streams
-        case audio
         case subtitles
-        case subtitleSync
-        case fontStyle
+        case subtitleStyle
+        case audio
+        case chapters
         case info
         case skipIntro
         case playNext
@@ -26,7 +23,7 @@ struct PlayerHUDView: View {
 
     var body: some View {
         ZStack {
-            // Top bar: Title + Episode info + Tech Badges
+            // Top bar: Clean White Title Logo ONLY (No tech badges)
             VStack {
                 topBar
                 Spacer()
@@ -59,165 +56,133 @@ struct PlayerHUDView: View {
                     }
                 }
                 .padding(.horizontal, 70)
-                .padding(.bottom, 210)
+                .padding(.bottom, 165)
             }
 
-            // Bottom transport & scrubber bar
+            // Bottom: 5 icon buttons + scrubber + elapsed under thumb & remaining right
             VStack {
                 Spacer()
                 bottomBar
             }
 
-            // Subtitle picker popover
+            // Right-anchored Subtitles popover
             if viewModel.showSubtitlePicker {
                 subtitlePickerOverlay
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            // Audio picker popover
+            // Right-anchored Audio popover
             if viewModel.showAudioPicker {
                 audioPickerOverlay
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            // Media & Stream Info popover
+            // Right-anchored Info popover
             if viewModel.showInfoPanel {
                 infoPanelOverlay
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .ignoresSafeArea()
+        .defaultFocus($focusedControl, .subtitles)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                if viewModel.showSubtitlePicker {
+                    focusedTrackId = "encoding_action"
+                } else if focusedControl == nil {
+                    focusedControl = .subtitles
+                }
+            }
+        }
+        .onChange(of: viewModel.showSubtitlePicker) { _, isOpen in
+            if isOpen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    focusedTrackId = viewModel.selectedExternalSubtitle?.id ?? "off"
+                }
+            } else {
+                isSearchFieldActive = false
+                focusedControl = .subtitles
+            }
+        }
         .onTapGesture {
             viewModel.toggleHUD()
         }
     }
 
-    // MARK: - Top Bar
+    // MARK: - Top Bar (Clean White Title Logo Only)
 
     @ViewBuilder
     private var topBar: some View {
         ZStack(alignment: .topLeading) {
             LinearGradient(
-                gradient: Gradient(colors: [Color.auraBackground.opacity(0.92), .clear]),
+                gradient: Gradient(colors: [Color.auraBackground.opacity(0.88), .clear]),
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 165)
+            .frame(height: 150)
 
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6) {
+                if viewModel.tmdbId > 0 {
+                    TitleLogoView(
+                        title: viewModel.title,
+                        mediaType: viewModel.mediaType,
+                        tmdbId: viewModel.tmdbId,
+                        maxWidth: 340,
+                        maxHeight: 54,
+                        fallbackFontSize: 28,
+                        alignment: .leading
+                    )
+                } else {
                     Text(viewModel.title.uppercased())
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .tracking(8)
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.75), radius: 8, x: 0, y: 2)
+                }
 
-                    if let season = viewModel.seasonNumber,
-                       let episode = viewModel.episodeNumber {
-                        HStack(spacing: 8) {
-                            Text("S\(season) • E\(episode)")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.85))
+                if viewModel.mediaType == "series",
+                   let season = viewModel.seasonNumber,
+                   let episode = viewModel.episodeNumber {
+                    HStack(spacing: 8) {
+                        Text("S\(season) • E\(episode)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.82))
 
-                            if let epTitle = viewModel.episodeTitle, !epTitle.isEmpty {
-                                Text("-")
-                                    .foregroundStyle(.white.opacity(0.55))
-                                Text(epTitle)
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.78))
-                                    .lineLimit(1)
-                            }
+                        if let epTitle = viewModel.episodeTitle, !epTitle.isEmpty {
+                            Text("-")
+                                .foregroundStyle(.white.opacity(0.5))
+                            Text(epTitle)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .lineLimit(1)
                         }
                     }
                 }
-
-                Spacer()
-
-                // Technical Badges (4K, HDR10/Dolby Vision, 5.1/Atmos)
-                HStack(spacing: 8) {
-                    ForEach(viewModel.activeTechBadges, id: \.self) { badge in
-                        BadgeView(text: badge, style: .outlined, fontSize: 12)
-                    }
-                    if let fileSize = viewModel.selectedStream?.parsedInfo.fileSize {
-                        BadgeView(text: fileSize, style: .translucent, fontSize: 12)
-                    }
-                }
-                .padding(.top, 8)
             }
             .padding(.horizontal, 70)
-            .padding(.top, 48)
+            .padding(.top, 46)
         }
     }
 
-    // MARK: - Bottom Bar
+    // MARK: - Bottom Bar (5 Icon Buttons + Slim Scrubber + Thumb-Aligned Time Labels)
 
     @ViewBuilder
     private var bottomBar: some View {
         ZStack(alignment: .bottom) {
             LinearGradient(
-                gradient: Gradient(colors: [.clear, Color.auraBackground.opacity(0.95)]),
+                gradient: Gradient(colors: [.clear, Color.auraBackground.opacity(0.92)]),
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 240)
+            .frame(height: 165)
 
-            VStack(spacing: 16) {
-                // Transport & Quick-Action Glass Pills Row
-                HStack(spacing: 14) {
-                    // Left cluster: Skip -10s, Play/Pause, Skip +10s
-                    HStack(spacing: 12) {
-                        transportButton(icon: "gobackward.10", control: .skipBack) {
-                            viewModel.seekBackward(seconds: 10)
-                        }
-
-                        transportButton(
-                            icon: viewModel.isPlaying ? "pause.fill" : "play.fill",
-                            control: .playPause,
-                            isProminent: true
-                        ) {
-                            viewModel.togglePlayPause()
-                        }
-
-                        transportButton(icon: "goforward.10", control: .skipForward) {
-                            viewModel.seekForward(seconds: 10)
-                        }
-                    }
-
+            VStack(spacing: 0) {
+                // 5 icon-only buttons aligned above the right side of the scrubber
+                HStack {
                     Spacer()
-
-                    // Right cluster: Streams, Audio, Subtitles, Subtitle Sync, Aa, Info
-                    HStack(spacing: 12) {
-                        if !viewModel.availableStreams.isEmpty {
-                            quickActionPill(
-                                icon: "tv.and.mediabox",
-                                label: viewModel.selectedStream?.parsedInfo.resolution.displayName ?? "Streams",
-                                isActive: viewModel.showStreamPicker,
-                                control: .streams
-                            ) {
-                                viewModel.showStreamPicker = true
-                                viewModel.showSubtitlePicker = false
-                                viewModel.showAudioPicker = false
-                                viewModel.showInfoPanel = false
-                            }
-                        }
-
-                        quickActionPill(
-                            icon: "waveform",
-                            label: "Audio",
-                            isActive: viewModel.showAudioPicker,
-                            control: .audio
-                        ) {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                viewModel.showAudioPicker.toggle()
-                                viewModel.showSubtitlePicker = false
-                                viewModel.showInfoPanel = false
-                            }
-                        }
-
-                        quickActionPill(
-                            icon: "captions.bubble.fill",
-                            label: "Subtitles",
-                            isActive: viewModel.showSubtitlePicker || viewModel.selectedExternalSubtitle != nil || viewModel.selectedSubtitleTrackId != -1,
+                    HStack(spacing: 14) {
+                        hudIconButton(
+                            icon: focusedControl == .subtitles ? "captions.bubble.fill" : "captions.bubble",
                             control: .subtitles
                         ) {
                             withAnimation(.easeOut(duration: 0.2)) {
@@ -227,25 +192,9 @@ struct PlayerHUDView: View {
                             }
                         }
 
-                        quickActionPill(
-                            icon: "slider.horizontal.2.square",
-                            label: "Sync",
-                            isActive: viewModel.showSubtitleSyncSheet,
-                            control: .subtitleSync
-                        ) {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                viewModel.showSubtitleSyncSheet = true
-                                viewModel.showSubtitlePicker = false
-                                viewModel.showAudioPicker = false
-                                viewModel.showInfoPanel = false
-                            }
-                        }
-
-                        quickActionPill(
-                            icon: nil,
-                            label: "Aa",
-                            isActive: viewModel.showSubtitleStyleSheet,
-                            control: .fontStyle
+                        hudIconButton(
+                            textLabel: "Aa",
+                            control: .subtitleStyle
                         ) {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 viewModel.showSubtitleStyleSheet = true
@@ -255,9 +204,31 @@ struct PlayerHUDView: View {
                             }
                         }
 
-                        hudCircleButton(
+                        hudIconButton(
+                            icon: "waveform",
+                            control: .audio
+                        ) {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                viewModel.showAudioPicker.toggle()
+                                viewModel.showSubtitlePicker = false
+                                viewModel.showInfoPanel = false
+                            }
+                        }
+
+                        hudIconButton(
+                            icon: "list.bullet.rectangle",
+                            control: .chapters
+                        ) {
+                            if !viewModel.availableStreams.isEmpty {
+                                viewModel.showStreamPicker = true
+                                viewModel.showSubtitlePicker = false
+                                viewModel.showAudioPicker = false
+                                viewModel.showInfoPanel = false
+                            }
+                        }
+
+                        hudIconButton(
                             icon: "info.circle",
-                            isActive: viewModel.showInfoPanel,
                             control: .info
                         ) {
                             withAnimation(.easeOut(duration: 0.2)) {
@@ -268,25 +239,36 @@ struct PlayerHUDView: View {
                         }
                     }
                 }
+                .padding(.bottom, 12)
 
-                // Scrubber Timeline Bar
+                // Full-width slim scrubber
                 timelineBar
 
-                // Elapsed & Remaining Timestamps
-                HStack {
-                    Text(viewModel.currentTimeFormatted)
-                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.92))
+                // Elapsed time under thumb + remaining time flush right
+                GeometryReader { geo in
+                    let totalWidth = geo.size.width
+                    let thumbCenterX = totalWidth * viewModel.progress
+                    let elapsedX = min(max(0, thumbCenterX - 24), max(0, totalWidth - 180))
 
-                    Spacer()
+                    ZStack(alignment: .leading) {
+                        HStack {
+                            Spacer()
+                            Text(viewModel.remainingTimeFormatted)
+                                .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.92))
+                        }
 
-                    Text(viewModel.remainingTimeFormatted)
-                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.92))
+                        Text(viewModel.currentTimeFormatted)
+                            .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.92))
+                            .offset(x: elapsedX)
+                    }
                 }
+                .frame(height: 24)
+                .padding(.top, 8)
             }
             .padding(.horizontal, 70)
-            .padding(.bottom, 42)
+            .padding(.bottom, 40)
         }
     }
 
@@ -297,25 +279,29 @@ struct PlayerHUDView: View {
         let isFocused = focusedControl == .timeline
 
         GeometryReader { geometry in
+            let width = geometry.size.width
+            let thumbX = max(0, (width * viewModel.progress) - (isFocused ? 3 : 1.5))
+
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.white.opacity(0.24))
-                    .frame(height: isFocused ? 9 : 6)
+                    .fill(Color.white.opacity(0.26))
+                    .frame(height: isFocused ? 8 : 4)
 
                 Capsule()
                     .fill(Color.white)
-                    .frame(width: geometry.size.width * viewModel.progress, height: isFocused ? 9 : 6)
+                    .frame(width: width * viewModel.progress, height: isFocused ? 8 : 4)
 
-                Circle()
+                // Slim vertical playhead tick matching reference scrubber
+                Capsule()
                     .fill(Color.white)
-                    .frame(width: isFocused ? 22 : 12, height: isFocused ? 22 : 12)
-                    .shadow(color: .black.opacity(0.6), radius: 6)
-                    .offset(x: max(0, (geometry.size.width * viewModel.progress) - (isFocused ? 11 : 6)))
+                    .frame(width: isFocused ? 6 : 3, height: isFocused ? 20 : 12)
+                    .shadow(color: .black.opacity(0.6), radius: 4)
+                    .offset(x: thumbX)
             }
             .frame(maxHeight: .infinity, alignment: .center)
             .animation(.easeOut(duration: 0.16), value: isFocused)
         }
-        .frame(height: 24)
+        .frame(height: 20)
         .focusable()
         .focused($focusedControl, equals: .timeline)
         .onMoveCommand { direction in
@@ -331,101 +317,36 @@ struct PlayerHUDView: View {
         }
     }
 
-    // MARK: - Transport & Action Controls
+    // MARK: - HUD Icon Button (Minimal — Solid White Circle on Focus Only)
 
     @ViewBuilder
-    private func transportButton(
-        icon: String,
-        control: HUDControl,
-        isProminent: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        let isFocused = focusedControl == control
-        let size: CGFloat = isProminent ? 52 : 46
-
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: isProminent ? 21 : 18, weight: .bold))
-                .foregroundStyle(isFocused ? Color.black : Color.white)
-                .frame(width: size, height: size)
-                .background(
-                    Circle()
-                        .fill(isFocused ? Color.white : Color.white.opacity(0.14))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.24), lineWidth: 1)
-                )
-                .scaleEffect(isFocused ? 1.12 : 1.0)
-                .animation(.easeOut(duration: 0.16), value: isFocused)
-        }
-        .buttonStyle(AuraButtonStyle())
-        .focusEffectDisabled()
-        .focused($focusedControl, equals: control)
-    }
-
-    @ViewBuilder
-    private func quickActionPill(
-        icon: String?,
-        label: String,
-        isActive: Bool,
+    private func hudIconButton(
+        icon: String? = nil,
+        textLabel: String? = nil,
         control: HUDControl,
         action: @escaping () -> Void
     ) -> some View {
         let isFocused = focusedControl == control
+        let size: CGFloat = 44
 
         Button(action: action) {
-            HStack(spacing: 8) {
+            Group {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 19, weight: .medium))
+                } else if let textLabel {
+                    Text(textLabel)
+                        .font(.system(size: 19, weight: .semibold))
                 }
-                Text(label)
-                    .font(.system(size: 15, weight: .bold))
             }
-            .foregroundStyle(isFocused || isActive ? Color.black : Color.white)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .foregroundStyle(isFocused ? Color.black : Color.white)
+            .frame(width: size, height: size)
             .background(
-                Capsule()
-                    .fill(isFocused || isActive ? Color.white : Color.white.opacity(0.14))
+                Circle()
+                    .fill(isFocused ? Color.white : Color.clear)
             )
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(isFocused ? 1.0 : 0.24), lineWidth: isFocused ? 2 : 1)
-            )
-            .scaleEffect(isFocused ? 1.08 : 1.0)
+            .scaleEffect(isFocused ? 1.1 : 1.0)
             .animation(.easeOut(duration: 0.16), value: isFocused)
-        }
-        .buttonStyle(AuraButtonStyle())
-        .focusEffectDisabled()
-        .focused($focusedControl, equals: control)
-    }
-
-    @ViewBuilder
-    private func hudCircleButton(
-        icon: String,
-        isActive: Bool,
-        control: HUDControl,
-        action: @escaping () -> Void
-    ) -> some View {
-        let isFocused = focusedControl == control
-
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isFocused || isActive ? Color.black : Color.white)
-                .frame(width: 46, height: 46)
-                .background(
-                    Circle()
-                        .fill(isFocused || isActive ? Color.white : Color.white.opacity(0.14))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.24), lineWidth: 1)
-                )
-                .scaleEffect(isFocused ? 1.12 : 1.0)
-                .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -540,72 +461,58 @@ struct PlayerHUDView: View {
         .shadow(color: .black.opacity(0.65), radius: 22, y: 8)
     }
 
-    // MARK: - Subtitle Picker Popover
+    // MARK: - Subtitle Picker Popover (Right-Anchored)
 
     @ViewBuilder
     private var subtitlePickerOverlay: some View {
         VStack(alignment: .trailing) {
             Spacer()
 
-            VStack(alignment: .leading, spacing: 12) {
-                // Search Subtitles bar
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.black.opacity(0.75))
-
-                    TextField("Search Subtitles...", text: $viewModel.subtitleSearchText)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.black)
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(Color.white, in: Capsule())
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-
-                // Sync & Styling shortcut pills
-                HStack(spacing: 12) {
-                    Button {
-                        viewModel.showSubtitleSyncSheet = true
-                        viewModel.showSubtitlePicker = false
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "slider.horizontal.2.square")
-                            Text("Subtitle Sync")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.14), in: Capsule())
-                    }
-                    .buttonStyle(AuraButtonStyle())
-                    .focusEffectDisabled()
-
-                    Button {
-                        viewModel.showSubtitleStyleSheet = true
-                        viewModel.showSubtitlePicker = false
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "textformat.size")
-                            Text("Appearance")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.14), in: Capsule())
-                    }
-                    .buttonStyle(AuraButtonStyle())
-                    .focusEffectDisabled()
-                }
-                .padding(.horizontal, 18)
-
-                Divider().background(Color.white.opacity(0.15))
-
+            VStack(alignment: .leading, spacing: 0) {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Top: Search Subtitles row (white pill only when focused)
+                        if isSearchFieldActive {
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                TextField("Search Subtitles...", text: $viewModel.subtitleSearchText)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                        } else {
+                            let isSearchFocused = focusedTrackId == "search_subs"
+                            Button {
+                                isSearchFieldActive = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(isSearchFocused ? Color.black : Color.white.opacity(0.9))
+                                        .frame(width: 18)
+
+                                    Text("Search Subtitles...")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(isSearchFocused ? Color.black : Color.white)
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(isSearchFocused ? Color.white : Color.clear)
+                                )
+                            }
+                            .buttonStyle(AuraButtonStyle())
+                            .focusEffectDisabled()
+                            .focused($focusedTrackId, equals: "search_subs")
+                        }
+
+                        // Off row
                         trackRow(
                             id: "off",
                             name: "Off",
@@ -620,16 +527,16 @@ struct PlayerHUDView: View {
                         if viewModel.isFetchingSubtitles {
                             HStack(spacing: 10) {
                                 ProgressView().scaleEffect(0.8).tint(.white)
-                                Text("Searching SubDL, OpenSubtitles & Wyzie...")
+                                Text("Searching subtitles...")
                                     .font(.system(size: 14))
                                     .foregroundStyle(Color.auraSecondaryText)
                             }
-                            .padding(16)
+                            .padding(14)
                         } else {
                             ForEach(viewModel.filteredSubtitleTracks) { track in
                                 trackRow(
                                     id: track.id,
-                                    name: track.displayName,
+                                    name: subtitleRowLabel(for: track),
                                     isSelected: viewModel.selectedExternalSubtitle?.id == track.id
                                 ) {
                                     Task {
@@ -640,12 +547,10 @@ struct PlayerHUDView: View {
                         }
 
                         if !viewModel.availableSubtitleTracks.isEmpty {
-                            Divider().background(Color.white.opacity(0.1)).padding(.vertical, 4)
-
                             ForEach(viewModel.availableSubtitleTracks) { embeddedTrack in
                                 trackRow(
                                     id: "stream_\(embeddedTrack.id)",
-                                    name: "\(embeddedTrack.displayName) [Stream]",
+                                    name: embeddedTrack.displayName,
                                     isSelected: viewModel.selectedSubtitleTrackId == embeddedTrack.id && viewModel.selectedExternalSubtitle == nil
                                 ) {
                                     Task {
@@ -655,22 +560,89 @@ struct PlayerHUDView: View {
                                 }
                             }
                         }
+
+                        // Bottom actions: Subtitle Sync... & Text Encoding >
+                        let syncFocused = focusedTrackId == "sync_action"
+                        Button {
+                            viewModel.showSubtitleSyncSheet = true
+                            viewModel.showSubtitlePicker = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(syncFocused ? Color.black : Color.white.opacity(0.9))
+                                    .frame(width: 18)
+
+                                Text("Subtitle Sync...")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(syncFocused ? Color.black : Color.white)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(syncFocused ? Color.white : Color.clear)
+                            )
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedTrackId, equals: "sync_action")
+
+                        let encodingFocused = focusedTrackId == "encoding_action"
+                        Button {
+                            viewModel.showSubtitleStyleSheet = true
+                            viewModel.showSubtitlePicker = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(encodingFocused ? Color.black : Color.white.opacity(0.9))
+                                    .frame(width: 18)
+
+                                Text("Text Encoding")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(encodingFocused ? Color.black : Color.white)
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(encodingFocused ? Color.black.opacity(0.65) : Color.white.opacity(0.55))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(encodingFocused ? Color.white : Color.clear)
+                            )
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedTrackId, equals: "encoding_action")
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 12)
+                    .padding(10)
                 }
-                .frame(maxHeight: 380)
+                .frame(maxHeight: 520)
             }
-            .frame(width: 490)
-            .background(Color.auraSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: 22))
+            .frame(width: 440)
+            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.92), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 22)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 190)
+            .padding(.bottom, 145)
         }
+    }
+
+    private func subtitleRowLabel(for track: SubtitleTrackItem) -> String {
+        if let rel = track.releaseInfo, !rel.isEmpty {
+            return "\(track.language) · \(rel)"
+        }
+        return track.displayName
     }
 
     // MARK: - Audio Picker Popover
@@ -682,10 +654,10 @@ struct PlayerHUDView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("Audio Tracks")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
 
                 Divider().background(Color.white.opacity(0.14))
 
@@ -713,14 +685,14 @@ struct PlayerHUDView: View {
                 .frame(maxHeight: 280)
             }
             .frame(width: 420)
-            .background(Color.auraSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: 20))
+            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 190)
+            .padding(.bottom, 145)
         }
     }
 
@@ -734,7 +706,7 @@ struct PlayerHUDView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("Playback & Stream Info")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(.white)
                     Spacer()
                     BadgeView(text: viewModel.selectedStream?.parsedInfo.resolution.displayName ?? "4K", style: .filled, fontSize: 12)
@@ -764,16 +736,16 @@ struct PlayerHUDView: View {
                         .padding(.top, 4)
                 }
             }
-            .padding(24)
-            .frame(width: 460)
-            .background(Color.auraSurface.opacity(0.95), in: RoundedRectangle(cornerRadius: 20))
+            .padding(22)
+            .frame(width: 440)
+            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 190)
+            .padding(.bottom, 145)
         }
     }
 
@@ -790,7 +762,7 @@ struct PlayerHUDView: View {
         }
     }
 
-    // MARK: - Track Row
+    // MARK: - Track Row (Checkmark on Active, White Pill ONLY on Focus)
 
     @ViewBuilder
     private func trackRow(id: String, name: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -809,22 +781,22 @@ struct PlayerHUDView: View {
 
                 Text(name)
                     .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isFocused ? Color.black : Color.white)
+                    .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.92))
                     .lineLimit(1)
 
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.12) : Color.clear))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isFocused ? Color.white : Color.clear)
             )
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($focusedTrackId, equals: id)
-        .scaleEffect(isFocused ? 1.02 : 1.0)
-        .animation(.easeOut(duration: 0.15), value: isFocused)
+        .scaleEffect(isFocused ? 1.01 : 1.0)
+        .animation(.easeOut(duration: 0.14), value: isFocused)
     }
 }

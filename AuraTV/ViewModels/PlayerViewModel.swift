@@ -253,20 +253,27 @@ final class PlayerViewModel {
         }
     }
 
-    /// Configures realistic Skyfall demo playback state + live Subtitle Sync overlay for CI previews.
+    enum PreviewScreenMode {
+        case hud
+        case subtitlesMenu
+        case subtitleSync
+        case loading
+    }
+
+    /// Configures realistic Skyfall demo playback state for CI previews.
     @MainActor
-    func configurePreviewHUD() {
-        self.isPreviewMode = true
+    func configurePreviewHUD(mode: PreviewScreenMode = .hud) {
+        self.isPreviewMode = mode != .loading
         self.title = "Skyfall"
         self.overview = "When Bond's latest assignment goes gravely wrong and agents around the world are exposed, MI6 itself comes under attack."
         self.tmdbId = 37724
         self.mediaType = "movie"
         self.backdropPath = "/wkA622CCN2X0uwpgqYEOnUYEDf5.jpg"
-        self.currentTime = 2350
-        self.totalDuration = 8580
-        self.isBuffering = false
-        self.isPlaying = true
-        self.isHUDVisible = true
+        self.currentTime = 2348
+        self.totalDuration = 8589
+        self.isBuffering = mode == .loading
+        self.isPlaying = mode != .loading
+        self.isHUDVisible = mode != .loading
         self.previewBadges = ["4K", "Dolby Vision", "5.1"]
         self.availableStreams = [
             StremioStream(
@@ -283,30 +290,57 @@ final class PlayerViewModel {
         ]
         self.selectedAudioTrackId = 1
 
-        let sampleSub = SubtitleTrackItem(
-            id: "preview_ar",
-            name: "Arabic · BluRay 1080p",
+        let track1 = SubtitleTrackItem(
+            id: "preview_ar_1",
+            name: "Arabic · RaYY00aN · BluRay 1080p SDR...",
             language: "Arabic",
             languageCode: "ar",
             source: .subdl,
             downloadURL: nil,
-            releaseInfo: "BluRay 1080p",
+            releaseInfo: "RaYY00aN · BluRay 1080p SDR...",
             hearingImpaired: false,
             isEmbedded: false,
             embeddedTrackId: nil
         )
-        self.externalSubtitleTracks = [sampleSub]
-        self.selectedExternalSubtitle = sampleSub
+        let track2 = SubtitleTrackItem(
+            id: "preview_ar_2",
+            name: "Arabic · Bander Alhlbaney · BluRay 720p...",
+            language: "Arabic",
+            languageCode: "ar",
+            source: .subdl,
+            downloadURL: nil,
+            releaseInfo: "Bander Alhlbaney · BluRay 720p...",
+            hearingImpaired: false,
+            isEmbedded: false,
+            embeddedTrackId: nil
+        )
+        self.externalSubtitleTracks = [track1, track2]
+        self.selectedExternalSubtitle = track2
+        self.availableSubtitleTracks = [
+            MediaTrack(id: 101, name: "PGS · ENG (pgssub)", language: "English", isDefault: false),
+            MediaTrack(id: 102, name: "PGS · SDH", language: "English", isDefault: false),
+            MediaTrack(id: 103, name: "PGS · ARA (pgssub)", language: "Arabic", isDefault: false),
+            MediaTrack(id: 104, name: "PGS", language: "English", isDefault: false),
+            MediaTrack(id: 105, name: "PGS ", language: "English", isDefault: false)
+        ]
+        self.subtitleStyle.backgroundOpacity = 0.0
+        self.subtitleSyncSettings = SubtitleSyncSettings(
+            manualOffset: 0.0,
+            autoSyncEnabled: false,
+            fixRTL: false,
+            fixReversedPunctuation: false
+        )
         self.currentSubtitleCue = SubtitleCue(
             id: 1,
-            startTime: 2345,
-            endTime: 2355,
-            text: "سفينة كبيرة لعينة، أستمحيك عذراً.",
+            startTime: 2340,
+            endTime: 2358,
+            text: "يا (007) أنا ضابط الإعاشة\nالجديد المكلف بكَ",
             processedText: nil,
             isArabic: true
         )
-        self.syncStatusMessage = "Using English subtitle timing reference"
-        self.showSubtitleSyncSheet = true
+        self.syncStatusMessage = "Matches the video's English subtitle: offset, frame rate and cuts"
+        self.showSubtitlePicker = (mode == .subtitlesMenu)
+        self.showSubtitleSyncSheet = (mode == .subtitleSync)
     }
 
     // MARK: - Playback Controls

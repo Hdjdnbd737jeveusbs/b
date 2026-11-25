@@ -17,8 +17,8 @@ class AppSettings {
     var subtitleFontWeight: String = "Bold"
     var subtitleFontName: String = "System"
     var subtitleTextColor: String = "White"
-    var subtitleBackgroundOpacity: Double = 0.35
-    var subtitleBottomOffset: Double = 60.0
+    var subtitleBackgroundOpacity: Double = 0.0
+    var subtitleBottomOffset: Double = 56.0
     var fixArabicRTL: Bool = true
     var fixReversedPunctuation: Bool = true
     var autoSyncSubtitles: Bool = false
@@ -64,8 +64,8 @@ class AppSettings {
         subtitleFontWeight: String = "Bold",
         subtitleFontName: String = "System",
         subtitleTextColor: String = "White",
-        subtitleBackgroundOpacity: Double = 0.35,
-        subtitleBottomOffset: Double = 60.0,
+        subtitleBackgroundOpacity: Double = 0.0,
+        subtitleBottomOffset: Double = 56.0,
         fixArabicRTL: Bool = true,
         fixReversedPunctuation: Bool = true,
         autoSyncSubtitles: Bool = false,

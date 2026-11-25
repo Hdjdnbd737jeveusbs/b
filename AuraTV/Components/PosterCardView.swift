@@ -1,6 +1,7 @@
 import SwiftUI
+import SwiftData
 
-// MARK: - Poster Card View (Clean 2:3 Portrait Card, No Caption, White Focus Border)
+// MARK: - Poster Card View (Clean 2:3 Portrait Card + Long-Press Context Menu)
 
 struct PosterCardView: View {
     let movie: TMDBMovie
@@ -64,6 +65,14 @@ struct PosterCardView: View {
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: movie.id,
+            mediaType: "movie",
+            title: movie.title,
+            posterPath: overridePosterPath ?? movie.posterPath,
+            backdropPath: movie.backdropPath,
+            initialWatched: isWatched
+        ))
     }
 
     private var posterPlaceholder: some View {
@@ -83,5 +92,223 @@ struct PosterCardView: View {
                         .padding(.horizontal, 12)
                 }
             }
+    }
+}
+
+// MARK: - Shared Poster Long-Press Context Menu Modifier
+
+struct MediaPosterContextMenuModifier: ViewModifier {
+    let tmdbId: Int
+    let mediaType: String // "movie" or "series"
+    let title: String
+    let posterPath: String?
+    let backdropPath: String?
+    var initialWatched: Bool = false
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var showChangeArtwork = false
+    @State private var isWatchedLocal: Bool?
+    @State private var isFavoriteLocal: Bool?
+
+    private var isWatched: Bool {
+        isWatchedLocal ?? initialWatched
+    }
+
+    private var isFavorite: Bool {
+        isFavoriteLocal ?? false
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .contextMenu {
+                Button {
+                    toggleWatched()
+                } label: {
+                    Label(
+                        isWatched ? "Mark as Unwatched" : "Mark as Watched",
+                        systemImage: "checkmark.circle"
+                    )
+                }
+
+                Button {
+                    toggleFavorite()
+                } label: {
+                    Label(
+                        isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                        systemImage: "star"
+                    )
+                }
+
+                Menu {
+                    Button {
+                        toggleFavorite()
+                    } label: {
+                        Label("Watchlist", systemImage: "bookmark")
+                    }
+                } label: {
+                    Label("Add to Collection", systemImage: "square.3.layers.3d")
+                }
+
+                Button {
+                    showChangeArtwork = true
+                } label: {
+                    Label("Change Artwork", systemImage: "photo.on.rectangle")
+                }
+
+                Button {
+                    Task { await applyArtworkSet() }
+                } label: {
+                    Label("Apply Set", systemImage: "square.3.layers.3d")
+                }
+
+                Button {
+                    Task { await refreshMetadata() }
+                } label: {
+                    Label("Refresh Metadata", systemImage: "arrow.clockwise")
+                }
+
+                Button {
+                    // Trigger intro scan placeholder for series
+                } label: {
+                    Label("Detect Intros in All Seasons", systemImage: "waveform")
+                }
+
+                Button {
+                    // Export marks action
+                } label: {
+                    Label("Export Marks for IntroDB", systemImage: "square.and.arrow.up")
+                }
+                .disabled(true)
+            }
+            .sheet(isPresented: $showChangeArtwork) {
+                ChangeArtworkView(
+                    tmdbId: tmdbId,
+                    mediaType: mediaType,
+                    title: title,
+                    defaultPosterPath: posterPath,
+                    defaultBackdropPath: backdropPath,
+                    defaultLogoPath: nil
+                )
+            }
+            .onAppear {
+                refreshLocalFlags()
+            }
+    }
+
+    @MainActor
+    private func refreshLocalFlags() {
+        let id = tmdbId
+        let type = mediaType
+        let watchDesc = FetchDescriptor<WatchHistory>(
+            predicate: #Predicate<WatchHistory> { item in
+                item.tmdbId == id && item.mediaType == type
+            }
+        )
+        if let found = try? modelContext.fetch(watchDesc).first {
+            isWatchedLocal = found.isCompleted
+        }
+
+        let favDesc = FetchDescriptor<WatchlistItem>(
+            predicate: #Predicate<WatchlistItem> { item in
+                item.tmdbId == id && item.mediaType == type
+            }
+        )
+        if let favs = try? modelContext.fetch(favDesc) {
+            isFavoriteLocal = !favs.isEmpty
+        }
+    }
+
+    @MainActor
+    private func toggleWatched() {
+        let id = tmdbId
+        let type = mediaType
+        let descriptor = FetchDescriptor<WatchHistory>(
+            predicate: #Predicate<WatchHistory> { item in
+                item.tmdbId == id && item.mediaType == type
+            }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.isCompleted.toggle()
+            existing.lastWatched = Date()
+            isWatchedLocal = existing.isCompleted
+        } else {
+            let entry = WatchHistory(
+                tmdbId: tmdbId,
+                mediaType: mediaType,
+                title: title,
+                posterPath: posterPath,
+                backdropPath: backdropPath,
+                isCompleted: true
+            )
+            modelContext.insert(entry)
+            isWatchedLocal = true
+        }
+        try? modelContext.save()
+    }
+
+    @MainActor
+    private func toggleFavorite() {
+        let id = tmdbId
+        let type = mediaType
+        let descriptor = FetchDescriptor<WatchlistItem>(
+            predicate: #Predicate<WatchlistItem> { item in
+                item.tmdbId == id && item.mediaType == type
+            }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(existing)
+            isFavoriteLocal = false
+        } else {
+            let item = WatchlistItem(
+                tmdbId: tmdbId,
+                mediaType: mediaType,
+                title: title,
+                posterPath: posterPath,
+                backdropPath: backdropPath,
+                addedDate: Date()
+            )
+            modelContext.insert(item)
+            isFavoriteLocal = true
+        }
+        try? modelContext.save()
+    }
+
+    @MainActor
+    private func applyArtworkSet() async {
+        guard let response = try? await TMDBService.shared.fetchAllArtwork(mediaType: mediaType, id: tmdbId) else {
+            return
+        }
+        let key = CustomArtwork.makeKey(tmdbId: tmdbId, mediaType: mediaType)
+        let descriptor = FetchDescriptor<CustomArtwork>(
+            predicate: #Predicate<CustomArtwork> { item in
+                item.key == key
+            }
+        )
+        let record: CustomArtwork
+        if let existing = try? modelContext.fetch(descriptor).first {
+            record = existing
+        } else {
+            record = CustomArtwork(key: key, tmdbId: tmdbId, mediaType: mediaType)
+            modelContext.insert(record)
+        }
+        if let topPoster = response.posters?.first?.filePath {
+            record.customPosterPath = topPoster
+        }
+        if let topBackdrop = response.backdrops?.first?.filePath {
+            record.customBackdropPath = topBackdrop
+        }
+        record.customLogoPath = await TMDBService.shared.fetchBestLogoPath(mediaType: mediaType, id: tmdbId)
+        record.updatedAt = Date()
+        try? modelContext.save()
+    }
+
+    @MainActor
+    private func refreshMetadata() async {
+        if mediaType == "series" {
+            _ = try? await TMDBService.shared.fetchSeriesDetails(id: tmdbId)
+        } else {
+            _ = try? await TMDBService.shared.fetchMovieDetails(id: tmdbId)
+        }
+        _ = await TMDBService.shared.fetchBestLogoPath(mediaType: mediaType, id: tmdbId)
     }
 }

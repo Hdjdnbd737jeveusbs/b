@@ -11,6 +11,10 @@ struct ContentView: View {
         case standard(AppTab)
         case movieDetail
         case playerHUD
+        case subtitlesMenu
+        case subtitleSync
+        case playbackLoading
+        case changeArtwork
     }
 
     /// Reads `-screenshotTab <name>` from launch arguments (or NSArgumentDomain)
@@ -33,6 +37,14 @@ struct ContentView: View {
             return .movieDetail
         case "playerhud":
             return .playerHUD
+        case "subtitlesmenu":
+            return .subtitlesMenu
+        case "subtitlesync":
+            return .subtitleSync
+        case "playbackloading":
+            return .playbackLoading
+        case "changeartwork":
+            return .changeArtwork
         default:
             if let tab = AppTab.allCases.first(where: { $0.rawValue.lowercased() == value.lowercased() }) {
                 return .standard(tab)
@@ -75,11 +87,26 @@ struct ContentView: View {
         Group {
             switch launchMode {
             case .movieDetail:
-                NavigationStack {
-                    MovieDetailView(tmdbId: 37724)
-                }
+                MovieDetailPreviewHostView()
             case .playerHUD:
-                PlayerPreviewHostView()
+                PlayerPreviewHostView(previewMode: .hud)
+            case .subtitlesMenu:
+                PlayerPreviewHostView(previewMode: .subtitlesMenu)
+            case .subtitleSync:
+                PlayerPreviewHostView(previewMode: .subtitleSync)
+            case .playbackLoading:
+                PlayerPreviewHostView(previewMode: .loading)
+            case .changeArtwork:
+                NavigationStack {
+                    ChangeArtworkView(
+                        tmdbId: 37724,
+                        mediaType: "movie",
+                        title: "Skyfall",
+                        defaultPosterPath: "/d0IVecFQvsGdSbnMAHqiYsNYaJT.jpg",
+                        defaultBackdropPath: "/wkA622CCN2X0uwpgqYEOnUYEDf5.jpg",
+                        defaultLogoPath: "/3FJMB018u5gvnDl7dv0IMVSWym9.png"
+                    )
+                }
             case .standard:
                 TabView(selection: $selectedTab) {
                     // Search Tab
@@ -148,6 +175,10 @@ struct ContentView: View {
             switch launchMode {
             case .movieDetail: activeMode = "MovieDetail"
             case .playerHUD: activeMode = "PlayerHUD"
+            case .subtitlesMenu: activeMode = "SubtitlesMenu"
+            case .subtitleSync: activeMode = "SubtitleSync"
+            case .playbackLoading: activeMode = "PlaybackLoading"
+            case .changeArtwork: activeMode = "ChangeArtwork"
             case .standard(let tab): activeMode = tab.rawValue
             }
             Self.logger.notice("ContentView active tab: \(activeMode, privacy: .public)")
@@ -156,7 +187,45 @@ struct ContentView: View {
     }
 }
 
+private struct MovieDetailPreviewHostView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var seeded = false
+
+    var body: some View {
+        NavigationStack {
+            if seeded {
+                MovieDetailView(tmdbId: 37724)
+            }
+        }
+        .onAppear {
+            if !seeded {
+                let descriptor = FetchDescriptor<WatchHistory>(
+                    predicate: #Predicate<WatchHistory> { item in
+                        item.tmdbId == 37724 && item.mediaType == "movie"
+                    }
+                )
+                if (try? modelContext.fetch(descriptor).first) == nil {
+                    let demoProgress = WatchHistory(
+                        tmdbId: 37724,
+                        mediaType: "movie",
+                        title: "Skyfall",
+                        backdropPath: "/wkA622CCN2X0uwpgqYEOnUYEDf5.jpg",
+                        currentTime: 2400,
+                        totalDuration: 8580,
+                        lastWatched: Date(),
+                        isCompleted: false
+                    )
+                    modelContext.insert(demoProgress)
+                    try? modelContext.save()
+                }
+                seeded = true
+            }
+        }
+    }
+}
+
 private struct PlayerPreviewHostView: View {
+    let previewMode: PlayerViewModel.PreviewScreenMode
     @State private var playerViewModel = PlayerViewModel()
     @State private var isReady = false
 
@@ -169,7 +238,7 @@ private struct PlayerPreviewHostView: View {
         }
         .onAppear {
             if !isReady {
-                playerViewModel.configurePreviewHUD()
+                playerViewModel.configurePreviewHUD(mode: previewMode)
                 isReady = true
             }
         }

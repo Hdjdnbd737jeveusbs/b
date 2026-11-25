@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Change Artwork View (Posters, Backdrops, Logos Picker with SwiftData Persistence)
+// MARK: - Change Artwork View (Full-Width 7-Column Grid + Toolbar + Floating Live Mini-Preview)
 
 struct ChangeArtworkView: View {
     let tmdbId: Int
@@ -16,26 +16,45 @@ struct ChangeArtworkView: View {
     @Query private var allCustomArtwork: [CustomArtwork]
 
     @State private var selectedTab: ArtworkTab = .posters
+    @State private var selectedSource: ArtworkSource = .tmdb
+    @State private var isMultipleArtworkEnabled: Bool = false
+    @State private var selectedMultiPosters: Set<String> = []
+    @State private var selectedMultiBackdrops: Set<String> = []
+
     @State private var posters: [TMDBImageAsset] = []
+    @State private var seasonPosters: [TMDBImageAsset] = []
     @State private var backdrops: [TMDBImageAsset] = []
     @State private var logos: [TMDBImageAsset] = []
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
 
-    @FocusState private var focusedTab: ArtworkTab?
+    @State private var showFromLinkAlert: Bool = false
+    @State private var customLinkInput: String = ""
+
+    @FocusState private var focusedToolbarItem: ToolbarControl?
     @FocusState private var focusedAssetPath: String?
-    @FocusState private var focusedButton: ActionButton?
 
     enum ArtworkTab: String, CaseIterable, Identifiable {
         case posters = "Posters"
+        case seasonPosters = "Season Posters"
         case backdrops = "Backdrops"
         case logos = "Logos"
         var id: String { rawValue }
     }
 
-    enum ActionButton: Hashable {
-        case restore
-        case done
+    enum ArtworkSource: String, CaseIterable, Identifiable {
+        case tmdb = "TMDB"
+        case mediux = "MediUX"
+        var id: String { rawValue }
+    }
+
+    enum ToolbarControl: Hashable {
+        case tab(ArtworkTab)
+        case source(ArtworkSource)
+        case fromLink
+        case addLogo
+        case restoreDefault
+        case multipleArtwork
     }
 
     private var recordKey: String {
@@ -61,6 +80,7 @@ struct ChangeArtworkView: View {
     private var currentAssets: [TMDBImageAsset] {
         switch selectedTab {
         case .posters: return posters
+        case .seasonPosters: return seasonPosters
         case .backdrops: return backdrops
         case .logos: return logos
         }
@@ -71,61 +91,52 @@ struct ChangeArtworkView: View {
         return currentAssets.first(where: { $0.filePath == focusedAssetPath })
     }
 
+    private var previewPosterPath: String? {
+        if (selectedTab == .posters || selectedTab == .seasonPosters), let focusedAsset {
+            return focusedAsset.filePath
+        }
+        return activePosterPath
+    }
+
+    private var previewBackdropPath: String? {
+        if selectedTab == .backdrops, let focusedAsset {
+            return focusedAsset.filePath
+        }
+        return activeBackdropPath
+    }
+
+    private var previewLogoPath: String? {
+        if selectedTab == .logos, let focusedAsset {
+            return focusedAsset.filePath
+        }
+        return activeLogoPath
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottomTrailing) {
             Color.auraBackground.ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 26) {
-                // Header + Artwork Category Pills
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CHANGE ARTWORK")
-                            .font(.system(size: 13, weight: .bold))
-                            .tracking(2.5)
-                            .foregroundStyle(.white.opacity(0.6))
-                        Text(title)
-                            .font(.system(size: 34, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                    }
+            VStack(alignment: .leading, spacing: 18) {
+                // Top Header Bar: Palette + "Change Artwork" + Media Title
+                headerBar
 
-                    Spacer()
+                // Filter / Source / Action Toolbar Row
+                toolbarRow
 
-                    HStack(spacing: 16) {
-                        ForEach(ArtworkTab.allCases) { tab in
-                            let isSelected = selectedTab == tab
-                            let isFocused = focusedTab == tab
+                // Sub-row: Multiple Artwork toggle & description
+                multipleArtworkRow
 
-                            Button {
-                                selectedTab = tab
-                            } label: {
-                                Text(tab.rawValue)
-                                    .font(.system(size: 18, weight: isSelected || isFocused ? .bold : .medium))
-                                    .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 11)
-                                    .background((isSelected || isFocused) ? Color.white : Color.white.opacity(0.12), in: Capsule())
-                                    .scaleEffect(isFocused ? 1.05 : 1.0)
-                                    .animation(.easeOut(duration: 0.16), value: focusedTab)
-                            }
-                            .buttonStyle(AuraButtonStyle())
-                            .focusEffectDisabled()
-                            .focused($focusedTab, equals: tab)
-                        }
-                    }
-                }
-
-                // Main Split: Left Live Preview | Right Asset Grid
-                HStack(alignment: .top, spacing: 40) {
-                    leftPreviewColumn
-                        .frame(width: 540)
-
-                    rightAssetsGrid
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                // Full-width Multi-Column Asset Grid
+                assetsGrid
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 70)
-            .padding(.vertical, 48)
+            .padding(.horizontal, 60)
+            .padding(.top, 38)
+
+            // Floating Bottom-Right Live Mini-Preview Card
+            floatingMiniPreviewCard
+                .padding(.trailing, 54)
+                .padding(.bottom, 34)
         }
         .task {
             await loadArtwork()
@@ -133,161 +144,216 @@ struct ChangeArtworkView: View {
         .onExitCommand {
             dismiss()
         }
+        .alert("Custom Artwork URL", isPresented: $showFromLinkAlert) {
+            TextField("https://image.tmdb.org/t/p/original/...", text: $customLinkInput)
+            Button("Apply") {
+                let trimmed = customLinkInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    applyArtwork(trimmed)
+                }
+                customLinkInput = ""
+            }
+            Button("Cancel", role: .cancel) {
+                customLinkInput = ""
+            }
+        } message: {
+            Text("Paste an image URL for the active artwork category (\(selectedTab.rawValue)).")
+        }
     }
 
-    // MARK: - Left Live Preview Column
+    // MARK: - Header Bar
 
-    private var leftPreviewColumn: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Live Hero + Poster Overlay Card
-            ZStack(alignment: .bottomTrailing) {
-                // Mini Backdrop
-                ZStack(alignment: .bottomLeading) {
-                    if let backdrop = activeBackdropPath,
-                       let url = TMDBService.shared.imageURL(path: backdrop, size: "w780") {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image
-                                    .resizable()
-                                    .aspectRatio(16 / 9, contentMode: .fill)
-                                    .frame(width: 540, height: 304)
-                                    .clipped()
-                            } else {
-                                Color.auraSurface.frame(width: 540, height: 304)
-                            }
-                        }
-                    } else {
-                        Color.auraSurface.frame(width: 540, height: 304)
-                    }
-
-                    LinearGradient(
-                        colors: [Color.auraBackground.opacity(0.92), .clear],
-                        startPoint: .bottomLeading,
-                        endPoint: .topTrailing
-                    )
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        TitleLogoView(
-                            title: title,
-                            mediaType: mediaType,
-                            tmdbId: tmdbId,
-                            preloadedLogoPath: activeLogoPath,
-                            maxWidth: 270,
-                            maxHeight: 68,
-                            fallbackFontSize: 26,
-                            alignment: .leading
-                        )
-
-                        HStack(spacing: 8) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 10))
-                            Text("Play")
-                                .font(.system(size: 12, weight: .bold))
-                        }
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Color.white, in: Capsule())
-                    }
-                    .padding(22)
-                }
-                .frame(width: 540, height: 304)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                )
-
-                // Mini Poster Preview on right corner
-                if let poster = activePosterPath,
-                   let posterURL = TMDBService.shared.imageURL(path: poster, size: "w342") {
-                    AsyncImage(url: posterURL) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .aspectRatio(2 / 3, contentMode: .fill)
-                                .frame(width: 112, height: 168)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
-                                )
-                                .shadow(color: .black.opacity(0.7), radius: 12, y: 4)
-                                .padding(14)
-                        }
-                    }
-                }
-            }
-
-            // Focused Asset Metadata Line
-            VStack(alignment: .leading, spacing: 6) {
-                Text(focusedAsset != nil ? "Press Select to Apply" : "Current Artwork")
+    private var headerBar: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "paintpalette")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
+                Text("Change Artwork")
+                    .font(.system(size: 18, weight: .semibold))
+            }
+            .foregroundStyle(.white.opacity(0.62))
 
-                if let asset = focusedAsset, let w = asset.width, let h = asset.height {
-                    let lang = asset.iso6391?.uppercased() ?? "Textless"
-                    Text("\(w) × \(h) • \(lang) • TMDB")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.auraSecondaryText)
-                } else {
-                    Text("\(posters.count) posters • \(backdrops.count) backdrops • \(logos.count) logos")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.auraSecondaryText)
+            Text(title)
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Toolbar Row
+
+    private var toolbarRow: some View {
+        HStack(spacing: 12) {
+            // Left Filter Group: Posters | Season Posters | Backdrops | Logos
+            HStack(spacing: 6) {
+                ForEach(ArtworkTab.allCases) { tab in
+                    toolbarTabButton(tab: tab)
                 }
             }
 
-            // Action Buttons: Restore Default & Done
-            HStack(spacing: 14) {
-                Button {
+            // Middle Source Group: TMDB | MediUX
+            HStack(spacing: 4) {
+                sourcePill(source: .tmdb, icon: "square.3.layers.3d")
+                sourcePill(source: .mediux, icon: "pencil.and.outline")
+            }
+            .padding(4)
+            .background(Color.white.opacity(0.08), in: Capsule())
+
+            Spacer()
+
+            // Right Action Group: From Link | Aa Add Logo | Restore Default
+            HStack(spacing: 10) {
+                actionToolbarButton(title: "From Link", icon: "link", control: .fromLink) {
+                    showFromLinkAlert = true
+                }
+
+                actionToolbarButton(title: "Aa Add Logo", icon: nil, control: .addLogo) {
+                    selectedTab = .logos
+                }
+
+                actionToolbarButton(title: "Restore Default", icon: "arrow.counterclockwise", control: .restoreDefault) {
                     restoreDefaultArtwork()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.counterclockwise")
-                        Text("Restore Default")
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(focusedButton == .restore ? Color.black : Color.white)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 12)
-                    .background(focusedButton == .restore ? Color.white : Color.white.opacity(0.14), in: Capsule())
-                    .scaleEffect(focusedButton == .restore ? 1.05 : 1.0)
-                    .animation(.easeOut(duration: 0.16), value: focusedButton)
                 }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
-                .focused($focusedButton, equals: .restore)
+            }
+        }
+    }
 
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Done")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
-                        .background(Color.white, in: Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(focusedButton == .done ? Color.white : .clear, lineWidth: 2.5)
-                                .padding(-4)
-                        )
-                        .scaleEffect(focusedButton == .done ? 1.05 : 1.0)
-                        .animation(.easeOut(duration: 0.16), value: focusedButton)
+    @ViewBuilder
+    private func toolbarTabButton(tab: ArtworkTab) -> some View {
+        let isSelected = selectedTab == tab
+        let isFocused = focusedToolbarItem == .tab(tab)
+
+        Button {
+            selectedTab = tab
+        } label: {
+            Text(tab.rawValue)
+                .font(.system(size: 15, weight: isSelected || isFocused ? .bold : .medium))
+                .foregroundStyle(isFocused ? Color.black : (isSelected ? Color.white : Color.white.opacity(0.7)))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule()
+                        .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.22) : Color.clear))
+                )
+                .scaleEffect(isFocused ? 1.04 : 1.0)
+                .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+        .focused($focusedToolbarItem, equals: .tab(tab))
+    }
+
+    @ViewBuilder
+    private func sourcePill(source: ArtworkSource, icon: String) -> some View {
+        let isSelected = selectedSource == source
+        let isFocused = focusedToolbarItem == .source(source)
+
+        Button {
+            selectedSource = source
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(source.rawValue)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(isFocused ? Color.black : (isSelected ? Color.white : Color.white.opacity(0.6)))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.16) : Color.clear))
+            )
+            .scaleEffect(isFocused ? 1.04 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+        .focused($focusedToolbarItem, equals: .source(source))
+    }
+
+    @ViewBuilder
+    private func actionToolbarButton(
+        title: String,
+        icon: String?,
+        control: ToolbarControl,
+        action: @escaping () -> Void
+    ) -> some View {
+        let isFocused = focusedToolbarItem == control
+
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
                 }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
-                .focused($focusedButton, equals: .done)
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.8))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isFocused ? Color.white : Color.clear)
+            )
+            .scaleEffect(isFocused ? 1.04 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+        .focused($focusedToolbarItem, equals: control)
+    }
+
+    // MARK: - Sub-Row (Multiple Artwork)
+
+    private var multipleArtworkRow: some View {
+        let isFocused = focusedToolbarItem == .multipleArtwork
+
+        return HStack(spacing: 14) {
+            Button {
+                isMultipleArtworkEnabled.toggle()
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "square.stack")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Multiple Artwork")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(isFocused ? Color.black : (isMultipleArtworkEnabled ? Color.white : Color.white.opacity(0.75)))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(isFocused ? Color.white : (isMultipleArtworkEnabled ? Color.white.opacity(0.24) : Color.clear))
+                )
+                .scaleEffect(isFocused ? 1.03 : 1.0)
+                .animation(.easeOut(duration: 0.14), value: isFocused)
+            }
+            .buttonStyle(AuraButtonStyle())
+            .focusEffectDisabled()
+            .focused($focusedToolbarItem, equals: .multipleArtwork)
+
+            if isMultipleArtworkEnabled {
+                Text("Posters: \(selectedMultiPosters.count) · Backdrops: \(selectedMultiBackdrops.count) · Every 5 Minutes")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.55))
+            } else {
+                Text("Show several posters and backdrops in turn")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.45))
             }
 
             Spacer()
         }
     }
 
-    // MARK: - Right Asset Grid
+    // MARK: - Full-Width Assets Grid (7 Columns for Posters)
 
     @ViewBuilder
-    private var rightAssetsGrid: some View {
+    private var assetsGrid: some View {
         if isLoading {
             VStack {
                 Spacer()
@@ -311,42 +377,49 @@ struct ChangeArtworkView: View {
             VStack(spacing: 12) {
                 Spacer()
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white.opacity(0.3))
-                Text("No \(selectedTab.rawValue) Available")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 46))
+                    .foregroundStyle(.white.opacity(0.28))
+                Text(selectedSource == .mediux ? "Connect MediUX set or switch to TMDB" : "No \(selectedTab.rawValue) Available")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.68))
                 Spacer()
             }
             .frame(maxWidth: .infinity)
         } else {
-            let columns = selectedTab == .posters
-                ? [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 22)]
-                : [GridItem(.adaptive(minimum: 360, maximum: 420), spacing: 22)]
+            let isPortrait = selectedTab == .posters || selectedTab == .seasonPosters
+            let columns = isPortrait
+                ? Array(repeating: GridItem(.flexible(), spacing: 14), count: 7)
+                : Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
 
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVGrid(columns: columns, spacing: 22) {
+                LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(currentAssets, id: \.filePath) { asset in
-                        artworkCard(for: asset)
+                        artworkCard(for: asset, isPortrait: isPortrait)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+                .padding(.bottom, 220)
             }
         }
     }
 
     @ViewBuilder
-    private func artworkCard(for asset: TMDBImageAsset) -> some View {
+    private func artworkCard(for asset: TMDBImageAsset, isPortrait: Bool) -> some View {
         let isFocused = focusedAssetPath == asset.filePath
         let isCurrent = isAssetActive(asset.filePath)
-        let ratio: CGFloat = selectedTab == .posters ? (2 / 3) : (16 / 9)
+        let isMultiSelected = isAssetMultiSelected(asset.filePath)
+        let ratio: CGFloat = isPortrait ? (2.0 / 3.0) : (16.0 / 9.0)
         let sizeParam = selectedTab == .backdrops ? "w780" : "w500"
 
         Button {
-            applyArtwork(asset.filePath)
+            if isMultipleArtworkEnabled {
+                toggleMultiArtwork(asset.filePath)
+            } else {
+                applyArtwork(asset.filePath)
+            }
         } label: {
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 Group {
                     if let url = TMDBService.shared.imageURL(path: asset.filePath, size: sizeParam) {
                         AsyncImage(url: url) { phase in
@@ -355,7 +428,7 @@ struct ChangeArtworkView: View {
                                 image
                                     .resizable()
                                     .aspectRatio(contentMode: selectedTab == .logos ? .fit : .fill)
-                                    .padding(selectedTab == .logos ? 20 : 0)
+                                    .padding(selectedTab == .logos ? 16 : 0)
                             default:
                                 Color.auraSurface
                             }
@@ -367,32 +440,231 @@ struct ChangeArtworkView: View {
                 .frame(maxWidth: .infinity)
                 .aspectRatio(ratio, contentMode: .fit)
                 .background(selectedTab == .logos ? Color.auraSurface : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
 
+                // Bottom-left "✓ Current" badge
                 if isCurrent {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                        Text("Current")
+                    VStack {
+                        Spacer()
+                        HStack {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("Current")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Color.white, in: Capsule())
+                            .shadow(color: .black.opacity(0.45), radius: 6, y: 2)
+                            .padding(8)
+
+                            Spacer()
+                        }
                     }
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.white, in: Capsule())
-                    .padding(10)
+                }
+
+                // Multi-artwork top-right selection circle
+                if isMultipleArtworkEnabled {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(systemName: isMultiSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.7), radius: 4)
+                                .padding(8)
+                        }
+                        Spacer()
+                    }
                 }
             }
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isFocused ? Color.white : Color.white.opacity(0.1), lineWidth: isFocused ? 3 : 1)
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 0.8)
             )
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .shadow(color: isFocused ? Color.white.opacity(0.16) : .black.opacity(0.4), radius: isFocused ? 16 : 6)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .scaleEffect(isFocused ? 1.04 : 1.0)
+            .shadow(color: isFocused ? Color.white.opacity(0.14) : .black.opacity(0.35), radius: isFocused ? 14 : 6)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($focusedAssetPath, equals: asset.filePath)
+    }
+
+    // MARK: - Floating Bottom-Right Live Mini-Preview Card
+
+    private var floatingMiniPreviewCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Miniature Detail Screen Preview
+            ZStack(alignment: .bottomLeading) {
+                if let backdrop = previewBackdropPath,
+                   let url = TMDBService.shared.imageURL(path: backdrop, size: "w780") {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 376, height: 190)
+                                .clipped()
+                        } else {
+                            Color.auraSurface.frame(width: 376, height: 190)
+                        }
+                    }
+                } else {
+                    Color.auraSurface.frame(width: 376, height: 190)
+                }
+
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.auraBackground.opacity(0.95), location: 0.0),
+                        .init(color: Color.auraBackground.opacity(0.55), location: 0.55),
+                        .init(color: .clear, location: 1.0)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+
+                LinearGradient(
+                    colors: [Color.auraBackground.opacity(0.95), .clear],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        TitleLogoView(
+                            title: title,
+                            mediaType: mediaType,
+                            tmdbId: tmdbId,
+                            preloadedLogoPath: previewLogoPath,
+                            maxWidth: 165,
+                            maxHeight: 42,
+                            fallbackFontSize: 16,
+                            alignment: .leading
+                        )
+
+                        Text("2025 • HD • Crime, Drama")
+                            .font(.system(size: 7.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.65))
+
+                        HStack(spacing: 4) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 6))
+                                Text("Play")
+                                    .font(.system(size: 7.5, weight: .bold))
+                            }
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Color.white, in: Capsule())
+
+                            ForEach(["checkmark", "bookmark", "ellipsis"], id: \.self) { icon in
+                                Image(systemName: icon)
+                                    .font(.system(size: 6, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 14, height: 14)
+                                    .background(Color.white.opacity(0.18), in: Circle())
+                            }
+                        }
+
+                        if mediaType == "series" {
+                            Text("Episodes")
+                                .font(.system(size: 7, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .padding(.top, 4)
+
+                            HStack(spacing: 6) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(width: 58, height: 28)
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(width: 58, height: 28)
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    // Mini Poster card on right of preview
+                    VStack(spacing: 4) {
+                        if let poster = previewPosterPath,
+                           let posterURL = TMDBService.shared.imageURL(path: poster, size: "w342") {
+                            AsyncImage(url: posterURL) { phase in
+                                if let image = phase.image {
+                                    image
+                                        .resizable()
+                                        .aspectRatio(2 / 3, contentMode: .fill)
+                                        .frame(width: 68, height: 102)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.auraSurface)
+                                        .frame(width: 68, height: 102)
+                                }
+                            }
+                        }
+                        Text(title)
+                            .font(.system(size: 7, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .frame(width: 72)
+                    }
+                }
+                .padding(14)
+            }
+            .frame(width: 376, height: 190)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
+            )
+
+            // Action instruction & metadata caption
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.point.up.left")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(previewActionLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+
+                Text(previewDimensionCaption)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(.horizontal, 4)
+        }
+        .padding(14)
+        .background(Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.96), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.75), radius: 24, y: 8)
+    }
+
+    private var previewActionLabel: String {
+        if let asset = focusedAsset {
+            if isMultipleArtworkEnabled {
+                return isAssetMultiSelected(asset.filePath) ? "Press to take it out" : "Press to add it"
+            }
+            return isAssetActive(asset.filePath) ? "Current artwork" : "Press to apply"
+        }
+        return "Press to apply"
+    }
+
+    private var previewDimensionCaption: String {
+        if let asset = focusedAsset ?? currentAssets.first,
+           let w = asset.width, let h = asset.height {
+            let ext = asset.filePath.lowercased().hasSuffix(".png") ? "PNG" : "JPG"
+            return "\(w) × \(h) · \(ext) · \(selectedSource.rawValue)"
+        }
+        return "\(posters.count) posters · \(backdrops.count) backdrops · \(selectedSource.rawValue)"
     }
 
     // MARK: - Logic & Persistence
@@ -400,8 +672,36 @@ struct ChangeArtworkView: View {
     private func isAssetActive(_ path: String) -> Bool {
         switch selectedTab {
         case .posters: return activePosterPath == path
+        case .seasonPosters: return activePosterPath == path
         case .backdrops: return activeBackdropPath == path
         case .logos: return activeLogoPath == path
+        }
+    }
+
+    private func isAssetMultiSelected(_ path: String) -> Bool {
+        switch selectedTab {
+        case .posters, .seasonPosters: return selectedMultiPosters.contains(path)
+        case .backdrops: return selectedMultiBackdrops.contains(path)
+        case .logos: return activeLogoPath == path
+        }
+    }
+
+    private func toggleMultiArtwork(_ path: String) {
+        switch selectedTab {
+        case .posters, .seasonPosters:
+            if selectedMultiPosters.contains(path) {
+                selectedMultiPosters.remove(path)
+            } else {
+                selectedMultiPosters.insert(path)
+            }
+        case .backdrops:
+            if selectedMultiBackdrops.contains(path) {
+                selectedMultiBackdrops.remove(path)
+            } else {
+                selectedMultiBackdrops.insert(path)
+            }
+        case .logos:
+            applyArtwork(path)
         }
     }
 
@@ -414,6 +714,21 @@ struct ChangeArtworkView: View {
             posters = response.posters ?? []
             backdrops = response.backdrops ?? []
             logos = (response.logos ?? []).filter { !$0.filePath.lowercased().hasSuffix(".svg") }
+
+            if mediaType == "series",
+               let seriesDetail = try? await TMDBService.shared.fetchSeriesDetails(id: tmdbId) {
+                seasonPosters = (seriesDetail.seasons ?? []).compactMap { season in
+                    guard let poster = season.posterPath else { return nil }
+                    return TMDBImageAsset(filePath: poster, iso6391: nil, aspectRatio: 0.667, width: 1000, height: 1500)
+                }
+            }
+
+            if focusedAssetPath == nil {
+                let targetPath = activePosterPath ?? posters.first?.filePath
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    focusedAssetPath = targetPath
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -431,7 +746,7 @@ struct ChangeArtworkView: View {
         }
 
         switch selectedTab {
-        case .posters:
+        case .posters, .seasonPosters:
             record.customPosterPath = path
         case .backdrops:
             record.customBackdropPath = path

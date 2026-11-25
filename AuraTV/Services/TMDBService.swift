@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 import os
+#if canImport(UIKit)
+import UIKit
+#endif
+import CoreGraphics
 
 // MARK: - Errors
 
@@ -76,6 +80,9 @@ final class TMDBService {
     /// - Returns: A complete URL, or `nil` when `path` is nil or empty.
     func imageURL(path: String?, size: String = "w500") -> URL? {
         guard let path, !path.isEmpty else { return nil }
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            return URL(string: path)
+        }
         return URL(string: "\(imageBaseURL)\(size)\(path)")
     }
 
@@ -171,21 +178,37 @@ final class TMDBService {
         )
     }
 
-    /// Returns the best raster (non-SVG) transparent TMDB logo path for display in UIImage/AsyncImage.
+    private func readCachedLogo(for key: String) -> (found: Bool, path: String?) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let cached = logoCache[key] {
+            return (true, cached)
+        }
+        if noLogoKeys.contains(key) {
+            return (true, nil)
+        }
+        return (false, nil)
+    }
+
+    private func writeCachedLogo(_ path: String?, for key: String) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let path {
+            logoCache[key] = path
+        } else {
+            noLogoKeys.insert(key)
+        }
+    }
+
+    /// Returns the best raster (non-SVG) transparent TMDB logo path that is visible on a dark canvas.
     func fetchBestLogoPath(mediaType: String, id: Int) async -> String? {
         let normalizedType = mediaType == "series" ? "tv" : mediaType
         let cacheKey = "\(normalizedType)-\(id)"
 
-        cacheLock.lock()
-        if let cached = logoCache[cacheKey] {
-            cacheLock.unlock()
-            return cached
+        let cached = readCachedLogo(for: cacheKey)
+        if cached.found {
+            return cached.path
         }
-        if noLogoKeys.contains(cacheKey) {
-            cacheLock.unlock()
-            return nil
-        }
-        cacheLock.unlock()
 
         do {
             let images = try await fetchImages(mediaType: normalizedType, id: id)
@@ -194,24 +217,75 @@ final class TMDBService {
                 return !lower.hasSuffix(".svg")
             }
 
-            // Prefer English landscape logos first, then language-neutral raster logos
-            let chosen = candidates.first(where: { $0.iso6391 == "en" && ($0.aspectRatio ?? 2.0) >= 1.1 })
-                ?? candidates.first(where: { $0.iso6391 == "en" })
-                ?? candidates.first(where: { $0.iso6391 == nil })
-                ?? candidates.first
-
-            cacheLock.lock()
-            if let path = chosen?.filePath {
-                logoCache[cacheKey] = path
-            } else {
-                noLogoKeys.insert(cacheKey)
+            // Order preferred English landscape logos first, then neutral raster logos
+            var ordered: [TMDBImageAsset] = []
+            ordered.append(contentsOf: candidates.filter { $0.iso6391 == "en" && ($0.aspectRatio ?? 2.0) >= 1.1 })
+            for asset in candidates where !ordered.contains(where: { $0.filePath == asset.filePath }) {
+                ordered.append(asset)
             }
-            cacheLock.unlock()
 
-            return chosen?.filePath
+            // Pick the first candidate whose opaque pixels aren't dark ink on dark backgrounds.
+            var selectedPath = ordered.first?.filePath
+            for asset in ordered.prefix(5) {
+                if let lum = await measureLogoLuminance(path: asset.filePath), lum >= 0.35 {
+                    selectedPath = asset.filePath
+                    break
+                }
+            }
+
+            writeCachedLogo(selectedPath, for: cacheKey)
+            return selectedPath
         } catch {
             return nil
         }
+    }
+
+    /// Computes average perceived luminance of non-transparent pixels in a w300 logo preview.
+    private func measureLogoLuminance(path: String) async -> Double? {
+        guard let url = imageURL(path: path, size: "w300"),
+              let (data, _) = try? await session.data(from: url) else {
+            return nil
+        }
+        #if canImport(UIKit)
+        guard let cgImage = UIImage(data: data)?.cgImage else { return nil }
+        let width = min(cgImage.width, 64)
+        let height = min(cgImage.height, 32)
+        guard width > 0, height > 0 else { return nil }
+
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var lumSum: Double = 0
+        var opaqueCount: Int = 0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            let alpha = Int(pixels[i + 3])
+            guard alpha > 32 else { continue }
+            let a = Double(alpha) / 255.0
+            let r = min(Double(pixels[i]) / 255.0 / a, 1.0)
+            let g = min(Double(pixels[i + 1]) / 255.0 / a, 1.0)
+            let b = min(Double(pixels[i + 2]) / 255.0 / a, 1.0)
+            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            lumSum += lum
+            opaqueCount += 1
+        }
+        guard opaqueCount > 0 else { return nil }
+        return lumSum / Double(opaqueCount)
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Search

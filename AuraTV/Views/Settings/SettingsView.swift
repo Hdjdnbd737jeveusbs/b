@@ -252,10 +252,16 @@ struct SettingsView: View {
             Spacer().frame(height: 110)
 
             // Icon + Category Title + 1-line description
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: selectedCategory.iconName)
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
 
                 Text(selectedCategory.rawValue)
                     .font(.system(size: 36, weight: .bold))
@@ -298,13 +304,6 @@ struct SettingsView: View {
             }
 
             Spacer()
-
-            HStack {
-                Text("Select \"\(selectedCategory.rawValue)\" on the left to configure")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.42))
-                Spacer()
-            }
         }
         .padding(42)
     }

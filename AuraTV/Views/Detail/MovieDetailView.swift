@@ -56,7 +56,7 @@ struct MovieDetailView: View {
         case play
         case rewatch
         case watched
-        case watchlist
+        case artwork
         case more
     }
 
@@ -132,6 +132,16 @@ struct MovieDetailView: View {
         .confirmationDialog("Options", isPresented: $showMoreOptions, titleVisibility: .visible) {
             Button("Choose Stream Source...") {
                 playMovie(forcePicker: true)
+            }
+            Button(viewModel.isInWatchlist ? "Remove from Watchlist" : "Add to Watchlist") {
+                viewModel.toggleWatchlist(
+                    tmdbId: tmdbId,
+                    mediaType: "movie",
+                    title: viewModel.movieDetail?.title ?? "",
+                    posterPath: effectivePosterPath,
+                    backdropPath: effectiveBackdropPath,
+                    context: modelContext
+                )
             }
             Button("Change Artwork...") {
                 showChangeArtwork = true
@@ -268,7 +278,7 @@ struct MovieDetailView: View {
                 if let cert = viewModel.certification, !cert.isEmpty {
                     Text("•")
                         .foregroundStyle(.white.opacity(0.5))
-                    BadgeView(text: cert, style: .outlined, fontSize: 12)
+                    Text(cert)
                 }
 
                 if let runtime = detail.runtime, runtime > 0 {
@@ -280,22 +290,22 @@ struct MovieDetailView: View {
                 if let genres = detail.genres, !genres.isEmpty {
                     Text("•")
                         .foregroundStyle(.white.opacity(0.5))
-                    Text(genres.map(\.name).prefix(3).joined(separator: ", "))
+                    Text(genres.map(\.name).prefix(2).joined(separator: ", "))
                         .lineLimit(1)
                 }
             }
             .font(.system(size: 19, weight: .medium))
-            .foregroundStyle(.white.opacity(0.86))
+            .foregroundStyle(.white.opacity(0.76))
         }
     }
 
-    // MARK: - Compact Outlined Technical Badges + Score
+    // MARK: - Solid 4K + Dolby Vision + Outlined Technical Badges + Score
 
     @ViewBuilder
     private var technicalBadgesRow: some View {
         HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .outlined, fontSize: 12)
-            BadgeView(text: "Dolby Vision", style: .outlined, fontSize: 12)
+            BadgeView(text: "4K", style: .filled, fontSize: 12)
+            DolbyVisionBadgeView()
             BadgeView(text: "5.1", style: .outlined, fontSize: 12)
             BadgeView(text: "CC", style: .outlined, fontSize: 12)
             BadgeView(text: "SDH", style: .outlined, fontSize: 12)
@@ -304,13 +314,13 @@ struct MovieDetailView: View {
             if let vote = viewModel.movieDetail?.voteAverage, vote > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .font(.system(size: 13))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
-                .padding(.leading, 6)
+                .padding(.leading, 4)
             }
         }
     }
@@ -334,15 +344,24 @@ struct MovieDetailView: View {
     @ViewBuilder
     private var actionButtons: some View {
         HStack(spacing: 14) {
-            // Primary Solid White Pill Button
+            // Primary Solid White Pill Button with inline mini progress bar on resume
             Button(action: { playMovie() }) {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 17))
 
                     if let progress = viewModel.watchProgress,
                        progress.progress > 0 && !progress.isCompleted,
                        !progress.remainingTimeFormatted.isEmpty {
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.black.opacity(0.22))
+                                .frame(width: 46, height: 4)
+                            Capsule()
+                                .fill(Color.black.opacity(0.88))
+                                .frame(width: max(8, 46 * min(max(progress.progress, 0), 1)), height: 4)
+                        }
+
                         Text(progress.remainingTimeFormatted)
                             .font(.system(size: 19, weight: .bold))
                     } else {
@@ -350,7 +369,7 @@ struct MovieDetailView: View {
                             .font(.system(size: 19, weight: .bold))
                     }
                 }
-                .padding(.horizontal, 34)
+                .padding(.horizontal, 32)
                 .padding(.vertical, 16)
                 .background(Color.white)
                 .foregroundStyle(.black)
@@ -383,7 +402,7 @@ struct MovieDetailView: View {
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
                     )
                 }
                 .buttonStyle(AuraButtonStyle())
@@ -409,20 +428,13 @@ struct MovieDetailView: View {
                 )
             }
 
-            // Watchlist Circular Glass Button
+            // Change Artwork Circular Glass Button
             circleGlassButton(
-                systemName: viewModel.isInWatchlist ? "bookmark.fill" : "bookmark",
-                isActive: viewModel.isInWatchlist,
-                target: .watchlist
+                systemName: "paintpalette",
+                isActive: customArtwork != nil,
+                target: .artwork
             ) {
-                viewModel.toggleWatchlist(
-                    tmdbId: tmdbId,
-                    mediaType: "movie",
-                    title: viewModel.movieDetail?.title ?? "",
-                    posterPath: effectivePosterPath,
-                    backdropPath: effectiveBackdropPath,
-                    context: modelContext
-                )
+                showChangeArtwork = true
             }
 
             // More (...) Circular Glass Button

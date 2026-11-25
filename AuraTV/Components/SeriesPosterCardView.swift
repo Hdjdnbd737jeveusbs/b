@@ -64,6 +64,14 @@ struct SeriesPosterCardView: View {
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: series.id,
+            mediaType: "series",
+            title: series.name,
+            posterPath: overridePosterPath ?? series.posterPath,
+            backdropPath: series.backdropPath,
+            initialWatched: isWatched
+        ))
     }
 
     private var posterPlaceholder: some View {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Subtitle Sync & Arabic Engine Glass Panel
+// MARK: - Subtitle Sync Panel (Right-Anchored Floating Popover Matching Video Reference)
 
 struct SubtitleSyncSheet: View {
     @Binding var settings: SubtitleSyncSettings
@@ -12,10 +12,10 @@ struct SubtitleSyncSheet: View {
     @FocusState private var focusedItem: SyncControl?
 
     enum SyncControl: Hashable {
-        case minus500
-        case minus100
-        case plus100
-        case plus500
+        case earlierSmall
+        case laterSmall
+        case earlierLarge
+        case laterLarge
         case reset
         case autoSync
         case syncNow
@@ -25,148 +25,168 @@ struct SubtitleSyncSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Header + Live Offset Display
-            HStack(alignment: .firstTextBaseline, spacing: 20) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Subtitle Sync")
-                        .font(.system(size: 28, weight: .bold))
+        VStack(alignment: .trailing) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 14) {
+                // Top Header Title
+                Text("Subtitle Sync")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+
+                // Large Offset on Left + 2-Line Muted Note on Right
+                HStack(alignment: .center, spacing: 18) {
+                    Text(SubtitleSyncEngine.formatOffset(settings.manualOffset))
+                        .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white)
 
-                    Text(statusMessage ?? (settings.manualOffset == 0
-                        ? "Subtitles are shown at their original times."
-                        : "Live offset active — persisted for future titles."))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Subtitles are shown at their original times.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text("Saved for this file and subtitle. Playback keeps going.")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    .lineLimit(1)
+
+                    Spacer(minLength: 0)
                 }
 
-                Spacer()
-
-                Text(SubtitleSyncEngine.formatOffset(settings.manualOffset))
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-            }
-
-            // Manual Sync Offset Buttons (-500ms, -100ms, +100ms, +500ms, Reset 0.0s)
-            HStack(spacing: 12) {
-                offsetButton(title: "-500ms", control: .minus500) {
-                    settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: -0.5)
+                // 5 Compact Offset Pills in One Row
+                HStack(spacing: 8) {
+                    syncPill(title: "− Earlier 0.1 s", control: .earlierSmall) {
+                        settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: -0.1)
+                    }
+                    syncPill(title: "+ Later 0.1 s", control: .laterSmall) {
+                        settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: 0.1)
+                    }
+                    syncPill(title: "-1 s", control: .earlierLarge) {
+                        settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: -1.0)
+                    }
+                    syncPill(title: "+1 s", control: .laterLarge) {
+                        settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: 1.0)
+                    }
+                    syncPill(title: "↺ Reset", control: .reset) {
+                        settings.manualOffset = SubtitleSyncEngine.resetOffset()
+                    }
                 }
 
-                offsetButton(title: "-100ms", control: .minus100) {
-                    settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: -0.1)
-                }
+                Divider().background(Color.white.opacity(0.12))
 
-                offsetButton(title: "+100ms", control: .plus100) {
-                    settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: 0.1)
-                }
-
-                offsetButton(title: "+500ms", control: .plus500) {
-                    settings.manualOffset = SubtitleSyncEngine.adjustOffset(current: settings.manualOffset, delta: 0.5)
-                }
-
-                offsetButton(title: "Reset 0.0s", control: .reset) {
-                    settings.manualOffset = SubtitleSyncEngine.resetOffset()
-                }
-            }
-
-            Divider().background(Color.white.opacity(0.14))
-
-            // Auto Sync & Arabic Engine Controls
-            VStack(spacing: 12) {
-                toggleRow(
-                    title: "Auto Sync",
-                    subtitle: "Aligns early, late, or drifting subtitles automatically when loaded",
-                    icon: "sparkles",
-                    isOn: $settings.autoSyncEnabled,
-                    control: .autoSync
-                )
-
-                actionRow(
-                    title: isSyncing ? "Syncing Subtitles..." : "Sync Now",
-                    subtitle: "Uses embedded or English reference subtitle timestamps",
-                    icon: "waveform.and.magnifyingglass",
-                    isBusy: isSyncing,
-                    control: .syncNow,
-                    action: onSyncNow
-                )
-
-                toggleRow(
-                    title: "Fix RTL",
-                    subtitle: "Embeds Arabic lines with strict RTL directional markers (RLE / ALM / RLM)",
-                    icon: "text.alignright",
-                    isOn: $settings.fixRTL,
-                    control: .fixRTL
-                )
-
-                toggleRow(
-                    title: "Fix Reversed Punctuation",
-                    subtitle: "Fixes periods, question marks, dashes, and brackets on Arabic lines",
-                    icon: "arrow.left.arrow.right",
-                    isOn: $settings.fixReversedPunctuation,
-                    control: .fixPunctuation
-                )
-            }
-
-            // Done Button
-            Button(action: onDismiss) {
-                Text("Done")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.white, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(focusedItem == .done ? Color.white : .clear, lineWidth: 2.5)
-                            .padding(-4)
+                // Toggle & Action Rows
+                VStack(alignment: .leading, spacing: 6) {
+                    compactToggleRow(
+                        title: "Auto Sync",
+                        subtitle: "For this title only: align a subtitle that is early, late or drifting",
+                        icon: "sparkles",
+                        isOn: $settings.autoSyncEnabled,
+                        control: .autoSync
                     )
-                    .scaleEffect(focusedItem == .done ? 1.03 : 1.0)
-                    .animation(.easeOut(duration: 0.16), value: focusedItem)
+
+                    compactActionRow(
+                        title: isSyncing ? "Syncing..." : "Sync Now",
+                        subtitle: "Uses the video's embedded English subtitle as the reference",
+                        icon: "waveform.and.magnifyingglass",
+                        isBusy: isSyncing,
+                        control: .syncNow,
+                        action: onSyncNow
+                    )
+
+                    Text("Matches the video's English subtitle: offset, frame rate and cuts")
+                        .font(.system(size: 11.5, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.44))
+                        .padding(.leading, 40)
+                        .padding(.bottom, 4)
+
+                    Divider().background(Color.white.opacity(0.10))
+
+                    compactToggleRow(
+                        title: "Fix RTL",
+                        subtitle: "For this title only: punctuation at the end of Arabic lines, as Subtitle Edit fo...",
+                        icon: "text.alignright",
+                        isOn: $settings.fixRTL,
+                        control: .fixRTL
+                    )
+
+                    compactToggleRow(
+                        title: "Fix Reversed Punctuation",
+                        subtitle: "For this title only: punctuation fixed at the wrong end of Arabic lines move...",
+                        icon: "arrow.left.arrow.right",
+                        isOn: $settings.fixReversedPunctuation,
+                        control: .fixPunctuation
+                    )
+                }
+
+                // Bottom-Left Subtle Done Button
+                HStack {
+                    Button(action: onDismiss) {
+                        Text("Done")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(focusedItem == .done ? Color.black : Color.white.opacity(0.75))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(focusedItem == .done ? Color.white : Color.clear)
+                            )
+                            .scaleEffect(focusedItem == .done ? 1.04 : 1.0)
+                            .animation(.easeOut(duration: 0.14), value: focusedItem)
+                    }
+                    .buttonStyle(AuraButtonStyle())
+                    .focusEffectDisabled()
+                    .focused($focusedItem, equals: .done)
+
+                    Spacer()
+                }
+                .padding(.top, 2)
             }
-            .buttonStyle(AuraButtonStyle())
-            .focusEffectDisabled()
-            .focused($focusedItem, equals: .done)
+            .padding(24)
+            .frame(width: 540)
+            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.75), radius: 28, y: 12)
+            .padding(.trailing, 70)
+            .padding(.bottom, 64)
         }
-        .padding(36)
-        .frame(width: 820)
-        .background(Color.auraSurface.opacity(0.95), in: RoundedRectangle(cornerRadius: 24))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.75), radius: 28, y: 12)
-        .defaultFocus($focusedItem, .syncNow)
+        .defaultFocus($focusedItem, .earlierSmall)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                focusedItem = .earlierSmall
+            }
+        }
     }
 
-    // MARK: - Helpers
+    // MARK: - Compact Sync Pill
 
     @ViewBuilder
-    private func offsetButton(title: String, control: SyncControl, action: @escaping () -> Void) -> some View {
+    private func syncPill(title: String, control: SyncControl, action: @escaping () -> Void) -> some View {
         let isFocused = focusedItem == control
 
         Button(action: action) {
             Text(title)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(isFocused ? Color.black : Color.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isFocused ? Color.white : Color.white.opacity(0.12), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(isFocused ? 1.0 : 0.2), lineWidth: 1)
-                )
-                .scaleEffect(isFocused ? 1.06 : 1.0)
-                .animation(.easeOut(duration: 0.16), value: isFocused)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.9))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(isFocused ? Color.white : Color.white.opacity(0.08), in: Capsule())
+                .scaleEffect(isFocused ? 1.04 : 1.0)
+                .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($focusedItem, equals: control)
     }
 
+    // MARK: - Compact Toggle Row
+
     @ViewBuilder
-    private func toggleRow(
+    private func compactToggleRow(
         title: String,
         subtitle: String,
         icon: String,
@@ -176,50 +196,46 @@ struct SubtitleSyncSheet: View {
         let isFocused = focusedItem == control
 
         Button { isOn.wrappedValue.toggle() } label: {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(isFocused ? Color.black : Color.white)
-                    .frame(width: 28)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.85))
+                    .frame(width: 22)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(isFocused ? Color.black : Color.white)
                     Text(subtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(isFocused ? Color.black.opacity(0.7) : Color.auraSecondaryText)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.68) : Color.white.opacity(0.5))
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 10)
 
                 Text(isOn.wrappedValue ? "On" : "Off")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(isFocused ? Color.black : (isOn.wrappedValue ? Color.white : Color.auraSecondaryText))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(isFocused ? Color.black.opacity(0.12) : Color.white.opacity(isOn.wrappedValue ? 0.16 : 0.06))
-                    )
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.6))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isFocused ? Color.white : Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isFocused ? Color.white : Color.clear)
             )
-            .scaleEffect(isFocused ? 1.02 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .scaleEffect(isFocused ? 1.01 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($focusedItem, equals: control)
     }
 
+    // MARK: - Compact Action Row
+
     @ViewBuilder
-    private func actionRow(
+    private func compactActionRow(
         title: String,
         subtitle: String,
         icon: String,
@@ -230,42 +246,43 @@ struct SubtitleSyncSheet: View {
         let isFocused = focusedItem == control
 
         Button(action: action) {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 if isBusy {
                     ProgressView()
-                        .tint(isFocused ? Color.black : Color.white)
-                        .frame(width: 28)
+                        .tint(isFocused ? .black : .white)
+                        .scaleEffect(0.75)
+                        .frame(width: 22)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(isFocused ? Color.black : Color.white)
-                        .frame(width: 28)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.85))
+                        .frame(width: 22)
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(isFocused ? Color.black : Color.white)
                     Text(subtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(isFocused ? Color.black.opacity(0.7) : Color.auraSecondaryText)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.68) : Color.white.opacity(0.5))
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 10)
 
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.75))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.7) : Color.white.opacity(0.55))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isFocused ? Color.white : Color.white.opacity(0.08))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isFocused ? Color.white : Color.clear)
             )
-            .scaleEffect(isFocused ? 1.02 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .scaleEffect(isFocused ? 1.01 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

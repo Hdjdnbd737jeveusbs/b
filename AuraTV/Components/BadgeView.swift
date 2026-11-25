@@ -18,10 +18,10 @@ struct BadgeView: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: fontSize, weight: .semibold))
+            .font(.system(size: fontSize, weight: style == .filled ? .heavy : .semibold))
             .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
             .background(backgroundView)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .overlay(
@@ -43,9 +43,9 @@ struct BadgeView: View {
     private var backgroundView: some View {
         switch style {
         case .filled:
-            Color.white
+            Color.white.opacity(0.92)
         case .outlined:
-            Color.white.opacity(0.08)
+            Color.white.opacity(0.06)
         case .translucent:
             Color.white.opacity(0.18)
         case .darkPill:
@@ -56,9 +56,47 @@ struct BadgeView: View {
     private var borderColor: Color {
         switch style {
         case .outlined:
-            return Color.white.opacity(0.4)
+            return Color.white.opacity(0.45)
         case .filled, .translucent, .darkPill:
             return .clear
         }
+    }
+}
+
+// MARK: - Dolby Vision Badge View
+
+struct DolbyVisionBadgeView: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 1.5) {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 4,
+                    topTrailingRadius: 4
+                )
+                .fill(Color.white.opacity(0.92))
+                .frame(width: 6, height: 12)
+
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 4,
+                    bottomLeadingRadius: 4,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 0
+                )
+                .fill(Color.white.opacity(0.92))
+                .frame(width: 6, height: 12)
+            }
+
+            VStack(alignment: .leading, spacing: -1) {
+                Text("Dolby")
+                    .font(.system(size: 11, weight: .bold))
+                Text("VISION")
+                    .font(.system(size: 6, weight: .bold))
+                    .tracking(0.8)
+            }
+            .foregroundStyle(.white.opacity(0.92))
+        }
+        .padding(.horizontal, 4)
     }
 }

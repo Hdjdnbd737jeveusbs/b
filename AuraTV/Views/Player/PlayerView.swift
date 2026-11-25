@@ -36,38 +36,35 @@ struct PlayerView: View {
                 videoPlayerLayer
             }
 
-            // Live Subtitle Overlay Layer
+            // Live Subtitle Overlay Layer (shifted above scrubber when HUD is visible)
             SubtitleOverlayView(
                 currentCue: viewModel.currentSubtitleCue,
                 style: viewModel.subtitleStyle,
                 fixRTL: viewModel.subtitleSyncSettings.fixRTL,
-                fixReversedPunctuation: viewModel.subtitleSyncSettings.fixReversedPunctuation
+                fixReversedPunctuation: viewModel.subtitleSyncSettings.fixReversedPunctuation,
+                isHUDVisible: viewModel.hasStartedPlayback && viewModel.isHUDVisible && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet
             )
 
             // Loading Overlay (shown while buffering & no playback yet)
-            if viewModel.isBuffering && !viewModel.hasStartedPlayback && !viewModel.isPreviewMode {
+            if viewModel.isBuffering && !viewModel.hasStartedPlayback {
                 LoadingOverlayView(
                     title: viewModel.title,
-                    backdropPath: viewModel.backdropPath
+                    backdropPath: viewModel.backdropPath,
+                    tmdbId: viewModel.tmdbId,
+                    mediaType: viewModel.mediaType
                 )
                 .transition(.opacity)
             }
 
-            // Player HUD (Top metadata + tech badges, Skip Intro/Credits, Up Next, Bottom transport & pills)
-            if viewModel.hasStartedPlayback {
+            // Player HUD (Title top-left, 5 icons + scrubber bottom; hidden while Sync/Style popovers are open)
+            if viewModel.hasStartedPlayback && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet {
                 PlayerHUDView(viewModel: viewModel)
                     .opacity(viewModel.isHUDVisible ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: viewModel.isHUDVisible)
             }
 
-            // Live Subtitle Sync Frosted Panel Overlay
+            // Live Subtitle Sync Popover (Right-Anchored, no full-screen dark dimmer)
             if viewModel.showSubtitleSyncSheet {
-                Color.black.opacity(0.45)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        viewModel.showSubtitleSyncSheet = false
-                    }
-
                 SubtitleSyncSheet(
                     settings: $viewModel.subtitleSyncSettings,
                     isSyncing: viewModel.isSyncingSubtitles,
@@ -82,17 +79,11 @@ struct PlayerView: View {
                         viewModel.showSubtitleSyncSheet = false
                     }
                 )
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            // Live Subtitle Styling Overlay
+            // Live Subtitle Styling Overlay (Right-Anchored, no full-screen dark dimmer)
             if viewModel.showSubtitleStyleSheet {
-                Color.black.opacity(0.45)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        viewModel.showSubtitleStyleSheet = false
-                    }
-
                 SubtitleStyleSheet(
                     style: $viewModel.subtitleStyle,
                     onDismiss: {
@@ -100,7 +91,7 @@ struct PlayerView: View {
                         viewModel.showSubtitleStyleSheet = false
                     }
                 )
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
             // Buffering indicator during active playback
