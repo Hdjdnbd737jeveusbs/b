@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Series Detail View
+// MARK: - Series Detail View (Full-Bleed Backdrop + TMDB Logo + Episode Controls)
 
 struct SeriesDetailView: View {
     let tmdbId: Int
@@ -9,11 +9,11 @@ struct SeriesDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = DetailViewModel()
     @FocusState private var focusedButton: SeriesButton?
-    @FocusState private var focusedSeason: Int?
 
-    // Phase 2: Streaming state
+    // Streaming state
     @State private var showStreamPicker = false
     @State private var showPlayer = false
+    @State private var showMoreOptions = false
     @State private var availableStreams: [StremioStream] = []
     @State private var isLoadingStreams = false
     @State private var streamError: String?
@@ -26,26 +26,51 @@ struct SeriesDetailView: View {
 
     enum SeriesButton: Hashable {
         case play
-        case rewatch
+        case watched
         case watchlist
-        case artwork
         case more
     }
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                // Background
-                Color.black.ignoresSafeArea()
+            ZStack(alignment: .topLeading) {
+                Color.auraBackground.ignoresSafeArea()
 
-                // Right-side backdrop image
-                backdropImage(geometry: geometry)
+                // Full-bleed dark cinema backdrop + left & bottom vignettes
+                backdropLayer(geometry: geometry)
 
-                // Left-side gradient fade
-                leftGradientOverlay(geometry: geometry)
+                // Scrollable foreground content
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 34) {
+                        // Left hero metadata column
+                        VStack(alignment: .leading, spacing: 18) {
+                            Spacer().frame(height: geometry.size.height * 0.13)
 
-                // Content
-                contentOverlay(geometry: geometry)
+                            titleSection
+
+                            metadataLine
+
+                            technicalBadgesRow
+
+                            overviewSection
+
+                            currentEpisodeSubtitle
+
+                            actionButtons
+                                .padding(.top, 4)
+                        }
+                        .frame(maxWidth: geometry.size.width * 0.54, alignment: .leading)
+                        .padding(.leading, 80)
+
+                        // Full-width Episodes section with Season selector pill
+                        episodesSection
+
+                        // Full-width circular Cast row
+                        castSection
+
+                        Spacer().frame(height: 60)
+                    }
+                }
             }
         }
         .ignoresSafeArea()
@@ -74,10 +99,29 @@ struct SeriesDetailView: View {
         .fullScreenCover(isPresented: $showPlayer) {
             PlayerView(viewModel: playerViewModel)
         }
+        .confirmationDialog("Options", isPresented: $showMoreOptions, titleVisibility: .visible) {
+            Button("Choose Stream Source...") {
+                playSeries(forcePicker: true)
+            }
+            Button(viewModel.isWatched ? "Mark as Unwatched" : "Mark as Watched") {
+                viewModel.toggleWatched(
+                    tmdbId: tmdbId,
+                    mediaType: "series",
+                    title: viewModel.seriesDetail?.name ?? "",
+                    posterPath: viewModel.seriesDetail?.posterPath,
+                    backdropPath: viewModel.seriesDetail?.backdropPath,
+                    context: modelContext
+                )
+            }
+            Button("Restart from S1 • E1") {
+                rewatchSeries()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .overlay {
             if isLoadingStreams {
                 ZStack {
-                    Color.black.opacity(0.5).ignoresSafeArea()
+                    Color.black.opacity(0.6).ignoresSafeArea()
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
@@ -99,15 +143,12 @@ struct SeriesDetailView: View {
         }
     }
 
-    // MARK: - Backdrop Image
+    // MARK: - Backdrop Layer with Vignettes
 
     @ViewBuilder
-    private func backdropImage(geometry: GeometryProxy) -> some View {
-        let imageWidth = geometry.size.width * 0.65
-        let imageHeight = geometry.size.height
-
-        HStack {
-            Spacer()
+    private func backdropLayer(geometry: GeometryProxy) -> some View {
+        let height = geometry.size.height * 0.78
+        ZStack(alignment: .topTrailing) {
             if let path = viewModel.seriesDetail?.backdropPath ?? viewModel.seriesDetail?.posterPath,
                let url = TMDBService.shared.imageURL(path: path, size: "original") {
                 AsyncImage(url: url) { phase in
@@ -116,115 +157,66 @@ struct SeriesDetailView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: imageWidth, height: imageHeight)
+                            .frame(width: geometry.size.width * 0.78, height: height)
                             .clipped()
                     case .failure, .empty:
-                        backdropPlaceholder(width: imageWidth, height: imageHeight)
+                        backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
                     @unknown default:
-                        backdropPlaceholder(width: imageWidth, height: imageHeight)
+                        backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
                     }
                 }
             } else {
-                backdropPlaceholder(width: imageWidth, height: imageHeight)
+                backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
             }
+        }
+        .frame(width: geometry.size.width, height: height, alignment: .topTrailing)
+        .overlay {
+            LinearGradient(
+                stops: [
+                    .init(color: Color.auraBackground, location: 0.0),
+                    .init(color: Color.auraBackground.opacity(0.95), location: 0.24),
+                    .init(color: Color.auraBackground.opacity(0.68), location: 0.45),
+                    .init(color: .clear, location: 0.85)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        .overlay {
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.45),
+                    .init(color: Color.auraBackground.opacity(0.75), location: 0.80),
+                    .init(color: Color.auraBackground, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
     }
 
     @ViewBuilder
     private func backdropPlaceholder(width: CGFloat, height: CGFloat) -> some View {
         Rectangle()
-            .fill(Color(white: 0.08))
+            .fill(Color.auraSurface)
             .frame(width: width, height: height)
-            .overlay {
-                Image(systemName: "tv")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.white.opacity(0.15))
-            }
     }
 
-    // MARK: - Left Gradient Overlay
-
-    @ViewBuilder
-    private func leftGradientOverlay(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
-            Color.black
-                .frame(width: geometry.size.width * 0.38)
-
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: .black, location: 0.0),
-                    .init(color: .black.opacity(0.92), location: 0.25),
-                    .init(color: .black.opacity(0.70), location: 0.55),
-                    .init(color: .black.opacity(0.30), location: 0.80),
-                    .init(color: .clear, location: 1.0)
-                ]),
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: geometry.size.width * 0.35)
-
-            Spacer()
-        }
-        .ignoresSafeArea()
-    }
-
-    // MARK: - Content Overlay
-
-    @ViewBuilder
-    private func contentOverlay(geometry: GeometryProxy) -> some View {
-        let contentWidth = geometry.size.width * 0.56
-
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 22) {
-                Spacer()
-                    .frame(height: geometry.size.height * 0.12)
-
-                // Title
-                titleSection
-
-                // Metadata line
-                metadataLine
-
-                // Quality badges
-                qualityBadges
-
-                // Rating
-                ratingView
-
-                // Overview
-                overviewSection
-
-                // Action buttons
-                actionButtons
-
-                // Cast section
-                castSection
-
-                // Seasons picker
-                seasonPicker
-
-                // Episodes list
-                episodesList
-
-                Spacer()
-                    .frame(height: 80)
-            }
-            .padding(.leading, 70)
-            .frame(width: contentWidth, alignment: .leading)
-        }
-    }
-
-    // MARK: - Title
+    // MARK: - Title Logo
 
     @ViewBuilder
     private var titleSection: some View {
         if let detail = viewModel.seriesDetail {
-            Text(detail.name.uppercased())
-                .font(.system(size: 64, weight: .bold))
-                .tracking(6)
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .shadow(color: .black.opacity(0.8), radius: 10, x: 0, y: 4)
+            TitleLogoView(
+                title: detail.name,
+                mediaType: "tv",
+                tmdbId: detail.id,
+                preloadedLogoPath: viewModel.logoPath,
+                maxWidth: 560,
+                maxHeight: 145,
+                fallbackFontSize: 58,
+                alignment: .leading
+            )
         } else {
             ProgressView()
                 .tint(.white)
@@ -242,100 +234,109 @@ struct SeriesDetailView: View {
                 }
 
                 if let cert = viewModel.certification, !cert.isEmpty {
-                    Text("·")
-                    BadgeView(text: cert, style: .outlined, fontSize: 13)
+                    Text("•")
+                        .foregroundStyle(.white.opacity(0.5))
+                    BadgeView(text: cert, style: .outlined, fontSize: 12)
                 }
 
                 if let numSeasons = detail.numberOfSeasons, numSeasons > 0 {
-                    Text("·")
+                    Text("•")
+                        .foregroundStyle(.white.opacity(0.5))
                     Text("\(numSeasons) Season\(numSeasons == 1 ? "" : "s")")
                 }
 
                 if let genres = detail.genres, !genres.isEmpty {
-                    Text("·")
-                    Text(genres.map(\.name).joined(separator: ", "))
+                    Text("•")
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(genres.map(\.name).prefix(3).joined(separator: ", "))
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 22, weight: .medium))
-            .foregroundStyle(.white.opacity(0.85))
+            .font(.system(size: 19, weight: .medium))
+            .foregroundStyle(.white.opacity(0.86))
         }
     }
 
-    // MARK: - Quality Badges
+    // MARK: - Technical Badges + Star Rating
 
     @ViewBuilder
-    private var qualityBadges: some View {
+    private var technicalBadgesRow: some View {
         HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .filled)
-            BadgeView(text: "Dolby Vision", style: .outlined)
-            BadgeView(text: "5.1", style: .outlined)
-            BadgeView(text: "CC", style: .outlined)
-            BadgeView(text: "SDH", style: .outlined)
-            BadgeView(text: "AR", style: .outlined)
-        }
-    }
+            BadgeView(text: "4K", style: .outlined, fontSize: 12)
+            BadgeView(text: "Dolby Vision", style: .outlined, fontSize: 12)
+            BadgeView(text: "5.1", style: .outlined, fontSize: 12)
+            BadgeView(text: "CC", style: .outlined, fontSize: 12)
+            BadgeView(text: "SDH", style: .outlined, fontSize: 12)
+            BadgeView(text: "AR", style: .outlined, fontSize: 12)
 
-    // MARK: - Rating
-
-    @ViewBuilder
-    private var ratingView: some View {
-        if let detail = viewModel.seriesDetail, let vote = detail.voteAverage, vote > 0 {
-            HStack(spacing: 6) {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.system(size: 20))
-                Text(String(format: "%.1f", vote))
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
+            if let vote = viewModel.seriesDetail?.voteAverage, vote > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.system(size: 14))
+                    Text(String(format: "%.1f", vote))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.leading, 6)
             }
         }
     }
 
-    // MARK: - Overview
+    // MARK: - 3-Line Synopsis
 
     @ViewBuilder
     private var overviewSection: some View {
         if let overview = viewModel.seriesDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.8))
-                .lineLimit(4)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(.white.opacity(0.78))
+                .lineLimit(3)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: - Action Buttons
+    // MARK: - Current Episode Subtitle ("S2 • E1 - Episode Title")
+
+    @ViewBuilder
+    private var currentEpisodeSubtitle: some View {
+        if let ep = activeEpisode {
+            Text("S\(ep.seasonNumber) • E\(ep.episodeNumber) - \(ep.name)")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
+        }
+    }
+
+    private var activeEpisode: TMDBEpisode? {
+        if let progress = viewModel.watchProgress,
+           let s = progress.seasonNumber,
+           let e = progress.episodeNumber,
+           let matched = viewModel.seasonDetail?.episodes?.first(where: { $0.seasonNumber == s && $0.episodeNumber == e }) {
+            return matched
+        }
+        return viewModel.seasonDetail?.episodes?.first
+    }
+
+    // MARK: - Action Buttons Row
 
     @ViewBuilder
     private var actionButtons: some View {
-        HStack(spacing: 20) {
-            // Play / Resume Button
+        HStack(spacing: 14) {
             Button(action: { playSeries() }) {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: 18))
 
-                    if let progress = viewModel.watchProgress, progress.progress > 0 && !progress.isCompleted {
-                        HStack(spacing: 12) {
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.black.opacity(0.25))
-                                    .frame(width: 80, height: 5)
-                                Capsule()
-                                    .fill(Color.black)
-                                    .frame(width: 80 * progress.progress, height: 5)
-                            }
-
-                            if !progress.remainingTimeFormatted.isEmpty {
-                                Text(progress.remainingTimeFormatted)
-                                    .font(.system(size: 18, weight: .semibold))
-                            }
-                        }
+                    if let progress = viewModel.watchProgress,
+                       progress.progress > 0 && !progress.isCompleted,
+                       !progress.remainingTimeFormatted.isEmpty {
+                        Text(progress.remainingTimeFormatted)
+                            .font(.system(size: 19, weight: .bold))
                     } else {
-                        Text("Play S1:E1")
-                            .font(.system(size: 22, weight: .bold))
+                        Text("Play")
+                            .font(.system(size: 19, weight: .bold))
                     }
                 }
                 .padding(.horizontal, 34)
@@ -343,37 +344,37 @@ struct SeriesDetailView: View {
                 .background(Color.white)
                 .foregroundStyle(.black)
                 .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .play)
-            .scaleEffect(focusedButton == .play ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
-
-            // Rewatch Button
-            Button(action: { rewatchSeries() }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 18))
-                    Text("Rewatch")
-                        .font(.system(size: 20, weight: .medium))
-                }
-                .padding(.horizontal, 26)
-                .padding(.vertical, 16)
-                .background(Color.white.opacity(0.12))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        .stroke(focusedButton == .play ? Color.white : .clear, lineWidth: 3)
+                        .padding(-4)
                 )
             }
             .buttonStyle(.plain)
-            .focused($focusedButton, equals: .rewatch)
-            .scaleEffect(focusedButton == .rewatch ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
+            .focused($focusedButton, equals: .play)
+            .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
+            .animation(.easeOut(duration: 0.18), value: focusedButton)
 
-            // Watchlist Toggle
-            Button(action: {
+            circleGlassButton(
+                systemName: "checkmark",
+                isActive: viewModel.isWatched,
+                target: .watched
+            ) {
+                viewModel.toggleWatched(
+                    tmdbId: tmdbId,
+                    mediaType: "series",
+                    title: viewModel.seriesDetail?.name ?? "",
+                    posterPath: viewModel.seriesDetail?.posterPath,
+                    backdropPath: viewModel.seriesDetail?.backdropPath,
+                    context: modelContext
+                )
+            }
+
+            circleGlassButton(
+                systemName: viewModel.isInWatchlist ? "bookmark.fill" : "bookmark",
+                isActive: viewModel.isInWatchlist,
+                target: .watchlist
+            ) {
                 viewModel.toggleWatchlist(
                     tmdbId: tmdbId,
                     mediaType: "series",
@@ -382,63 +383,117 @@ struct SeriesDetailView: View {
                     backdropPath: viewModel.seriesDetail?.backdropPath,
                     context: modelContext
                 )
-            }) {
-                Image(systemName: viewModel.isInWatchlist ? "checkmark" : "plus")
-                    .font(.system(size: 22, weight: .bold))
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(viewModel.isInWatchlist ? Color.green : Color.white)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
             }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .watchlist)
-            .scaleEffect(focusedButton == .watchlist ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
 
-            // Artwork Picker Button (Matches Screenshot 2)
-            Button(action: { /* Change Artwork */ }) {
-                Image(systemName: "paintpalette")
-                    .font(.system(size: 20, weight: .semibold))
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(.white)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
+            circleGlassButton(
+                systemName: "ellipsis",
+                isActive: false,
+                target: .more
+            ) {
+                showMoreOptions = true
             }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .artwork)
-            .scaleEffect(focusedButton == .artwork ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
-
-            // More Options
-            Button(action: { /* Phase 4: Change Artwork */ }) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 20, weight: .bold))
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(.white)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .more)
-            .scaleEffect(focusedButton == .more ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
         }
-        .padding(.top, 6)
     }
 
-    // MARK: - Cast Section
+    @ViewBuilder
+    private func circleGlassButton(
+        systemName: String,
+        isActive: Bool,
+        target: SeriesButton,
+        action: @escaping () -> Void
+    ) -> some View {
+        let isFocused = focusedButton == target
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .bold))
+                .frame(width: 52, height: 52)
+                .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
+                .foregroundStyle(isFocused ? Color.black : Color.white)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .focused($focusedButton, equals: target)
+        .scaleEffect(isFocused ? 1.1 : 1.0)
+        .animation(.easeOut(duration: 0.18), value: focusedButton)
+    }
+
+    // MARK: - Episodes Section with Season Picker Pill
+
+    @ViewBuilder
+    private var episodesSection: some View {
+        let seasons = viewModel.seriesDetail?.seasons?.filter { $0.seasonNumber > 0 }
+            ?? viewModel.seriesDetail?.seasons
+            ?? []
+
+        if !seasons.isEmpty || !(viewModel.seasonDetail?.episodes?.isEmpty ?? true) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Episodes")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    if !seasons.isEmpty {
+                        Menu {
+                            ForEach(seasons) { season in
+                                Button {
+                                    Task {
+                                        await viewModel.loadSeasonDetail(
+                                            seriesId: tmdbId,
+                                            seasonNumber: season.seasonNumber
+                                        )
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(season.name)
+                                        if season.seasonNumber == viewModel.selectedSeasonNumber {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text("Season \(viewModel.selectedSeasonNumber)")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 80)
+
+                if let episodes = viewModel.seasonDetail?.episodes, !episodes.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 22) {
+                            ForEach(episodes) { episode in
+                                EpisodeCardView(episode: episode) {
+                                    playEpisode(episode: episode)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 80)
+                        .padding(.vertical, 12)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Cast Section (Full-Width Horizontal Row of Circular Portraits)
 
     @ViewBuilder
     private var castSection: some View {
@@ -447,77 +502,22 @@ struct SeriesDetailView: View {
                 Text("Cast")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(.white)
+                    .padding(.horizontal, 80)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(viewModel.cast.prefix(15)) { member in
+                    LazyHStack(spacing: 20) {
+                        ForEach(viewModel.cast.prefix(20)) { member in
                             CastCardView(member: member)
                         }
                     }
+                    .padding(.horizontal, 80)
+                    .padding(.vertical, 10)
                 }
             }
-            .padding(.top, 14)
         }
     }
 
-    // MARK: - Seasons Picker
-
-    @ViewBuilder
-    private var seasonPicker: some View {
-        if let seasons = viewModel.seriesDetail?.seasons, !seasons.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Seasons")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(.white)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(seasons) { season in
-                            SeasonPillButton(
-                                season: season,
-                                isSelected: viewModel.selectedSeasonNumber == season.seasonNumber,
-                                onSelect: {
-                                    Task {
-                                        await viewModel.loadSeasonDetail(
-                                            seriesId: tmdbId,
-                                            seasonNumber: season.seasonNumber
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-            .padding(.top, 16)
-        }
-    }
-
-    // MARK: - Episodes List
-
-    @ViewBuilder
-    private var episodesList: some View {
-        if let episodes = viewModel.seasonDetail?.episodes, !episodes.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Episodes")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(.white)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(episodes) { episode in
-                            EpisodeCardView(episode: episode) {
-                                playEpisode(episode: episode)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.top, 16)
-        }
-    }
-
-    // MARK: - Phase 2: Playback Actions
+    // MARK: - Playback Helpers
 
     private var streamPickerTitle: String {
         let name = viewModel.seriesDetail?.name ?? "Series"
@@ -527,16 +527,22 @@ struct SeriesDetailView: View {
         return name
     }
 
-    private func playSeries() {
-        let s = viewModel.watchProgress?.seasonNumber ?? 1
+    private func playSeries(forcePicker: Bool = false) {
+        let s = viewModel.watchProgress?.seasonNumber ?? viewModel.selectedSeasonNumber
         let e = viewModel.watchProgress?.episodeNumber ?? 1
         let ep = viewModel.seasonDetail?.episodes?.first(where: { $0.seasonNumber == s && $0.episodeNumber == e })
             ?? viewModel.seasonDetail?.episodes?.first
 
         if let ep {
-            playEpisode(episode: ep)
+            fetchAndPlayEpisode(
+                season: ep.seasonNumber,
+                episode: ep.episodeNumber,
+                title: ep.name,
+                stillPath: ep.stillPath,
+                forcePicker: forcePicker
+            )
         } else {
-            fetchAndPlayEpisode(season: s, episode: e, title: nil, stillPath: nil)
+            fetchAndPlayEpisode(season: s, episode: e, title: nil, stillPath: nil, forcePicker: forcePicker)
         }
     }
 
@@ -548,8 +554,7 @@ struct SeriesDetailView: View {
             progress.episodeNumber = 1
             try? modelContext.save()
         }
-        let firstEp = viewModel.seasonDetail?.episodes?.first
-        if let firstEp {
+        if let firstEp = viewModel.seasonDetail?.episodes?.first(where: { $0.episodeNumber == 1 }) {
             playEpisode(episode: firstEp)
         } else {
             fetchAndPlayEpisode(season: 1, episode: 1, title: nil, stillPath: nil)
@@ -565,7 +570,7 @@ struct SeriesDetailView: View {
         )
     }
 
-    private func fetchAndPlayEpisode(season: Int, episode: Int, title: String?, stillPath: String?) {
+    private func fetchAndPlayEpisode(season: Int, episode: Int, title: String?, stillPath: String?, forcePicker: Bool = false) {
         pendingEpisodeSeason = season
         pendingEpisodeNumber = episode
         pendingEpisodeTitle = title
@@ -587,7 +592,7 @@ struct SeriesDetailView: View {
                 availableStreams = streams
                 isLoadingStreams = false
 
-                if streams.count == 1, let url = URL(string: streams[0].url ?? "") {
+                if !forcePicker && streams.count == 1, let url = URL(string: streams[0].url ?? "") {
                     startPlayback(
                         url: url,
                         season: season,
@@ -632,39 +637,5 @@ struct SeriesDetailView: View {
         )
         showStreamPicker = false
         showPlayer = true
-    }
-}
-
-// MARK: - Season Pill Button
-
-private struct SeasonPillButton: View {
-    let season: TMDBSeason
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        Button(action: onSelect) {
-            Text(season.name)
-                .font(.system(size: 18, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? Color.black : Color.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    isSelected
-                    ? Color.white
-                    : Color.white.opacity(0.12)
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(isFocused ? Color.auraAccent : Color.clear, lineWidth: 2)
-                )
-                .scaleEffect(isFocused ? 1.08 : 1.0)
-                .animation(.easeInOut(duration: 0.2), value: isFocused)
-        }
-        .buttonStyle(.plain)
-        .focused($isFocused)
     }
 }

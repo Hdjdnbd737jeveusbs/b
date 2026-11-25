@@ -11,14 +11,15 @@ final class DetailViewModel {
     var seriesDetail: TMDBSeriesDetail?
     var seasonDetail: TMDBSeasonDetail?
     var selectedSeasonNumber: Int = 1
+    var logoPath: String?
     var cast: [TMDBCastMember] = []
     var certification: String?
     var isLoading: Bool = false
     var isInWatchlist: Bool = false
+    var isWatched: Bool = false
     var watchProgress: WatchHistory?
     var error: String?
 
-    // Computed progress helpers
     var watchProgressFraction: Double {
         watchProgress?.progress ?? 0
     }
@@ -30,70 +31,99 @@ final class DetailViewModel {
     // MARK: - Dependencies
 
     private let service = TMDBService.shared
+    private var activeLoadTask: Task<Void, Never>?
 
     // MARK: - Movie Detail
 
     @MainActor
     func loadMovieDetail(id: Int, context: ModelContext? = nil) async {
+        activeLoadTask?.cancel()
+
         isLoading = true
         error = nil
         movieDetail = nil
         seriesDetail = nil
         seasonDetail = nil
+        logoPath = nil
         cast = []
         certification = nil
 
-        do {
-            let detail = try await service.fetchMovieDetails(id: id)
-            movieDetail = detail
-            cast = detail.credits?.cast ?? []
-            certification = extractMovieCertification(from: detail)
-
-            if let context {
-                checkWatchlistStatus(tmdbId: id, mediaType: "movie", context: context)
-                loadWatchProgress(tmdbId: id, mediaType: "movie", context: context)
-            }
-        } catch {
-            self.error = error.localizedDescription
+        if let context {
+            checkWatchlistStatus(tmdbId: id, mediaType: "movie", context: context)
+            loadWatchProgress(tmdbId: id, mediaType: "movie", context: context)
         }
 
-        isLoading = false
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.isLoading = false }
+
+            do {
+                async let detailFetch = self.service.fetchMovieDetails(id: id)
+                async let logoFetch = self.service.fetchBestLogoPath(mediaType: "movie", id: id)
+
+                let detail = try await detailFetch
+                let resolvedLogo = await logoFetch
+                self.movieDetail = detail
+                self.logoPath = resolvedLogo
+                self.cast = detail.credits?.cast ?? []
+                self.certification = self.extractMovieCertification(from: detail)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+
+        activeLoadTask = task
+        await task.value
     }
 
     // MARK: - Series Detail
 
     @MainActor
     func loadSeriesDetail(id: Int, context: ModelContext? = nil) async {
+        activeLoadTask?.cancel()
+
         isLoading = true
         error = nil
         movieDetail = nil
         seriesDetail = nil
         seasonDetail = nil
+        logoPath = nil
         cast = []
         certification = nil
 
-        do {
-            let detail = try await service.fetchSeriesDetails(id: id)
-            seriesDetail = detail
-            cast = detail.credits?.cast ?? []
-            certification = extractSeriesCertification(from: detail)
-
-            if let context {
-                checkWatchlistStatus(tmdbId: id, mediaType: "series", context: context)
-                loadWatchProgress(tmdbId: id, mediaType: "series", context: context)
-            }
-
-            // Auto-load first season (prefer seasonNumber > 0)
-            if let seasons = detail.seasons, !seasons.isEmpty {
-                let firstSeason = seasons.first(where: { $0.seasonNumber > 0 }) ?? seasons.first!
-                selectedSeasonNumber = firstSeason.seasonNumber
-                await loadSeasonDetail(seriesId: id, seasonNumber: firstSeason.seasonNumber)
-            }
-        } catch {
-            self.error = error.localizedDescription
+        if let context {
+            checkWatchlistStatus(tmdbId: id, mediaType: "series", context: context)
+            loadWatchProgress(tmdbId: id, mediaType: "series", context: context)
         }
 
-        isLoading = false
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.isLoading = false }
+
+            do {
+                async let detailFetch = self.service.fetchSeriesDetails(id: id)
+                async let logoFetch = self.service.fetchBestLogoPath(mediaType: "tv", id: id)
+
+                let detail = try await detailFetch
+                let resolvedLogo = await logoFetch
+                self.seriesDetail = detail
+                self.logoPath = resolvedLogo
+                self.cast = detail.credits?.cast ?? []
+                self.certification = self.extractSeriesCertification(from: detail)
+
+                if let seasons = detail.seasons, !seasons.isEmpty {
+                    let targetSeason = self.watchProgress?.seasonNumber
+                        ?? (seasons.first(where: { $0.seasonNumber > 0 }) ?? seasons.first!).seasonNumber
+                    self.selectedSeasonNumber = targetSeason
+                    await self.loadSeasonDetail(seriesId: id, seasonNumber: targetSeason)
+                }
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+
+        activeLoadTask = task
+        await task.value
     }
 
     // MARK: - Season Detail
@@ -176,8 +206,51 @@ final class DetailViewModel {
         do {
             let items = try context.fetch(descriptor)
             watchProgress = items.first
+            isWatched = items.first?.isCompleted ?? false
         } catch {
             watchProgress = nil
+            isWatched = false
+        }
+    }
+
+    @MainActor
+    func toggleWatched(
+        tmdbId: Int,
+        mediaType: String,
+        title: String,
+        posterPath: String?,
+        backdropPath: String?,
+        context: ModelContext
+    ) {
+        let descriptor = FetchDescriptor<WatchHistory>(
+            predicate: #Predicate<WatchHistory> { item in
+                item.tmdbId == tmdbId && item.mediaType == mediaType
+            }
+        )
+
+        do {
+            let existing = try context.fetch(descriptor)
+            if let history = existing.first {
+                history.isCompleted.toggle()
+                history.lastWatched = Date()
+                isWatched = history.isCompleted
+                watchProgress = history
+            } else {
+                let history = WatchHistory(
+                    tmdbId: tmdbId,
+                    mediaType: mediaType,
+                    title: title,
+                    posterPath: posterPath,
+                    backdropPath: backdropPath,
+                    isCompleted: true
+                )
+                context.insert(history)
+                isWatched = true
+                watchProgress = history
+            }
+            try context.save()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
@@ -209,6 +282,7 @@ final class DetailViewModel {
                 context.insert(history)
             }
             try context.save()
+            isWatched = true
             watchProgress?.isCompleted = true
         } catch {
             self.error = error.localizedDescription
@@ -267,6 +341,7 @@ final class DetailViewModel {
 
             try context.save()
             watchProgress = history
+            isWatched = history.isCompleted
         } catch {
             self.error = error.localizedDescription
         }

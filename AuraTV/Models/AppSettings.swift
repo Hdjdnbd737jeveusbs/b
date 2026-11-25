@@ -10,7 +10,7 @@ class AppSettings {
     var preferredLanguage: String = "en"
     var subtitleLanguage: String = "ar"
 
-    // MARK: - Phase 3: Subtitles & Arabic Settings
+    // MARK: - Subtitles & Arabic Settings
     var subdlApiKey: String = ""
     var openSubtitlesApiKey: String = ""
     var subtitleFontSize: Double = 44.0
@@ -22,6 +22,32 @@ class AppSettings {
     var fixArabicRTL: Bool = true
     var fixReversedPunctuation: Bool = true
     var autoSyncSubtitles: Bool = false
+    var subtitleAutoMode: String = "Preferred Languages"
+    var secondarySubtitleLanguage: String = "en"
+
+    // MARK: - Playback Settings
+    var resumePlaybackBehavior: String = "Ask"
+    var nextEpisodeBehavior: String = "On · 10 s"
+    var playerEngineName: String = "KSPlayer"
+    var audioOutputMode: String = "Dolby Digital Plus 5.1"
+
+    // MARK: - Skip Intro & Credits
+    var skipIntroMode: String = "Skip After Delay"
+    var skipRecapMode: String = "Skip After Delay"
+    var skipCreditsMode: String = "Show Button"
+    var skipDelaySeconds: Int = 8
+    var useIntroDB: Bool = true
+
+    // MARK: - Appearance & Artwork
+    var homeHeroStyle: String = "Ambient"
+    var moviesLayoutStyle: String = "Grid"
+    var showWatchedIndicators: Bool = true
+    var includeLogosInHome: Bool = true
+    var preferredArtworkLanguage: String = "English"
+
+    // MARK: - Trakt
+    var traktUsername: String = ""
+    var traktScrobbleEnabled: Bool = true
 
     // MARK: - Init
 
@@ -42,7 +68,25 @@ class AppSettings {
         subtitleBottomOffset: Double = 60.0,
         fixArabicRTL: Bool = true,
         fixReversedPunctuation: Bool = true,
-        autoSyncSubtitles: Bool = false
+        autoSyncSubtitles: Bool = false,
+        subtitleAutoMode: String = "Preferred Languages",
+        secondarySubtitleLanguage: String = "en",
+        resumePlaybackBehavior: String = "Ask",
+        nextEpisodeBehavior: String = "On · 10 s",
+        playerEngineName: String = "KSPlayer",
+        audioOutputMode: String = "Dolby Digital Plus 5.1",
+        skipIntroMode: String = "Skip After Delay",
+        skipRecapMode: String = "Skip After Delay",
+        skipCreditsMode: String = "Show Button",
+        skipDelaySeconds: Int = 8,
+        useIntroDB: Bool = true,
+        homeHeroStyle: String = "Ambient",
+        moviesLayoutStyle: String = "Grid",
+        showWatchedIndicators: Bool = true,
+        includeLogosInHome: Bool = true,
+        preferredArtworkLanguage: String = "English",
+        traktUsername: String = "",
+        traktScrobbleEnabled: Bool = true
     ) {
         self.id = id
         self.tmdbApiKey = tmdbApiKey
@@ -61,5 +105,23 @@ class AppSettings {
         self.fixArabicRTL = fixArabicRTL
         self.fixReversedPunctuation = fixReversedPunctuation
         self.autoSyncSubtitles = autoSyncSubtitles
+        self.subtitleAutoMode = subtitleAutoMode
+        self.secondarySubtitleLanguage = secondarySubtitleLanguage
+        self.resumePlaybackBehavior = resumePlaybackBehavior
+        self.nextEpisodeBehavior = nextEpisodeBehavior
+        self.playerEngineName = playerEngineName
+        self.audioOutputMode = audioOutputMode
+        self.skipIntroMode = skipIntroMode
+        self.skipRecapMode = skipRecapMode
+        self.skipCreditsMode = skipCreditsMode
+        self.skipDelaySeconds = skipDelaySeconds
+        self.useIntroDB = useIntroDB
+        self.homeHeroStyle = homeHeroStyle
+        self.moviesLayoutStyle = moviesLayoutStyle
+        self.showWatchedIndicators = showWatchedIndicators
+        self.includeLogosInHome = includeLogosInHome
+        self.preferredArtworkLanguage = preferredArtworkLanguage
+        self.traktUsername = traktUsername
+        self.traktScrobbleEnabled = traktScrobbleEnabled
     }
 }

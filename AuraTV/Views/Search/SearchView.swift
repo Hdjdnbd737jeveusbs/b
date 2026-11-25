@@ -39,8 +39,8 @@ struct SearchView: View {
                 .padding(.vertical, 16)
                 .background(Color.auraSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 50)
-                .padding(.top, 24)
+                .padding(.horizontal, 75)
+                .padding(.top, 84)
 
                 // Results or Empty State
                 if viewModel.isSearching {
@@ -66,7 +66,7 @@ struct SearchView: View {
                     SearchResultCard(result: result)
                 }
             }
-            .padding(.horizontal, 50)
+            .padding(.horizontal, 75)
             .padding(.bottom, 60)
         }
     }

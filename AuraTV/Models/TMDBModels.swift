@@ -97,6 +97,21 @@ struct TMDBCredits: Codable, Hashable {
     let cast: [TMDBCastMember]?
 }
 
+struct TMDBImageAsset: Codable, Hashable {
+    let filePath: String
+    let iso6391: String?
+    let aspectRatio: Double?
+    let width: Int?
+    let height: Int?
+}
+
+struct TMDBImagesResponse: Codable, Hashable {
+    let id: Int?
+    let logos: [TMDBImageAsset]?
+    let backdrops: [TMDBImageAsset]?
+    let posters: [TMDBImageAsset]?
+}
+
 struct TMDBSeason: Codable, Identifiable, Hashable {
     let id: Int
     let name: String

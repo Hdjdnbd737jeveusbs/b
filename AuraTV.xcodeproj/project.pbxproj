@@ -53,6 +53,8 @@
 		1044 /* SubtitleOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2045 /* SubtitleOverlayView.swift */; };
 		1045 /* SubtitleSyncSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2046 /* SubtitleSyncSheet.swift */; };
 		1046 /* SubtitleStyleSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2047 /* SubtitleStyleSheet.swift */; };
+		1047 /* TitleLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2048 /* TitleLogoView.swift */; };
+		1048 /* SeriesPosterCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2049 /* SeriesPosterCardView.swift */; };
 		B003 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* KSPlayer */; };
 /* End PBXBuildFile section */
 
@@ -105,6 +107,8 @@
 		2045 /* SubtitleOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlayView.swift; sourceTree = "<group>"; };
 		2046 /* SubtitleSyncSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSyncSheet.swift; sourceTree = "<group>"; };
 		2047 /* SubtitleStyleSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleSheet.swift; sourceTree = "<group>"; };
+		2048 /* TitleLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleLogoView.swift; sourceTree = "<group>"; };
+		2049 /* SeriesPosterCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesPosterCardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +157,8 @@
 				2020 /* MediaRowView.swift */,
 				2021 /* PosterCardView.swift */,
 				2022 /* SeriesCardView.swift */,
+				2048 /* TitleLogoView.swift */,
+				2049 /* SeriesPosterCardView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -421,6 +427,8 @@
 				1044 /* SubtitleOverlayView.swift in Sources */,
 				1045 /* SubtitleSyncSheet.swift in Sources */,
 				1046 /* SubtitleStyleSheet.swift in Sources */,
+				1047 /* TitleLogoView.swift in Sources */,
+				1048 /* SeriesPosterCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

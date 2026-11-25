@@ -1,38 +1,53 @@
 import SwiftUI
+import SwiftData
 
-// MARK: - Movies View (Ambient Backdrop + Category Grid)
+// MARK: - Movies View (Ambient Backdrop + Category Grid with Safe-Area Clearance)
 
 struct MoviesView: View {
+    @Query private var historyItems: [WatchHistory]
+    @Query private var settingsList: [AppSettings]
+
     @State private var viewModel = MoviesViewModel()
     @State private var focusedMovie: TMDBMovie?
     @FocusState private var focusedCategory: MovieCategory?
     @FocusState private var focusedMovieId: Int?
 
     private let columns = [
-        GridItem(.adaptive(minimum: 200, maximum: 230), spacing: 28)
+        GridItem(.adaptive(minimum: 205, maximum: 230), spacing: 26)
     ]
+
+    private var watchedMovieIds: Set<Int> {
+        Set(historyItems.filter { $0.mediaType == "movie" && $0.isCompleted }.map(\.tmdbId))
+    }
+
+    private var showWatchedIndicators: Bool {
+        settingsList.first?.showWatchedIndicators ?? true
+    }
 
     var body: some View {
         ZStack {
             // Ambient Backdrop of focused movie
             ambientBackdropView
 
-            // Content
-            VStack(alignment: .leading, spacing: 24) {
-                // Category Selector Bar
+            // Content pushed clearly below the floating tvOS sidebar pill (< Movies)
+            VStack(alignment: .leading, spacing: 26) {
                 categoryBar
-                    .padding(.horizontal, 50)
-                    .padding(.top, 24)
+                    .padding(.horizontal, 75)
+                    .padding(.top, 84)
 
-                // Movie Grid
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVGrid(columns: columns, spacing: 32) {
                         ForEach(viewModel.movies(for: viewModel.selectedCategory)) { movie in
-                            PosterCardView(movie: movie)
-                                .focused($focusedMovieId, equals: movie.id)
+                            PosterCardView(
+                                movie: movie,
+                                isWatched: watchedMovieIds.contains(movie.id),
+                                showWatchedBadge: showWatchedIndicators
+                            )
+                            .focused($focusedMovieId, equals: movie.id)
                         }
                     }
-                    .padding(.horizontal, 50)
+                    .padding(.horizontal, 75)
+                    .padding(.top, 8)
                     .padding(.bottom, 60)
                 }
             }
@@ -62,8 +77,8 @@ struct MoviesView: View {
                             .aspectRatio(contentMode: .fill)
                             .ignoresSafeArea()
                             .blur(radius: 40)
-                            .opacity(0.35)
-                            .overlay(Color.black.opacity(0.55))
+                            .opacity(0.32)
+                            .overlay(Color.auraBackground.opacity(0.65))
                     }
                 }
             }
@@ -74,33 +89,36 @@ struct MoviesView: View {
 
     @ViewBuilder
     private var categoryBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             ForEach(MovieCategory.allCases) { category in
+                let isSelected = viewModel.selectedCategory == category
+                let isFocused = focusedCategory == category
+
                 Button(action: {
-                    withAnimation {
+                    withAnimation(.easeOut(duration: 0.2)) {
                         viewModel.selectedCategory = category
                     }
                 }) {
                     Text(category.rawValue)
-                        .font(.system(size: 20, weight: viewModel.selectedCategory == category ? .bold : .medium))
-                        .foregroundStyle(viewModel.selectedCategory == category ? Color.black : Color.white)
+                        .font(.system(size: 19, weight: isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? Color.black : Color.white)
                         .padding(.horizontal, 26)
                         .padding(.vertical, 12)
                         .background(
-                            viewModel.selectedCategory == category
+                            isSelected
                             ? Color.white
-                            : Color.white.opacity(0.12)
+                            : Color.white.opacity(isFocused ? 0.22 : 0.1)
                         )
                         .clipShape(Capsule())
                         .overlay(
                             Capsule()
-                                .stroke(focusedCategory == category ? Color.auraAccent : Color.clear, lineWidth: 2)
+                                .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
                         )
                 }
                 .buttonStyle(.plain)
                 .focused($focusedCategory, equals: category)
-                .scaleEffect(focusedCategory == category ? 1.06 : 1.0)
-                .animation(.easeInOut(duration: 0.2), value: focusedCategory)
+                .scaleEffect(isFocused ? 1.06 : 1.0)
+                .animation(.easeOut(duration: 0.16), value: focusedCategory)
             }
         }
     }

@@ -53,6 +53,9 @@ final class TMDBService {
     private static let logger = Logger(subsystem: "com.auratv.AuraTV", category: "TMDB")
     private let session: URLSession
     private let decoder: JSONDecoder
+    private let cacheLock = NSLock()
+    private var logoCache: [String: String] = [:]
+    private var noLogoKeys: Set<String> = []
 
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -146,6 +149,60 @@ final class TMDBService {
 
     func fetchSeriesExternalIds(id: Int) async throws -> TMDBExternalIds {
         try await request(endpoint: "tv/\(id)/external_ids")
+    }
+
+    // MARK: - Images & Title Logos
+
+    /// Fetch available logos, backdrops, and posters for a movie or TV series.
+    func fetchImages(mediaType: String, id: Int) async throws -> TMDBImagesResponse {
+        let normalizedType = mediaType == "series" ? "tv" : mediaType
+        return try await request(
+            endpoint: "\(normalizedType)/\(id)/images",
+            queryItems: [.init(name: "include_image_language", value: "en,null")]
+        )
+    }
+
+    /// Returns the best raster (non-SVG) transparent TMDB logo path for display in UIImage/AsyncImage.
+    func fetchBestLogoPath(mediaType: String, id: Int) async -> String? {
+        let normalizedType = mediaType == "series" ? "tv" : mediaType
+        let cacheKey = "\(normalizedType)-\(id)"
+
+        cacheLock.lock()
+        if let cached = logoCache[cacheKey] {
+            cacheLock.unlock()
+            return cached
+        }
+        if noLogoKeys.contains(cacheKey) {
+            cacheLock.unlock()
+            return nil
+        }
+        cacheLock.unlock()
+
+        do {
+            let images = try await fetchImages(mediaType: normalizedType, id: id)
+            let candidates = (images.logos ?? []).filter {
+                let lower = $0.filePath.lowercased()
+                return !lower.hasSuffix(".svg")
+            }
+
+            // Prefer English landscape logos first, then language-neutral raster logos
+            let chosen = candidates.first(where: { $0.iso6391 == "en" && ($0.aspectRatio ?? 2.0) >= 1.1 })
+                ?? candidates.first(where: { $0.iso6391 == "en" })
+                ?? candidates.first(where: { $0.iso6391 == nil })
+                ?? candidates.first
+
+            cacheLock.lock()
+            if let path = chosen?.filePath {
+                logoCache[cacheKey] = path
+            } else {
+                noLogoKeys.insert(cacheKey)
+            }
+            cacheLock.unlock()
+
+            return chosen?.filePath
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Search

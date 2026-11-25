@@ -29,8 +29,8 @@ struct CollectionsView: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 50)
-                .padding(.top, 24)
+                .padding(.horizontal, 75)
+                .padding(.top, 84)
 
                 // Content
                 if watchlist.isEmpty {
@@ -42,7 +42,7 @@ struct CollectionsView: View {
                                 WatchlistCard(item: item)
                             }
                         }
-                        .padding(.horizontal, 50)
+                        .padding(.horizontal, 75)
                         .padding(.bottom, 60)
                     }
                 }

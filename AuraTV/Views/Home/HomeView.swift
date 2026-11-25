@@ -5,7 +5,20 @@ import SwiftData
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var settingsList: [AppSettings]
     @State private var viewModel = HomeViewModel()
+
+    private var heroStyle: HomeHeroStyle {
+        HomeHeroStyle(settingValue: settingsList.first?.homeHeroStyle ?? "Ambient")
+    }
+
+    private var showWatchedIndicators: Bool {
+        settingsList.first?.showWatchedIndicators ?? true
+    }
+
+    private var includeLogos: Bool {
+        settingsList.first?.includeLogosInHome ?? true
+    }
 
     var body: some View {
         ZStack {
@@ -17,32 +30,46 @@ struct HomeView: View {
                     .tint(.white)
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 36) {
-                        // Hero Spotlight Carousel
-                        SpotlightCarouselView(items: viewModel.spotlightItems)
-                            .padding(.horizontal, 50)
-                            .padding(.top, 20)
+                    VStack(alignment: .leading, spacing: 34) {
+                        // Hero Spotlight / Ambient Banner
+                        SpotlightCarouselView(
+                            items: viewModel.spotlightItems,
+                            style: heroStyle,
+                            logos: viewModel.spotlightLogos,
+                            runtimes: viewModel.spotlightRuntimes,
+                            certifications: viewModel.spotlightCertifications,
+                            showLogos: includeLogos
+                        )
 
-                        // Continue Watching Row (16:9 cards)
+                        // Continue Watching Row (16:9 cards with flush bottom progress bar)
                         ContinueWatchingRow(items: viewModel.continueWatching)
 
-                        // Trending Movies Shelf (2:3 posters)
-                        MediaRowView(title: "Trending Movies") {
-                            ForEach(viewModel.trendingMovies) { movie in
-                                PosterCardView(movie: movie)
+                        // Series Shelf (2:3 clean portrait posters with count)
+                        MediaRowView(title: "Series", count: viewModel.trendingSeries.count) {
+                            ForEach(viewModel.trendingSeries) { series in
+                                SeriesPosterCardView(
+                                    series: series,
+                                    isWatched: viewModel.watchedSeriesIds.contains(series.id),
+                                    showWatchedBadge: showWatchedIndicators
+                                )
                             }
                         }
 
-                        // Trending Series Shelf (16:9 cards)
-                        MediaRowView(title: "Trending Series") {
-                            ForEach(viewModel.trendingSeries) { series in
-                                SeriesCardView(series: series)
+                        // Movies Shelf (2:3 clean portrait posters with count)
+                        MediaRowView(title: "Movies", count: viewModel.trendingMovies.count) {
+                            ForEach(viewModel.trendingMovies) { movie in
+                                PosterCardView(
+                                    movie: movie,
+                                    isWatched: viewModel.watchedMovieIds.contains(movie.id),
+                                    showWatchedBadge: showWatchedIndicators
+                                )
                             }
                         }
 
                         Spacer().frame(height: 60)
                     }
                 }
+                .ignoresSafeArea(.container, edges: heroStyle == .ambient ? [.top, .horizontal] : [])
             }
         }
         .task {

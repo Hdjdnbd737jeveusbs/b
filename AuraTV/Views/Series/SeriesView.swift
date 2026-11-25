@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Series View (16:9 Title Cards Grid)
+// MARK: - Series View (16:9 Title Cards Grid with Safe-Area Clearance)
 
 struct SeriesView: View {
     @State private var viewModel = SeriesViewModel()
@@ -17,14 +17,12 @@ struct SeriesView: View {
             // Ambient Backdrop
             ambientBackdropView
 
-            // Content
-            VStack(alignment: .leading, spacing: 24) {
-                // Category Selector Bar
+            // Content pushed clearly below the floating tvOS sidebar pill (< Series)
+            VStack(alignment: .leading, spacing: 26) {
                 categoryBar
-                    .padding(.horizontal, 50)
-                    .padding(.top, 24)
+                    .padding(.horizontal, 75)
+                    .padding(.top, 84)
 
-                // Series Grid (16:9 cards)
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVGrid(columns: columns, spacing: 32) {
                         ForEach(viewModel.series(for: viewModel.selectedCategory)) { series in
@@ -32,7 +30,8 @@ struct SeriesView: View {
                                 .focused($focusedSeriesId, equals: series.id)
                         }
                     }
-                    .padding(.horizontal, 50)
+                    .padding(.horizontal, 75)
+                    .padding(.top, 8)
                     .padding(.bottom, 60)
                 }
             }
@@ -62,8 +61,8 @@ struct SeriesView: View {
                             .aspectRatio(contentMode: .fill)
                             .ignoresSafeArea()
                             .blur(radius: 40)
-                            .opacity(0.35)
-                            .overlay(Color.black.opacity(0.55))
+                            .opacity(0.32)
+                            .overlay(Color.auraBackground.opacity(0.65))
                     }
                 }
             }
@@ -74,33 +73,36 @@ struct SeriesView: View {
 
     @ViewBuilder
     private var categoryBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             ForEach(SeriesCategory.allCases) { category in
+                let isSelected = viewModel.selectedCategory == category
+                let isFocused = focusedCategory == category
+
                 Button(action: {
-                    withAnimation {
+                    withAnimation(.easeOut(duration: 0.2)) {
                         viewModel.selectedCategory = category
                     }
                 }) {
                     Text(category.rawValue)
-                        .font(.system(size: 20, weight: viewModel.selectedCategory == category ? .bold : .medium))
-                        .foregroundStyle(viewModel.selectedCategory == category ? Color.black : Color.white)
+                        .font(.system(size: 19, weight: isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? Color.black : Color.white)
                         .padding(.horizontal, 26)
                         .padding(.vertical, 12)
                         .background(
-                            viewModel.selectedCategory == category
+                            isSelected
                             ? Color.white
-                            : Color.white.opacity(0.12)
+                            : Color.white.opacity(isFocused ? 0.22 : 0.1)
                         )
                         .clipShape(Capsule())
                         .overlay(
                             Capsule()
-                                .stroke(focusedCategory == category ? Color.auraAccent : Color.clear, lineWidth: 2)
+                                .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
                         )
                 }
                 .buttonStyle(.plain)
                 .focused($focusedCategory, equals: category)
-                .scaleEffect(focusedCategory == category ? 1.06 : 1.0)
-                .animation(.easeInOut(duration: 0.2), value: focusedCategory)
+                .scaleEffect(isFocused ? 1.06 : 1.0)
+                .animation(.easeOut(duration: 0.16), value: focusedCategory)
             }
         }
     }

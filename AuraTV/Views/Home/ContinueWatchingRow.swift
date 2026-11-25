@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Continue Watching Row (16:9 Title Cards with Progress Bars)
+// MARK: - Continue Watching Row (16:9 Landscape Cards with Bottom Progress Bar)
 
 struct ContinueWatchingRow: View {
     let items: [WatchHistory]
@@ -8,21 +8,19 @@ struct ContinueWatchingRow: View {
     var body: some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                // Section Header
                 Text("Continue Watching")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 25, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 50)
+                    .padding(.horizontal, 80)
 
-                // Horizontal list of 16:9 cards
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 24) {
                         ForEach(items) { item in
                             ContinueWatchingCard(item: item)
                         }
                     }
-                    .padding(.horizontal, 50)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, 80)
+                    .padding(.vertical, 18)
                 }
             }
         }
@@ -38,61 +36,66 @@ private struct ContinueWatchingCard: View {
 
     var body: some View {
         NavigationLink(destination: destinationView) {
-            VStack(alignment: .leading, spacing: 8) {
-                // 16:9 Image container with progress bar
+            VStack(alignment: .leading, spacing: 10) {
+                // 16:9 Image container with thin flush bottom progress bar
                 ZStack(alignment: .bottom) {
-                    // Backdrop or episode still
                     imageContent
 
-                    // Progress bar at bottom of card
                     ZStack(alignment: .leading) {
                         Rectangle()
-                            .fill(Color.white.opacity(0.3))
+                            .fill(Color.white.opacity(0.28))
                             .frame(height: 4)
 
                         Rectangle()
                             .fill(Color.white)
-                            .frame(width: 360 * max(min(item.progress, 1.0), 0), height: 4)
+                            .frame(width: 340 * max(min(item.progress, 1.0), 0.04), height: 4)
                     }
                 }
-                .frame(width: 360, height: 202)
+                .frame(width: 340, height: 191)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isFocused ? Color.white.opacity(0.8) : Color.clear, lineWidth: 2.5)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
                 )
 
-                // Title and episode info below
+                // Title & remaining time underneath
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
-                    if let epTitle = item.episodeTitle, !epTitle.isEmpty,
-                       let s = item.seasonNumber, let e = item.episodeNumber {
-                        Text("S\(s):E\(e) · \(epTitle)")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.auraSecondaryText)
-                            .lineLimit(1)
-                    } else if !item.remainingTimeFormatted.isEmpty {
-                        Text("\(item.remainingTimeFormatted) left")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.auraSecondaryText)
-                    }
+                    Text(subtitleText)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.auraSecondaryText)
+                        .lineLimit(1)
                 }
-                .frame(width: 360, alignment: .leading)
+                .frame(width: 340, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.07 : 1.0)
+            .scaleEffect(isFocused ? 1.06 : 1.0)
             .shadow(
-                color: isFocused ? Color.auraAccent.opacity(0.5) : Color.black.opacity(0.4),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
+                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.4),
+                radius: isFocused ? 18 : 6,
+                y: isFocused ? 8 : 3
             )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(.easeOut(duration: 0.18), value: isFocused)
         }
         .buttonStyle(.plain)
         .focused($isFocused)
+    }
+
+    private var subtitleText: String {
+        if item.mediaType == "series", let s = item.seasonNumber, let e = item.episodeNumber {
+            if !item.remainingTimeFormatted.isEmpty {
+                return "S\(s) • E\(e) • \(item.remainingTimeFormatted) left"
+            } else if let epTitle = item.episodeTitle, !epTitle.isEmpty {
+                return "S\(s) • E\(e) • \(epTitle)"
+            }
+            return "S\(s) • E\(e) • Next episode"
+        } else if !item.remainingTimeFormatted.isEmpty {
+            return "\(item.remainingTimeFormatted) left"
+        }
+        return "In progress"
     }
 
     @ViewBuilder
@@ -114,8 +117,8 @@ private struct ContinueWatchingCard: View {
                 case .success(let image):
                     image
                         .resizable()
-                        .aspectRatio(16/9, contentMode: .fill)
-                        .frame(width: 360, height: 202)
+                        .aspectRatio(16 / 9, contentMode: .fill)
+                        .frame(width: 340, height: 191)
                         .clipped()
                 case .failure, .empty:
                     placeholder
@@ -131,10 +134,10 @@ private struct ContinueWatchingCard: View {
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 360, height: 202)
+            .frame(width: 340, height: 191)
             .overlay {
                 Image(systemName: "play.rectangle")
-                    .font(.system(size: 40))
+                    .font(.system(size: 38))
                     .foregroundStyle(.white.opacity(0.25))
             }
     }

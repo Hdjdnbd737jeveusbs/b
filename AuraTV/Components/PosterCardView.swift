@@ -1,76 +1,64 @@
 import SwiftUI
 
-// MARK: - Poster Card View (2:3 Aspect Ratio)
+// MARK: - Poster Card View (Clean 2:3 Portrait Card, No Caption, White Focus Border)
 
 struct PosterCardView: View {
     let movie: TMDBMovie
+    var isWatched: Bool = false
+    var showWatchedBadge: Bool = true
 
     @FocusState private var isFocused: Bool
 
     var body: some View {
         NavigationLink(destination: MovieDetailView(tmdbId: movie.id)) {
-            VStack(alignment: .leading, spacing: 10) {
-                // Poster Image
-                ZStack(alignment: .topTrailing) {
-                    if let path = movie.posterPath,
-                       let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(2/3, contentMode: .fill)
-                                    .frame(width: 220, height: 330)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                            case .failure, .empty:
-                                posterPlaceholder
-                            @unknown default:
-                                posterPlaceholder
-                            }
+            ZStack(alignment: .topTrailing) {
+                if let path = movie.posterPath,
+                   let url = TMDBService.shared.imageURL(path: path, size: "w500") {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(2 / 3, contentMode: .fill)
+                                .frame(width: 215, height: 322)
+                                .clipped()
+                        case .failure, .empty:
+                            posterPlaceholder
+                        @unknown default:
+                            posterPlaceholder
                         }
-                    } else {
-                        posterPlaceholder
                     }
-
-                    // Rating badge overlay
-                    if let vote = movie.voteAverage, vote > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.yellow)
-                            Text(String(format: "%.1f", vote))
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
-                        .padding(8)
-                    }
+                } else {
+                    posterPlaceholder
                 }
 
-                // Title and year
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(movie.title)
-                        .font(.system(size: 18, weight: .semibold))
+                // Watched indicator badge (top-right circle checkmark)
+                if isWatched && showWatchedBadge {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    if let date = movie.releaseDate, date.count >= 4 {
-                        Text(String(date.prefix(4)))
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.auraSecondaryText)
-                    }
+                        .frame(width: 26, height: 26)
+                        .background(Color.black.opacity(0.65), in: Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
+                        .padding(10)
                 }
-                .frame(width: 220, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.08 : 1.0)
-            .shadow(
-                color: isFocused ? Color.auraAccent.opacity(0.5) : Color.black.opacity(0.3),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
+            .frame(width: 215, height: 322)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .scaleEffect(isFocused ? 1.07 : 1.0)
+            .shadow(
+                color: isFocused ? Color.white.opacity(0.18) : Color.black.opacity(0.45),
+                radius: isFocused ? 18 : 6,
+                y: isFocused ? 8 : 3
+            )
+            .animation(.easeOut(duration: 0.18), value: isFocused)
         }
         .buttonStyle(.plain)
         .focused($isFocused)
@@ -79,18 +67,18 @@ struct PosterCardView: View {
     private var posterPlaceholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 220, height: 330)
+            .frame(width: 215, height: 322)
             .overlay {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "film")
-                        .font(.system(size: 40))
+                        .font(.system(size: 36))
                         .foregroundStyle(.white.opacity(0.25))
                     Text(movie.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.45))
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 12)
                 }
             }
     }

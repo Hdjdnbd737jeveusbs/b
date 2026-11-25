@@ -70,13 +70,17 @@ struct SeriesCardView: View {
                     .padding(12)
                 }
             }
-            .scaleEffect(isFocused ? 1.07 : 1.0)
-            .shadow(
-                color: isFocused ? Color.auraAccent.opacity(0.45) : Color.black.opacity(0.35),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .scaleEffect(isFocused ? 1.06 : 1.0)
+            .shadow(
+                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.4),
+                radius: isFocused ? 18 : 6,
+                y: isFocused ? 8 : 3
+            )
+            .animation(.easeOut(duration: 0.18), value: isFocused)
         }
         .buttonStyle(.plain)
         .focused($isFocused)

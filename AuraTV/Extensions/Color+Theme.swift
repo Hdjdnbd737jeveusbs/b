@@ -1,18 +1,24 @@
 import SwiftUI
 
 extension Color {
-    /// Near-black background used as the primary app background.
-    static let auraBackground = Color(red: 0.06, green: 0.06, blue: 0.08)
+    /// Deep dark cinema background (#090B10).
+    static let auraBackground = Color(red: 9 / 255, green: 11 / 255, blue: 16 / 255)
 
-    /// Dark gray surface for cards, sheets, and elevated containers.
-    static let auraSurface = Color(red: 0.12, green: 0.12, blue: 0.15)
+    /// Elevated translucent surface for dark cards, settings tiles, and sheets.
+    static let auraSurface = Color(red: 19 / 255, green: 22 / 255, blue: 30 / 255)
 
-    /// Subtle blue-purple accent for highlights and interactive elements.
+    /// Subtle frosted glass card fill.
+    static let auraGlassFill = Color.white.opacity(0.06)
+
+    /// Subtle hairline border for glass containers.
+    static let auraGlassBorder = Color.white.opacity(0.14)
+
+    /// Accent highlight for secondary controls when needed.
     static let auraAccent = Color(red: 0.40, green: 0.44, blue: 0.90)
 
-    /// Primary text color — white.
+    /// Primary text color — pure white.
     static let auraText = Color.white
 
-    /// Secondary text color — medium gray for subtitles and metadata.
-    static let auraSecondaryText = Color(white: 0.55)
+    /// Secondary text color — muted gray for metadata, subtitles, and counts.
+    static let auraSecondaryText = Color(white: 0.56)
 }

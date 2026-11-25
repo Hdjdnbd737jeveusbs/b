@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Movie Detail View
+// MARK: - Movie Detail View (Full-Bleed Backdrop + TMDB Logo + Action Pill Bar)
 
 struct MovieDetailView: View {
     let tmdbId: Int
@@ -10,10 +10,10 @@ struct MovieDetailView: View {
     @State private var viewModel = DetailViewModel()
     @FocusState private var focusedButton: DetailButton?
 
-    // Phase 2 & 3: Streaming & Subtitles state
+    // Streaming & Subtitles state
     @State private var showStreamPicker = false
     @State private var showPlayer = false
-    @State private var selectedStreamURL: URL?
+    @State private var showMoreOptions = false
     @State private var availableStreams: [StremioStream] = []
     @State private var isLoadingStreams = false
     @State private var streamError: String?
@@ -23,25 +23,46 @@ struct MovieDetailView: View {
     enum DetailButton: Hashable {
         case play
         case rewatch
+        case watched
         case watchlist
-        case artwork
         case more
     }
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                // Background
-                Color.black.ignoresSafeArea()
+            ZStack(alignment: .topLeading) {
+                Color.auraBackground.ignoresSafeArea()
 
-                // Right-side backdrop image
-                backdropImage(geometry: geometry)
+                // Full-bleed dark cinema backdrop + left & bottom vignettes
+                backdropLayer(geometry: geometry)
 
-                // Left-side gradient fade
-                leftGradientOverlay(geometry: geometry)
+                // Scrollable foreground content
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 36) {
+                        // Left hero metadata column
+                        VStack(alignment: .leading, spacing: 18) {
+                            Spacer().frame(height: geometry.size.height * 0.14)
 
-                // Left-side content
-                contentOverlay(geometry: geometry)
+                            titleSection
+
+                            metadataLine
+
+                            technicalBadgesRow
+
+                            overviewSection
+
+                            actionButtons
+                                .padding(.top, 6)
+                        }
+                        .frame(maxWidth: geometry.size.width * 0.54, alignment: .leading)
+                        .padding(.leading, 80)
+
+                        // Full-width circular Cast row below the fold
+                        castSection
+
+                        Spacer().frame(height: 60)
+                    }
+                }
             }
         }
         .ignoresSafeArea()
@@ -63,10 +84,26 @@ struct MovieDetailView: View {
         .fullScreenCover(isPresented: $showPlayer) {
             PlayerView(viewModel: playerViewModel)
         }
+        .confirmationDialog("Options", isPresented: $showMoreOptions, titleVisibility: .visible) {
+            Button("Choose Stream Source...") {
+                playMovie(forcePicker: true)
+            }
+            Button(viewModel.isWatched ? "Mark as Unwatched" : "Mark as Watched") {
+                viewModel.toggleWatched(
+                    tmdbId: tmdbId,
+                    mediaType: "movie",
+                    title: viewModel.movieDetail?.title ?? "",
+                    posterPath: viewModel.movieDetail?.posterPath,
+                    backdropPath: viewModel.movieDetail?.backdropPath,
+                    context: modelContext
+                )
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .overlay {
             if isLoadingStreams {
                 ZStack {
-                    Color.black.opacity(0.5).ignoresSafeArea()
+                    Color.black.opacity(0.6).ignoresSafeArea()
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
@@ -88,15 +125,12 @@ struct MovieDetailView: View {
         }
     }
 
-    // MARK: - Backdrop Image (Right 65% width)
+    // MARK: - Backdrop Layer with Cinematic Vignettes
 
     @ViewBuilder
-    private func backdropImage(geometry: GeometryProxy) -> some View {
-        let imageWidth = geometry.size.width * 0.65
-        let imageHeight = geometry.size.height
-
-        HStack {
-            Spacer()
+    private func backdropLayer(geometry: GeometryProxy) -> some View {
+        let height = geometry.size.height * 0.78
+        ZStack(alignment: .topTrailing) {
             if let path = viewModel.movieDetail?.backdropPath ?? viewModel.movieDetail?.posterPath,
                let url = TMDBService.shared.imageURL(path: path, size: "original") {
                 AsyncImage(url: url) { phase in
@@ -105,116 +139,75 @@ struct MovieDetailView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: imageWidth, height: imageHeight)
+                            .frame(width: geometry.size.width * 0.78, height: height)
                             .clipped()
                     case .failure, .empty:
-                        backdropPlaceholder(width: imageWidth, height: imageHeight)
+                        backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
                     @unknown default:
-                        backdropPlaceholder(width: imageWidth, height: imageHeight)
+                        backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
                     }
                 }
             } else {
-                backdropPlaceholder(width: imageWidth, height: imageHeight)
+                backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
             }
+        }
+        .frame(width: geometry.size.width, height: height, alignment: .topTrailing)
+        .overlay {
+            // Left horizontal fade into #090B10
+            LinearGradient(
+                stops: [
+                    .init(color: Color.auraBackground, location: 0.0),
+                    .init(color: Color.auraBackground.opacity(0.95), location: 0.24),
+                    .init(color: Color.auraBackground.opacity(0.68), location: 0.45),
+                    .init(color: .clear, location: 0.85)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        .overlay {
+            // Bottom vertical vignette into #090B10
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.45),
+                    .init(color: Color.auraBackground.opacity(0.75), location: 0.80),
+                    .init(color: Color.auraBackground, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
     }
 
     @ViewBuilder
     private func backdropPlaceholder(width: CGFloat, height: CGFloat) -> some View {
         Rectangle()
-            .fill(Color(white: 0.08))
+            .fill(Color.auraSurface)
             .frame(width: width, height: height)
-            .overlay {
-                Image(systemName: "film")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.white.opacity(0.15))
-            }
     }
 
-    // MARK: - Left Gradient Overlay
-
-    @ViewBuilder
-    private func leftGradientOverlay(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
-            Color.black
-                .frame(width: geometry.size.width * 0.38)
-
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: .black, location: 0.0),
-                    .init(color: .black.opacity(0.92), location: 0.25),
-                    .init(color: .black.opacity(0.70), location: 0.55),
-                    .init(color: .black.opacity(0.30), location: 0.80),
-                    .init(color: .clear, location: 1.0)
-                ]),
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: geometry.size.width * 0.35)
-
-            Spacer()
-        }
-        .ignoresSafeArea()
-    }
-
-    // MARK: - Content Overlay
-
-    @ViewBuilder
-    private func contentOverlay(geometry: GeometryProxy) -> some View {
-        let contentWidth = geometry.size.width * 0.52
-
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 22) {
-                Spacer()
-                    .frame(height: geometry.size.height * 0.14)
-
-                // Title
-                titleSection
-
-                // Metadata line (Year · PG-13 · 2h 23m · Action, Adventure)
-                metadataLine
-
-                // Quality badges (4K, Dolby Vision, 5.1, CC, SDH, AR)
-                qualityBadges
-
-                // Rating
-                ratingView
-
-                // Overview
-                overviewSection
-
-                // Action buttons row (Play/Resume, Rewatch, Watchlist, More)
-                actionButtons
-
-                // Cast section
-                castSection
-
-                Spacer()
-                    .frame(height: 60)
-            }
-            .padding(.leading, 70)
-            .frame(width: contentWidth, alignment: .leading)
-        }
-    }
-
-    // MARK: - Title
+    // MARK: - Title Logo
 
     @ViewBuilder
     private var titleSection: some View {
         if let detail = viewModel.movieDetail {
-            Text(detail.title.uppercased())
-                .font(.system(size: 64, weight: .bold))
-                .tracking(6)
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .shadow(color: .black.opacity(0.8), radius: 10, x: 0, y: 4)
+            TitleLogoView(
+                title: detail.title,
+                mediaType: "movie",
+                tmdbId: detail.id,
+                preloadedLogoPath: viewModel.logoPath,
+                maxWidth: 560,
+                maxHeight: 145,
+                fallbackFontSize: 58,
+                alignment: .leading
+            )
         } else {
             ProgressView()
                 .tint(.white)
         }
     }
 
-    // MARK: - Metadata Line
+    // MARK: - Metadata Line (Year • Rating • Runtime • Genres)
 
     @ViewBuilder
     private var metadataLine: some View {
@@ -225,102 +218,88 @@ struct MovieDetailView: View {
                 }
 
                 if let cert = viewModel.certification, !cert.isEmpty {
-                    Text("·")
-                    BadgeView(text: cert, style: .outlined, fontSize: 13)
+                    Text("•")
+                        .foregroundStyle(.white.opacity(0.5))
+                    BadgeView(text: cert, style: .outlined, fontSize: 12)
                 }
 
                 if let runtime = detail.runtime, runtime > 0 {
-                    Text("·")
+                    Text("•")
+                        .foregroundStyle(.white.opacity(0.5))
                     Text(formatRuntime(runtime))
                 }
 
                 if let genres = detail.genres, !genres.isEmpty {
-                    Text("·")
-                    Text(genres.map(\.name).joined(separator: ", "))
+                    Text("•")
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(genres.map(\.name).prefix(3).joined(separator: ", "))
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 22, weight: .medium))
-            .foregroundStyle(.white.opacity(0.85))
+            .font(.system(size: 19, weight: .medium))
+            .foregroundStyle(.white.opacity(0.86))
         }
     }
 
-    // MARK: - Quality Badges
+    // MARK: - Compact Outlined Technical Badges + Score
 
     @ViewBuilder
-    private var qualityBadges: some View {
+    private var technicalBadgesRow: some View {
         HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .filled)
-            BadgeView(text: "Dolby Vision", style: .outlined)
-            BadgeView(text: "5.1", style: .outlined)
-            BadgeView(text: "CC", style: .outlined)
-            BadgeView(text: "SDH", style: .outlined)
-            BadgeView(text: "AR", style: .outlined)
-        }
-    }
+            BadgeView(text: "4K", style: .outlined, fontSize: 12)
+            BadgeView(text: "Dolby Vision", style: .outlined, fontSize: 12)
+            BadgeView(text: "5.1", style: .outlined, fontSize: 12)
+            BadgeView(text: "CC", style: .outlined, fontSize: 12)
+            BadgeView(text: "SDH", style: .outlined, fontSize: 12)
+            BadgeView(text: "AR", style: .outlined, fontSize: 12)
 
-    // MARK: - Rating
-
-    @ViewBuilder
-    private var ratingView: some View {
-        if let detail = viewModel.movieDetail, let vote = detail.voteAverage, vote > 0 {
-            HStack(spacing: 6) {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.system(size: 20))
-                Text(String(format: "%.1f", vote))
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
+            if let vote = viewModel.movieDetail?.voteAverage, vote > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.system(size: 14))
+                    Text(String(format: "%.1f", vote))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.leading, 6)
             }
         }
     }
 
-    // MARK: - Overview
+    // MARK: - 3-Line Synopsis
 
     @ViewBuilder
     private var overviewSection: some View {
         if let overview = viewModel.movieDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.8))
-                .lineLimit(4)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(.white.opacity(0.78))
+                .lineLimit(3)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: - Action Buttons
+    // MARK: - Action Buttons Row
 
     @ViewBuilder
     private var actionButtons: some View {
-        HStack(spacing: 20) {
-            // Play / Resume Button
+        HStack(spacing: 14) {
+            // Primary Solid White Pill Button
             Button(action: { playMovie() }) {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: 18))
 
-                    if let progress = viewModel.watchProgress, progress.progress > 0 && !progress.isCompleted {
-                        // Resume layout with progress bar & remaining time
-                        HStack(spacing: 12) {
-                            // Progress bar
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.black.opacity(0.25))
-                                    .frame(width: 80, height: 5)
-                                Capsule()
-                                    .fill(Color.black)
-                                    .frame(width: 80 * progress.progress, height: 5)
-                            }
-
-                            if !progress.remainingTimeFormatted.isEmpty {
-                                Text(progress.remainingTimeFormatted)
-                                    .font(.system(size: 18, weight: .semibold))
-                            }
-                        }
+                    if let progress = viewModel.watchProgress,
+                       progress.progress > 0 && !progress.isCompleted,
+                       !progress.remainingTimeFormatted.isEmpty {
+                        Text(progress.remainingTimeFormatted)
+                            .font(.system(size: 19, weight: .bold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(size: 19, weight: .bold))
                     }
                 }
                 .padding(.horizontal, 34)
@@ -328,37 +307,64 @@ struct MovieDetailView: View {
                 .background(Color.white)
                 .foregroundStyle(.black)
                 .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .play)
-            .scaleEffect(focusedButton == .play ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
-
-            // Rewatch Button
-            Button(action: { rewatchMovie() }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 18))
-                    Text("Rewatch")
-                        .font(.system(size: 20, weight: .medium))
-                }
-                .padding(.horizontal, 26)
-                .padding(.vertical, 16)
-                .background(Color.white.opacity(0.12))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        .stroke(focusedButton == .play ? Color.white : .clear, lineWidth: 3)
+                        .padding(-4)
                 )
             }
             .buttonStyle(.plain)
-            .focused($focusedButton, equals: .rewatch)
-            .scaleEffect(focusedButton == .rewatch ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
+            .focused($focusedButton, equals: .play)
+            .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
+            .animation(.easeOut(duration: 0.18), value: focusedButton)
 
-            // Watchlist Toggle
-            Button(action: {
+            // Rewatch glass pill if currently resuming
+            if let progress = viewModel.watchProgress, progress.progress > 0 && !progress.isCompleted {
+                Button(action: { rewatchMovie() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Rewatch")
+                            .font(.system(size: 18, weight: .semibold))
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    .background(focusedButton == .rewatch ? Color.white : Color.white.opacity(0.14))
+                    .foregroundStyle(focusedButton == .rewatch ? .black : .white)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .focused($focusedButton, equals: .rewatch)
+                .scaleEffect(focusedButton == .rewatch ? 1.07 : 1.0)
+                .animation(.easeOut(duration: 0.18), value: focusedButton)
+            }
+
+            // Watched Toggle Circular Glass Button
+            circleGlassButton(
+                systemName: "checkmark",
+                isActive: viewModel.isWatched,
+                target: .watched
+            ) {
+                viewModel.toggleWatched(
+                    tmdbId: tmdbId,
+                    mediaType: "movie",
+                    title: viewModel.movieDetail?.title ?? "",
+                    posterPath: viewModel.movieDetail?.posterPath,
+                    backdropPath: viewModel.movieDetail?.backdropPath,
+                    context: modelContext
+                )
+            }
+
+            // Watchlist Circular Glass Button
+            circleGlassButton(
+                systemName: viewModel.isInWatchlist ? "bookmark.fill" : "bookmark",
+                isActive: viewModel.isInWatchlist,
+                target: .watchlist
+            ) {
                 viewModel.toggleWatchlist(
                     tmdbId: tmdbId,
                     mediaType: "movie",
@@ -367,63 +373,46 @@ struct MovieDetailView: View {
                     backdropPath: viewModel.movieDetail?.backdropPath,
                     context: modelContext
                 )
-            }) {
-                Image(systemName: viewModel.isInWatchlist ? "checkmark" : "plus")
-                    .font(.system(size: 22, weight: .bold))
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(viewModel.isInWatchlist ? Color.green : Color.white)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
             }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .watchlist)
-            .scaleEffect(focusedButton == .watchlist ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
 
-            // Artwork Picker Button (Matches Screenshot 2)
-            Button(action: { /* Change Artwork */ }) {
-                Image(systemName: "paintpalette")
-                    .font(.system(size: 20, weight: .semibold))
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(.white)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
+            // More (...) Circular Glass Button
+            circleGlassButton(
+                systemName: "ellipsis",
+                isActive: false,
+                target: .more
+            ) {
+                showMoreOptions = true
             }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .artwork)
-            .scaleEffect(focusedButton == .artwork ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
-
-            // More Options Button
-            Button(action: { /* Phase 4: Change Artwork */ }) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 20, weight: .bold))
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(.white)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .focused($focusedButton, equals: .more)
-            .scaleEffect(focusedButton == .more ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: focusedButton)
         }
-        .padding(.top, 6)
     }
 
-    // MARK: - Cast Section
+    @ViewBuilder
+    private func circleGlassButton(
+        systemName: String,
+        isActive: Bool,
+        target: DetailButton,
+        action: @escaping () -> Void
+    ) -> some View {
+        let isFocused = focusedButton == target
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .bold))
+                .frame(width: 52, height: 52)
+                .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
+                .foregroundStyle(isFocused ? Color.black : Color.white)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .focused($focusedButton, equals: target)
+        .scaleEffect(isFocused ? 1.1 : 1.0)
+        .animation(.easeOut(duration: 0.18), value: focusedButton)
+    }
+
+    // MARK: - Cast Section (Full-Width Horizontal Row of Circular Portraits)
 
     @ViewBuilder
     private var castSection: some View {
@@ -432,20 +421,22 @@ struct MovieDetailView: View {
                 Text("Cast")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(.white)
+                    .padding(.horizontal, 80)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(viewModel.cast.prefix(15)) { member in
+                    LazyHStack(spacing: 20) {
+                        ForEach(viewModel.cast.prefix(20)) { member in
                             CastCardView(member: member)
                         }
                     }
+                    .padding(.horizontal, 80)
+                    .padding(.vertical, 10)
                 }
             }
-            .padding(.top, 14)
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Helpers & Playback
 
     private func formatRuntime(_ minutes: Int) -> String {
         let hours = minutes / 60
@@ -459,9 +450,7 @@ struct MovieDetailView: View {
         }
     }
 
-    // MARK: - Phase 2: Playback Actions
-
-    private func playMovie() {
+    private func playMovie(forcePicker: Bool = false) {
         Task {
             isLoadingStreams = true
             streamError = nil
@@ -474,8 +463,7 @@ struct MovieDetailView: View {
                 availableStreams = streams
                 isLoadingStreams = false
 
-                if streams.count == 1, let url = URL(string: streams[0].url ?? "") {
-                    // Single stream — play directly
+                if !forcePicker && streams.count == 1, let url = URL(string: streams[0].url ?? "") {
                     startPlayback(url: url, resumeFrom: viewModel.watchProgress?.currentTime ?? 0)
                 } else {
                     showStreamPicker = true
@@ -488,7 +476,6 @@ struct MovieDetailView: View {
     }
 
     private func rewatchMovie() {
-        // Reset progress and play from beginning
         if let progress = viewModel.watchProgress {
             progress.currentTime = 0
             progress.isCompleted = false
