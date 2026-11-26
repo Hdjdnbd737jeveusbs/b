@@ -67,6 +67,14 @@ struct SettingsView: View {
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = SettingsViewModel()
 
+    @State private var addonLink = ""
+    @State private var addonMessage = ""
+    @State private var installingAddon = false
+    @AppStorage("streamOrder") private var streamOrder = "Provider order"
+    @AppStorage("hideDV") private var hideDV = false
+    @AppStorage("hide3D") private var hide3D = false
+    @AppStorage("hideCAM") private var hideCAM = false
+
     @State private var selectedCategory: SettingsCategory = .playback
     @State private var isEditingCategory: Bool = false
     @State private var showSavedAlert: Bool = false
@@ -552,14 +560,18 @@ struct SettingsView: View {
             }
 
         case .library:
+            textFieldSettingRow(title: "Backup File URL", placeholder: "https://…/history.json", text: $viewModel.backupURL, isSecure: false)
+            Text("Use a direct HTTPS file URL you control. Export uploads with PUT and replaces that file. Import downloads with GET.")
             actionSettingRow(title: "Export Watch History (JSON)", icon: "square.and.arrow.up") {
-                _ = viewModel.exportWatchHistory(context: modelContext)
+                Task { await viewModel.transferBackup(exporting: true, context: modelContext) }
             }
+            .disabled(viewModel.transferringBackup)
             actionSettingRow(title: "Import Watch History (JSON)", icon: "square.and.arrow.down") {
-                if let data = viewModel.exportData {
-                    viewModel.importWatchHistory(data: data, context: modelContext)
-                }
+                Task { await viewModel.transferBackup(exporting: false, context: modelContext) }
             }
+            .disabled(viewModel.transferringBackup)
+            if viewModel.transferringBackup { ProgressView() }
+            if let error = viewModel.error { Text(error).foregroundStyle(.red) }
             actionSettingRow(title: "Clear Watch History", icon: "trash") {
                 viewModel.clearWatchHistory(context: modelContext)
             }
@@ -568,6 +580,36 @@ struct SettingsView: View {
             }
 
         case .serversAccounts:
+            cycleSettingRow(title: "Stream order", value: streamOrder) {
+                streamOrder = viewModel.nextValue(after: streamOrder, in: ["Provider order", "Arabic first", "Cached first", "Preferred quality"])
+            }
+            Toggle("Hide CAM when alternatives exist", isOn: $hideCAM)
+            Toggle("Hide Dolby Vision when alternatives exist", isOn: $hideDV)
+            Toggle("Hide 3D when alternatives exist", isOn: $hide3D)
+            ForEach(AIOStreamsService.shared.addons) { addon in
+                HStack {
+                    Button(addon.name + (addon.enabled ? " · On" : " · Off")) {
+                        if let i = AIOStreamsService.shared.addons.firstIndex(where: { $0.id == addon.id }) {
+                            AIOStreamsService.shared.addons[i].enabled.toggle()
+                        }
+                    }
+                    Button("Remove") { AIOStreamsService.shared.addons.removeAll { $0.id == addon.id } }
+                }
+            }
+            textFieldSettingRow(title: "Additional Stremio add-on", placeholder: "Manifest link", text: $addonLink, isSecure: false)
+            Button("Install add-on") {
+                installingAddon = true
+                Task {
+                    defer { installingAddon = false }
+                    do {
+                        try await AIOStreamsService.shared.install(addonLink)
+                        addonLink = ""
+                        addonMessage = "Add-on installed."
+                    } catch { addonMessage = error.localizedDescription }
+                }
+            }
+            .disabled(installingAddon || addonLink.isEmpty)
+            if !addonMessage.isEmpty { Text(addonMessage) }
             textFieldSettingRow(
                 title: "TMDB API Key (v3)",
                 placeholder: "Enter TMDB v3 API Key",

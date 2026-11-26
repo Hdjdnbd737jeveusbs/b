@@ -115,6 +115,12 @@ struct PlayerView: View {
             viewModel.startPeriodicSave(context: modelContext)
             didResolveEnginePreference = true
         }
+        .task(id: viewModel.streamURL) {
+            if !viewModel.isPreviewMode, let url = viewModel.streamURL {
+                viewModel.loadSubtitleSettingsFromPreferences(context: modelContext)
+                await viewModel.loadIntroMarker(for: url)
+            }
+        }
         .onChange(of: viewModel.subtitleSyncSettings) { _, _ in
             viewModel.saveSubtitlePreferences()
             #if canImport(AetherEngine)
@@ -222,6 +228,10 @@ struct PlayerView: View {
                 guard let targetTime else { return }
                 viewModel.seekTrigger = nil
                 aetherCoordinator.seek(to: targetTime)
+            }
+            .onDisappear { viewModel.engineAudioControlsActive = false }
+            .onChange(of: viewModel.audioDelayMs) { _, ms in
+                aetherCoordinator.engine?.setAudioDelay(Double(ms) / 1000)
             }
             .onChange(of: viewModel.selectedAudioTrackId) { _, trackId in
                 aetherCoordinator.selectAudioTrack(trackId)
@@ -397,6 +407,10 @@ final class AetherPlayerCoordinator: ObservableObject {
                     options: options
                 )
                 guard !Task.isCancelled else { return }
+                if let viewModel {
+                    viewModel.engineAudioControlsActive = true
+                    engine.setAudioDelay(Double(viewModel.audioDelayMs) / 1000)
+                }
                 if let viewModel, let probe, !self.didNotifyReadyForCurrentLoad, probe.durationSeconds > 0 {
                     viewModel.totalDuration = probe.durationSeconds
                 }
@@ -715,6 +729,17 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
                 }
             }
         }
+
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { status in
+                guard status == .failed else { return }
+                viewModel.isBuffering = false
+                viewModel.isPlaying = false
+                viewModel.playbackError = playerItem.error?.localizedDescription
+                    ?? "The stream could not be played."
+            }
+            .store(in: &context.coordinator.cancellables)
 
         playerItem.publisher(for: \.isPlaybackBufferEmpty)
             .receive(on: DispatchQueue.main)

@@ -49,7 +49,7 @@ final class SettingsViewModel {
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
 
     // Skip Intro & Credits
-    var skipIntroMode: String = "Skip After Delay"
+    var skipIntroMode: String = "Off"
     var skipRecapMode: String = "Skip After Delay"
     var skipCreditsMode: String = "Show Button"
     var skipDelaySeconds: Int = 8
@@ -70,7 +70,8 @@ final class SettingsViewModel {
     var ambientBannerBackdropPath: String?
 
     var isSaving: Bool = false
-    var exportData: Data?
+    var backupURL = ""
+    var transferringBackup = false
     var statusMessage: String?
     var error: String?
     var connectionTestStatus: String?
@@ -260,7 +261,44 @@ final class SettingsViewModel {
     // MARK: - Export / Import / Clear Watch History
 
     @MainActor
-    func exportWatchHistory(context: ModelContext) -> Data? {
+    func transferBackup(exporting: Bool, context: ModelContext) async {
+        guard !transferringBackup else { return }
+        statusMessage = nil
+        error = nil
+        guard let url = URL(string: backupURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme?.lowercased() == "https", url.host != nil else {
+            error = "Enter a direct HTTPS backup file URL."
+            return
+        }
+        transferringBackup = true
+        defer { transferringBackup = false }
+        do {
+            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+            if exporting {
+                request.httpMethod = "PUT"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try exportWatchHistory(context: context)
+            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            guard (200...299).contains(http.statusCode) else {
+                error = "Backup server returned HTTP \(http.statusCode). Check the file URL and permissions."
+                return
+            }
+            if exporting {
+                statusMessage = "Uploaded watch history to your backup URL."
+            } else {
+                let restoreContext = ModelContext(context.container)
+                restoreContext.autosaveEnabled = false
+                importWatchHistory(data: data, context: restoreContext)
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func exportWatchHistory(context: ModelContext) throws -> Data {
         let descriptor = FetchDescriptor<WatchHistory>(
             sortBy: [SortDescriptor(\.lastWatched, order: .reverse)]
         )
@@ -289,13 +327,7 @@ final class SettingsViewModel {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
 
-            let data = try encoder.encode(exportItems)
-            exportData = data
-            statusMessage = "Exported \(items.count) items to JSON."
-            return data
-        } catch {
-            self.error = error.localizedDescription
-            return nil
+            return try encoder.encode(exportItems)
         }
     }
 

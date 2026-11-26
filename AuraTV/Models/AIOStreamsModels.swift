@@ -7,6 +7,7 @@ struct StremioManifest: Codable {
     let name: String?
     let description: String?
     let version: String?
+    var idPrefixes: [String]? = nil
     let catalogs: [StremioCatalog]?
     let resources: [StremioResource]?
     let types: [String]?
@@ -22,6 +23,21 @@ struct StremioResource: Codable {
     let name: String?
     let types: [String]?
     let idPrefixes: [String]?
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let shortName = try? value.decode(String.self) {
+            name = shortName
+            types = nil
+            idPrefixes = nil
+            return
+        }
+
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        name = try fields.decodeIfPresent(String.self, forKey: .name)
+        types = try fields.decodeIfPresent([String].self, forKey: .types)
+        idPrefixes = try fields.decodeIfPresent([String].self, forKey: .idPrefixes)
+    }
 }
 
 // MARK: - Stremio Stream Response
@@ -185,16 +201,10 @@ struct ParsedStreamInfo: Hashable {
         }
 
         // Cached (debrid)
-        self.isCached = combined.contains("⚡")
-            || combined.contains("CACHED")
-            || combined.contains("[RD+]")
-            || combined.contains("[AD+]")
-            || combined.contains("[PM+]")
-            || combined.contains("[TB+]")
-            || combined.contains("[RD")
-            || combined.contains("[AD")
-            || combined.contains("[PM")
-            || combined.contains("[DL")
+        let explicitlyUncached = combined.range(of: #"\b(?:UN[\s-]?CACHED|NOT\s+CACHED)\b"#, options: .regularExpression) != nil
+        let cachedWord = combined.range(of: #"\bCACHED\b"#, options: .regularExpression) != nil
+        let cachedTags = ["⚡", "[RD+]", "[AD+]", "[PM+]", "[TB+]"]
+        self.isCached = !explicitlyUncached && (cachedWord || cachedTags.contains(where: combined.contains))
 
         // Provider name (first line of `name`)
         self.providerName = name?
@@ -232,4 +242,37 @@ enum StreamHDR: String, Hashable {
     case dolbyVision = "Dolby Vision"
 
     var displayName: String { rawValue }
+}
+
+struct InstalledAddon: Codable, Identifiable {
+    let endpoint: URL
+    let manifest: StremioManifest
+    var enabled = true
+    var id: URL { endpoint }
+    var name: String { manifest.name ?? manifest.id ?? "Add-on" }
+
+    func supports(_ resource: String, type: String, id: String) -> Bool {
+        manifest.resources?.contains {
+            $0.name == resource && ($0.types ?? manifest.types ?? []).contains(type)
+                && ($0.idPrefixes ?? manifest.idPrefixes)?.contains(where: id.hasPrefix) != false
+        } == true
+    }
+
+    func url(_ resource: String, _ type: String, _ id: String) -> URL {
+        endpoint.deletingLastPathComponent().appendingPathComponent(resource)
+            .appendingPathComponent(type).appendingPathComponent(id).appendingPathExtension("json")
+    }
+}
+
+struct AddonTitle: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let poster: URL?
+}
+
+struct AddonShelf: Identifiable {
+    let id: URL
+    let name: String
+    let type: String
+    let titles: [AddonTitle]
 }

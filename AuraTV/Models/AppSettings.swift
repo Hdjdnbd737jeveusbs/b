@@ -32,7 +32,7 @@ class AppSettings {
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
 
     // MARK: - Skip Intro & Credits
-    var skipIntroMode: String = "Skip After Delay"
+    var skipIntroMode: String = "Off"
     var skipRecapMode: String = "Skip After Delay"
     var skipCreditsMode: String = "Show Button"
     var skipDelaySeconds: Int = 8
@@ -75,7 +75,7 @@ class AppSettings {
         nextEpisodeBehavior: String = "On · 10 s",
         playerEngineName: String = "AetherEngine",
         audioOutputMode: String = "Dolby Digital Plus 5.1",
-        skipIntroMode: String = "Skip After Delay",
+        skipIntroMode: String = "Off",
         skipRecapMode: String = "Skip After Delay",
         skipCreditsMode: String = "Show Button",
         skipDelaySeconds: Int = 8,

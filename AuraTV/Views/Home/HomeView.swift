@@ -9,6 +9,11 @@ struct HomeView: View {
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = HomeViewModel()
 
+    @State private var addonShelves: [AddonShelf] = []
+    private var enabledAddons: [URL] {
+        AIOStreamsService.shared.addons.filter(\.enabled).map(\.endpoint)
+    }
+
     private var heroStyle: HomeHeroStyle {
         HomeHeroStyle(settingValue: settingsList.first?.homeHeroStyle ?? "Ambient")
     }
@@ -94,6 +99,23 @@ struct HomeView: View {
                             backdropOverrides: customContinueBackdrops
                         )
 
+                        ForEach(addonShelves) { shelf in
+                            MediaRowView(title: shelf.name, count: shelf.titles.count) {
+                                ForEach(shelf.titles) { item in
+                                    NavigationLink {
+                                        AddonTitleDestination(title: item, type: shelf.type)
+                                    } label: {
+                                        VStack {
+                                            AsyncImage(url: item.poster) { image in image.resizable().scaledToFit() }
+                                                placeholder: { Color.gray.opacity(0.2) }
+                                                .frame(width: 170, height: 245)
+                                            Text(item.name).lineLimit(1).frame(width: 170)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Series Shelf (2:3 clean portrait posters with count)
                         MediaRowView(title: "Series", count: viewModel.trendingSeries.count) {
                             ForEach(viewModel.trendingSeries) { series in
@@ -127,8 +149,33 @@ struct HomeView: View {
         .task {
             await viewModel.loadAll(context: modelContext)
         }
+        .task(id: enabledAddons) {
+            let shelves = await AIOStreamsService.shared.fetchShelves()
+            if !Task.isCancelled { addonShelves = shelves }
+        }
         .refreshable {
             await viewModel.refresh(context: modelContext)
+        }
+    }
+}
+
+private struct AddonTitleDestination: View {
+    let title: AddonTitle
+    let type: String
+    @State private var tmdbId: Int?
+    @State private var error: String?
+
+    var body: some View {
+        Group {
+            if let tmdbId {
+                if type == "movie" { MovieDetailView(tmdbId: tmdbId) }
+                else { SeriesDetailView(tmdbId: tmdbId) }
+            } else if let error { Text(error) }
+            else { ProgressView() }
+        }
+        .task(id: title.id) {
+            do { tmdbId = try await TMDBService.shared.resolveIMDb(title.id, type: type) }
+            catch { self.error = error.localizedDescription }
         }
     }
 }

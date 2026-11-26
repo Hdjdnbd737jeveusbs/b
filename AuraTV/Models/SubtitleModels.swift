@@ -7,6 +7,7 @@ enum SubtitleSource: String, Codable, CaseIterable {
     case embedded = "Embedded"
     case subdl = "SubDL"
     case openSubtitles = "OpenSubtitles"
+    case addon = "Add-on"
     case wyzie = "Wyzie"
 
     var badgeName: String {
@@ -14,6 +15,7 @@ enum SubtitleSource: String, Codable, CaseIterable {
         case .embedded: return "Stream"
         case .subdl: return "SubDL"
         case .openSubtitles: return "OpenSub"
+        case .addon: return "Add-on"
         case .wyzie: return "Wyzie"
         }
     }

@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import SwiftData
 import Observation
 import CoreGraphics
@@ -54,11 +55,15 @@ final class PlayerViewModel {
         if let badges = selectedStream?.parsedInfo.techBadges, !badges.isEmpty {
             return badges
         }
-        return ["4K", "HDR10", "5.1"]
+        return []
     }
 
     // MARK: - Track Selection
 
+    var audioDelayMs = UserDefaults.standard.integer(forKey: "audioDelayMs") {
+        didSet { UserDefaults.standard.set(audioDelayMs, forKey: "audioDelayMs") }
+    }
+    var engineAudioControlsActive = false
     var availableAudioTracks: [MediaTrack] = []
     var availableSubtitleTracks: [MediaTrack] = []
     var selectedAudioTrackId: Int = 0
@@ -67,6 +72,7 @@ final class PlayerViewModel {
     // MARK: - Subtitles, Styling & Sync State
 
     var externalSubtitleTracks: [SubtitleTrackItem] = []
+    private var subtitleSelectionRevision = 0
     var selectedExternalSubtitle: SubtitleTrackItem?
     var activeCues: [AuraSubtitleCue] = []
     var currentSubtitleCue: AuraSubtitleCue?
@@ -108,7 +114,7 @@ final class PlayerViewModel {
 
     // MARK: - Skip Intro / Credits & Up Next
 
-    var skipIntroMode: String = "Skip After Delay"
+    var skipIntroMode: String = "Off"
     var skipRecapMode: String = "Skip After Delay"
     var skipCreditsMode: String = "Show Button"
     var skipDelaySeconds: Int = 8
@@ -123,18 +129,39 @@ final class PlayerViewModel {
     private var didAutoSkipIntro: Bool = false
     private var upNextTriggered: Bool = false
 
+    private var introRange: Range<Double>?
+
+    @MainActor
+    func loadIntroMarker(for url: URL) async {
+        introRange = nil
+        guard mediaType == "series", skipIntroMode != "Off" else { return }
+        let asset = AVURLAsset(url: url)
+        guard let chapters = try? await asset.loadChapterMetadataGroups(bestMatchingPreferredLanguages: Locale.preferredLanguages) else { return }
+        let introNames = ["intro", "opening", "opening credits", "opening theme", "مقدمة", "المقدمة"]
+        for chapter in chapters {
+            let titles = AVMetadataItem.metadataItems(from: chapter.items, withKey: AVMetadataKey.commonKeyTitle, keySpace: .common)
+            for item in titles {
+                guard let title = try? await item.load(.stringValue),
+                      introNames.contains(title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) else { continue }
+                let start = chapter.timeRange.start.seconds
+                let end = CMTimeRangeGetEnd(chapter.timeRange).seconds
+                guard !Task.isCancelled, streamURL == url, start.isFinite, end.isFinite, start >= 0, end > start else { return }
+                introRange = start..<end
+                return
+            }
+        }
+    }
+
     var showSkipIntroPill: Bool {
         mediaType == "series"
             && !skipIntroDismissed
             && skipIntroMode != "Off"
-            && totalDuration > 180
-            && currentTime >= 15
-            && currentTime <= 105
+            && introRange?.contains(currentTime) == true
     }
 
     var skipIntroCountdownRemaining: Int? {
-        guard showSkipIntroPill, skipIntroMode == "Skip After Delay" else { return nil }
-        return max(0, skipDelaySeconds - Int(currentTime - 15))
+        guard let introRange, showSkipIntroPill, skipIntroMode == "Skip After Delay" else { return nil }
+        return max(0, skipDelaySeconds - Int(currentTime - introRange.lowerBound))
     }
 
     var showSkipCreditsPill: Bool {
@@ -396,6 +423,7 @@ final class PlayerViewModel {
         currentBitmapSubtitle = nil
         selectedStream = stream
         resumeFromTime = currentTime
+        introRange = nil
         streamURL = url
         isBuffering = true
         showStreamPicker = false
@@ -404,10 +432,10 @@ final class PlayerViewModel {
     // MARK: - Skip Intro / Up Next
 
     func skipIntro() {
+        guard let introRange, introRange.contains(currentTime) else { return }
         skipIntroDismissed = true
         didAutoSkipIntro = true
-        let target = min(105, max(currentTime, totalDuration - 10))
-        seek(to: target)
+        seek(to: introRange.upperBound)
     }
 
     func dismissSkipIntro() {
@@ -613,10 +641,14 @@ final class PlayerViewModel {
 
     @MainActor
     func selectExternalSubtitleTrack(_ track: SubtitleTrackItem?) async {
+        subtitleSelectionRevision += 1
+        let revision = subtitleSelectionRevision
         selectedExternalSubtitle = track
+        isSyncingSubtitles = false
+        activeCues = []
+        if !isPreviewMode { currentSubtitleCue = nil }
 
         guard let track else {
-            activeCues = []
             if !isPreviewMode && activeEmbeddedTextCue == nil { currentSubtitleCue = nil }
             selectedSubtitleTrackId = -1
             return
@@ -628,6 +660,7 @@ final class PlayerViewModel {
 
         do {
             let cues = try await SubtitleService.shared.loadAndParseCues(for: track)
+            guard revision == subtitleSelectionRevision else { return }
             self.activeCues = cues
             self.syncStatusMessage = "\(cues.count) cues loaded (\(track.source.badgeName))"
 
@@ -635,6 +668,7 @@ final class PlayerViewModel {
                 await performSyncNow()
             }
         } catch {
+            guard revision == subtitleSelectionRevision else { return }
             self.activeCues = []
             self.syncStatusMessage = "Could not load subtitle track."
         }
@@ -642,9 +676,12 @@ final class PlayerViewModel {
 
     @MainActor
     func performSyncNow() async {
+        let revision = subtitleSelectionRevision
         isSyncingSubtitles = true
         syncStatusMessage = "Analyzing timing offset..."
-        defer { isSyncingSubtitles = false }
+        defer {
+            if revision == subtitleSelectionRevision { isSyncingSubtitles = false }
+        }
 
         guard !activeCues.isEmpty else {
             syncStatusMessage = isPreviewMode
@@ -656,11 +693,13 @@ final class PlayerViewModel {
         if referenceEmbeddedCues.isEmpty {
             if let englishTrack = externalSubtitleTracks.first(where: { $0.languageCode == "en" && $0.id != selectedExternalSubtitle?.id }) {
                 if let refCues = try? await SubtitleService.shared.loadAndParseCues(for: englishTrack) {
+                    guard revision == subtitleSelectionRevision else { return }
                     self.referenceEmbeddedCues = refCues
                 }
             }
         }
 
+        guard revision == subtitleSelectionRevision else { return }
         guard !referenceEmbeddedCues.isEmpty else {
             syncStatusMessage = "No English reference track found for auto-alignment."
             return

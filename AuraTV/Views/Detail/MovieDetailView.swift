@@ -304,12 +304,9 @@ struct MovieDetailView: View {
     @ViewBuilder
     private var technicalBadgesRow: some View {
         HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .filled, fontSize: 12)
-            DolbyVisionBadgeView()
-            BadgeView(text: "5.1", style: .outlined, fontSize: 12)
-            BadgeView(text: "CC", style: .outlined, fontSize: 12)
-            BadgeView(text: "SDH", style: .outlined, fontSize: 12)
-            BadgeView(text: "AR", style: .outlined, fontSize: 12)
+            ForEach(selectedStream?.parsedInfo.techBadges ?? [], id: \.self) { badge in
+                BadgeView(text: badge, style: .outlined, fontSize: 12)
+            }
 
             if let vote = viewModel.movieDetail?.voteAverage, vote > 0 {
                 HStack(spacing: 4) {

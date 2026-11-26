@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Observation
 
 // MARK: - AIOStreams Service Errors
@@ -38,6 +39,12 @@ enum AIOStreamsError: LocalizedError {
 final class AIOStreamsService {
 
     static let shared = AIOStreamsService()
+
+    var addons: [InstalledAddon] = (UserDefaults.standard.data(forKey: "installedAddons").flatMap {
+        try? JSONDecoder().decode([InstalledAddon].self, from: $0)
+    }) ?? [] {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(addons), forKey: "installedAddons") }
+    }
 
     var manifestURL: String = ""
 
@@ -95,27 +102,30 @@ final class AIOStreamsService {
 
     // MARK: - Fetch Streams (Raw)
 
+    @MainActor
     func fetchStreams(type: String, stremioId: String) async throws -> [StremioStream] {
-        guard !manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw AIOStreamsError.missingManifestURL
+        var endpoints: [URL] = []
+        if !baseURL.isEmpty, let primary = URL(string: "\(baseURL)/stream/\(type)/\(stremioId).json") {
+            endpoints.append(primary)
         }
-
-        let endpoint = "\(baseURL)/stream/\(type)/\(stremioId).json"
-        guard let url = URL(string: endpoint) else {
-            throw AIOStreamsError.invalidURL
+        for addon in addons where addon.enabled && addon.supports("stream", type: type, id: stremioId) {
+            let url = addon.url("stream", type, stremioId)
+            if !endpoints.contains(url) { endpoints.append(url) }
         }
-
-        let (data, response) = try await fetchData(from: url)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw AIOStreamsError.httpError(statusCode: http.statusCode)
+        guard !endpoints.isEmpty else { throw AIOStreamsError.missingManifestURL }
+        var results: [StremioStream] = []
+        var seen = Set<String>()
+        var lastError: Error?
+        var receivedResponse = false
+        for url in endpoints {
+            do {
+                let page: StremioStreamResponse = try await readAddon(url)
+                receivedResponse = true
+                results += (page.streams ?? []).filter { seen.insert($0.id).inserted }
+            } catch { lastError = error }
         }
-
-        do {
-            let result = try decoder.decode(StremioStreamResponse.self, from: data)
-            return result.streams ?? []
-        } catch {
-            throw AIOStreamsError.decodingError(error)
-        }
+        if !receivedResponse, let lastError { throw lastError }
+        return results
     }
 
     // MARK: - High-Level: Movie & Series
@@ -172,43 +182,36 @@ final class AIOStreamsService {
 
     /// Returns the best playable stream honoring `preferredQuality` ("4K", "1080p", "720p", "480p").
     func bestStream(matching preferredQuality: String, in candidates: [StremioStream]) -> StremioStream? {
-        sortedStreams(candidates, preferredQuality: preferredQuality)
+        candidates
             .first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) })
     }
 
     func sortedStreams(_ streams: [StremioStream], preferredQuality: String = "4K") -> [StremioStream] {
-        let targetRes = StreamResolution(rawValue: preferredQuality) ?? .uhd4k
-
-        return streams.sorted { a, b in
-            let infoA = a.parsedInfo
-            let infoB = b.parsedInfo
-
-            // 1. Exact preferred quality tier comes first
-            let matchA = infoA.resolution == targetRes
-            let matchB = infoB.resolution == targetRes
-            if matchA != matchB {
-                return matchA
+        let prefs = UserDefaults.standard
+        var rows = streams
+        let hideCAM = prefs.bool(forKey: "hideCAM")
+        let hide3D = prefs.bool(forKey: "hide3D")
+        let hideDV = prefs.bool(forKey: "hideDV")
+        if hideCAM || hide3D || hideDV {
+            let filtered = rows.filter {
+                let label = [$0.name, $0.title, $0.description, $0.behaviorHints?.filename].compactMap { $0 }.joined(separator: " ")
+                let cam = hideCAM && label.range(of: #"(?i)\b(?:CAM|CAMRIP|HDCAM|TELESYNC)\b"#, options: .regularExpression) != nil
+                let stereo = hide3D && label.range(of: #"(?i)\b3D\b"#, options: .regularExpression) != nil
+                return !cam && !stereo && !(hideDV && $0.parsedInfo.hdrType == .dolbyVision)
             }
-
-            // 2. Otherwise sort descending resolution order (4K -> 1080p -> 720p -> ...)
-            if infoA.qualitySortOrder != infoB.qualitySortOrder {
-                return infoA.qualitySortOrder < infoB.qualitySortOrder
-            }
-
-            // 3. Cached debrid streams first
-            if infoA.isCached != infoB.isCached {
-                return infoA.isCached
-            }
-
-            // 4. REMUX / HDR boost
-            let remuxA = infoA.releaseType == "REMUX"
-            let remuxB = infoB.releaseType == "REMUX"
-            if remuxA != remuxB {
-                return remuxA
-            }
-
-            return (infoA.hdrType != nil) && (infoB.hdrType == nil)
+            if filtered.contains(where: { $0.url?.isEmpty == false }) { rows = filtered }
         }
+        func rank(_ stream: StremioStream) -> Int {
+            let label = [stream.name, stream.title, stream.description, stream.behaviorHints?.filename].compactMap { $0 }.joined(separator: " ")
+            switch prefs.string(forKey: "streamOrder") {
+            case "Arabic first": return ["عربي", "Arabic", "🇸🇦"].contains { label.localizedCaseInsensitiveContains($0) } ? 0 : 1
+            case "Cached first": return stream.parsedInfo.isCached ? 0 : 1
+            case "Preferred quality": return stream.parsedInfo.resolution.rawValue == preferredQuality ? 0 : 1
+            default: return 0
+            }
+        }
+        guard let order = prefs.string(forKey: "streamOrder"), order != "Provider order" else { return rows }
+        return rows.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
     func groupedByResolution() -> [(resolution: StreamResolution, streams: [StremioStream])] {
@@ -228,5 +231,65 @@ final class AIOStreamsService {
         } catch {
             throw AIOStreamsError.networkError(error)
         }
+    }
+}
+
+extension AIOStreamsService {
+    @MainActor
+    func install(_ input: String) async throws {
+        var raw = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.lowercased().hasPrefix("stremio://") { raw = "https://" + raw.dropFirst(10) }
+        guard let endpoint = URL(string: raw), endpoint.scheme == "https", endpoint.host != nil,
+              endpoint.lastPathComponent == "manifest.json" else { throw AIOStreamsError.invalidURL }
+        let manifest: StremioManifest = try await readAddon(endpoint)
+        guard manifest.id != nil, manifest.resources != nil else { throw URLError(.cannotParseResponse) }
+        if !addons.contains(where: { $0.endpoint == endpoint }) {
+            addons.append(InstalledAddon(endpoint: endpoint, manifest: manifest))
+        }
+    }
+
+    func readAddon<T: Decodable>(_ url: URL) async throws -> T {
+        let (data, response) = try await session.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    @MainActor
+    func fetchShelves() async -> [AddonShelf] {
+        struct Response: Decodable { let metas: [AddonTitle] }
+        var shelves: [AddonShelf] = []
+        for addon in addons where addon.enabled {
+            for catalog in addon.manifest.catalogs ?? [] {
+                guard let type = catalog.type, ["movie", "series"].contains(type), let id = catalog.id else { continue }
+                let url = addon.url("catalog", type, id)
+                guard let page: Response = try? await readAddon(url) else { continue }
+                let titles = page.metas.filter { $0.id.range(of: #"^tt[0-9]+$"#, options: .regularExpression) != nil }
+                if !titles.isEmpty {
+                    shelves.append(AddonShelf(id: url, name: addon.name + " · " + (catalog.name ?? id), type: type, titles: titles))
+                }
+            }
+        }
+        return shelves
+    }
+
+    @MainActor
+    func addonSubtitles(type: String, id: String) async -> [SubtitleTrackItem] {
+        struct Entry: Decodable { let url: URL; let lang: String }
+        struct Response: Decodable { let subtitles: [Entry] }
+        var tracks: [SubtitleTrackItem] = []
+        for addon in addons where addon.enabled && addon.supports("subtitles", type: type, id: id) {
+            guard let page: Response = try? await readAddon(addon.url("subtitles", type, id)) else { continue }
+            for entry in page.subtitles where ["https", "http"].contains(entry.url.scheme ?? "") {
+                let code = ["ara": "ar", "eng": "en"][entry.lang.lowercased()] ?? entry.lang.lowercased()
+                let key = SHA256.hash(data: Data(entry.url.absoluteString.utf8)).map { String(format: "%02x", $0) }.joined()
+                if tracks.contains(where: { $0.id == key }) { continue }
+                tracks.append(SubtitleTrackItem(id: key, name: addon.name, language: code, languageCode: code,
+                    source: .addon, downloadURL: entry.url, releaseInfo: addon.name, hearingImpaired: false,
+                    isEmbedded: false, embeddedTrackId: nil))
+            }
+        }
+        return tracks
     }
 }
