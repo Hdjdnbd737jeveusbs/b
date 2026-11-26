@@ -20,6 +20,8 @@ struct MovieDetailView: View {
     @State private var availableStreams: [StremioStream] = []
     @State private var selectedStream: StremioStream?
     @State private var isLoadingStreams = false
+    @State private var requestID = UUID()
+    @State private var restartRequested = false
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
     @State private var movieImdbId: String?
@@ -50,6 +52,7 @@ struct MovieDetailView: View {
     }
 
     private var effectiveResumeTime: Double {
+        if restartRequested { return 0 }
         let settings = settingsList.first
         return ExternalPlayerService.adjustedResumeTime(
             rawTime: viewModel.watchProgress?.currentTime ?? 0,
@@ -523,7 +526,10 @@ struct MovieDetailView: View {
         }
     }
 
-    private func playMovie(forcePicker: Bool = false) {
+    private func playMovie(forcePicker: Bool = false, restart: Bool = false) {
+        restartRequested = restart
+        let id = UUID()
+        requestID = id
         Task {
             isLoadingStreams = true
             streamError = nil
@@ -536,6 +542,7 @@ struct MovieDetailView: View {
                     tmdbId: tmdbId,
                     preferredQuality: preferredQuality
                 )
+                guard requestID == id else { return }
                 availableStreams = streams
                 let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
                 selectedStream = firstPlayable
@@ -549,6 +556,7 @@ struct MovieDetailView: View {
                     showStreamPicker = true
                 }
             } catch {
+                guard requestID == id else { return }
                 isLoadingStreams = false
                 streamError = error.localizedDescription
             }
@@ -556,12 +564,7 @@ struct MovieDetailView: View {
     }
 
     private func rewatchMovie() {
-        if let progress = viewModel.watchProgress {
-            progress.currentTime = 0
-            progress.isCompleted = false
-            try? modelContext.save()
-        }
-        playMovie()
+        playMovie(restart: true)
     }
 
     private func startPlayback(url: URL, stream: StremioStream? = nil, resumeFrom: Double = 0) {

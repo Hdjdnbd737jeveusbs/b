@@ -20,6 +20,8 @@ struct SeriesDetailView: View {
     @State private var availableStreams: [StremioStream] = []
     @State private var selectedStream: StremioStream?
     @State private var isLoadingStreams = false
+    @State private var requestID = UUID()
+    @State private var restartRequested = false
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
     @State private var pendingEpisodeSeason: Int?
@@ -62,6 +64,7 @@ struct SeriesDetailView: View {
     }
 
     private func effectiveResumeTime(forSeason season: Int, episode: Int) -> Double {
+        if restartRequested { return 0 }
         guard let progress = viewModel.watchProgress,
               progress.seasonNumber == season,
               progress.episodeNumber == episode else {
@@ -699,7 +702,7 @@ struct SeriesDetailView: View {
         let s = viewModel.watchProgress?.seasonNumber ?? viewModel.selectedSeasonNumber
         let e = viewModel.watchProgress?.episodeNumber ?? 1
         let ep = viewModel.seasonDetail?.episodes?.first(where: { $0.seasonNumber == s && $0.episodeNumber == e })
-            ?? viewModel.seasonDetail?.episodes?.first
+
 
         if let ep {
             fetchAndPlayEpisode(
@@ -715,18 +718,8 @@ struct SeriesDetailView: View {
     }
 
     private func rewatchSeries() {
-        if let progress = viewModel.watchProgress {
-            progress.currentTime = 0
-            progress.isCompleted = false
-            progress.seasonNumber = 1
-            progress.episodeNumber = 1
-            try? modelContext.save()
-        }
-        if let firstEp = viewModel.seasonDetail?.episodes?.first(where: { $0.episodeNumber == 1 }) {
-            playEpisode(episode: firstEp)
-        } else {
-            fetchAndPlayEpisode(season: 1, episode: 1, title: nil, stillPath: nil)
-        }
+        let first = viewModel.seasonDetail?.episodes?.first { $0.seasonNumber == 1 && $0.episodeNumber == 1 }
+        fetchAndPlayEpisode(season: 1, episode: 1, title: first?.name, stillPath: first?.stillPath, restart: true)
     }
 
     func playEpisode(episode: TMDBEpisode) {
@@ -744,13 +737,17 @@ struct SeriesDetailView: View {
         title: String?,
         stillPath: String?,
         forcePicker: Bool = false,
-        autoPlayBest: Bool = false
+        autoPlayBest: Bool = false,
+        restart: Bool = false
     ) {
+        restartRequested = restart
         pendingEpisodeSeason = season
         pendingEpisodeNumber = episode
         pendingEpisodeTitle = title
         pendingEpisodeStillPath = stillPath
 
+        let id = UUID()
+        requestID = id
         Task {
             isLoadingStreams = true
             streamError = nil
@@ -765,6 +762,7 @@ struct SeriesDetailView: View {
                     episode: episode,
                     preferredQuality: preferredQuality
                 )
+                guard requestID == id else { return }
                 availableStreams = streams
                 let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
                 selectedStream = firstPlayable
@@ -787,6 +785,7 @@ struct SeriesDetailView: View {
                     showStreamPicker = true
                 }
             } catch {
+                guard requestID == id else { return }
                 isLoadingStreams = false
                 streamError = error.localizedDescription
             }

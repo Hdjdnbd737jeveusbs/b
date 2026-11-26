@@ -251,13 +251,13 @@ final class PlayerViewModel {
             && !upNextDismissed
             && nextEpisodeBehavior != "Off"
             && totalDuration > 180
-            && (totalDuration - currentTime) <= 45
+            && (totalDuration - currentTime) <= Double(nextEpisodeBehavior.contains("5") ? 5 : 10)
     }
 
     var upNextCountdownRemaining: Int {
         let configured = nextEpisodeBehavior.contains("5") ? 5 : 10
-        let remainingUntilEnd = max(0, Int(totalDuration - currentTime))
-        return min(configured, max(0, remainingUntilEnd - (45 - configured)))
+        let remainingUntilEnd = max(0, Int(ceil(totalDuration - currentTime)))
+        return min(configured, remainingUntilEnd)
     }
 
     // MARK: - Media Info
@@ -803,7 +803,10 @@ final class PlayerViewModel {
     @MainActor
     func fetchSubtitles() async {
         isFetchingSubtitles = true
-        let queryId = imdbId.isEmpty ? "\(tmdbId)" : imdbId
+        defer { isFetchingSubtitles = false }
+        guard imdbId.hasPrefix("tt") else { return }
+        let revision = subtitleRevision
+        let queryId = imdbId
 
         let externalTracks = await SubtitleService.shared.fetchSubtitles(
             imdbId: queryId,
@@ -814,14 +817,13 @@ final class PlayerViewModel {
 
         externalSubtitleTracks = externalTracks
 
-        if selectedExternalSubtitle == nil {
+        if revision == subtitleRevision, selectedExternalSubtitle == nil {
             if let preferredTrack = externalTracks.first(where: { $0.languageCode.lowercased() == preferredSubtitleLanguage.lowercased() })
                 ?? externalTracks.first(where: { $0.languageCode == "ar" }) {
                 await selectExternalSubtitleTrack(preferredTrack)
             }
         }
 
-        isFetchingSubtitles = false
     }
 
     @MainActor
