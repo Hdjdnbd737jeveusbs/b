@@ -618,6 +618,34 @@ struct PlayerHUDView: View {
                         .focusEffectDisabled()
                         .focused($focusedTrackId, equals: "sync_action")
 
+                        let syncLineFocused = focusedTrackId == "sync_to_line_action"
+                        Button {
+                            viewModel.showSyncToLineSheet = true
+                            viewModel.showSubtitlePicker = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "text.line.first.and.arrowtriangle.forward")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(syncLineFocused ? Color.black : Color.white.opacity(0.9))
+                                    .frame(width: 18)
+
+                                Text("Sync to a Line...")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(syncLineFocused ? Color.black : Color.white)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(syncLineFocused ? Color.white : Color.clear)
+                            )
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedTrackId, equals: "sync_to_line_action")
+
                         let encodingFocused = focusedTrackId == "encoding_action"
                         Button {
                             viewModel.showSubtitleStyleSheet = true

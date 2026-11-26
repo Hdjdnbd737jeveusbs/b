@@ -124,6 +124,22 @@ struct SubtitleStyle: Codable, Hashable {
 
         if fontName == "System" || fontName.isEmpty {
             return .system(size: fontSize, weight: weight)
+        } else if fontName == "IBM Plex Sans Arabic" {
+            let psName: String
+            switch fontWeight.lowercased() {
+            case "regular": psName = "IBMPlexSansArabic-Regular"
+            case "medium": psName = "IBMPlexSansArabic-Medium"
+            default: psName = "IBMPlexSansArabic-Bold"
+            }
+            return .custom(psName, size: fontSize)
+        } else if fontName == "Tajawal" {
+            let psName: String
+            switch fontWeight.lowercased() {
+            case "regular": psName = "Tajawal-Regular"
+            case "medium": psName = "Tajawal-Medium"
+            default: psName = "Tajawal-Bold"
+            }
+            return .custom(psName, size: fontSize)
         } else {
             return .custom(fontName, size: fontSize)
         }

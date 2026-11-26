@@ -42,6 +42,14 @@ final class SettingsViewModel {
     var fixReversedPunctuation: Bool = true
     var autoSyncSubtitles: Bool = false
 
+    // AI Live Subtitle Translation
+    var aiTranslationEnabled: Bool = false
+    var aiTranslationProvider: String = "OpenAI"
+    var aiTranslationApiKey: String = ""
+    var aiTranslationTargetLanguage: String = "ar"
+    var aiTranslationCustomEndpoint: String = "http://localhost:11434/v1/chat/completions"
+    var aiTranslationModel: String = ""
+
     // Playback
     var resumePlaybackBehavior: String = "Ask"
     var nextEpisodeBehavior: String = "On · 10 s"
@@ -103,6 +111,13 @@ final class SettingsViewModel {
     static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
     static let fontWeightOptions = ["Regular", "Medium", "Semibold", "Bold"]
     static let fontNameOptions = SubtitleProcessor.availableFonts
+    static let aiTranslationProviderOptions = [
+        "OpenAI",
+        "Gemini",
+        "Claude",
+        "Groq",
+        "Custom (Ollama / OpenAI)"
+    ]
     static let skipModeOptions = ["Skip After Delay", "Show Button", "Off"]
     static let skipDelayOptions = [3, 5, 8, 10]
     static let artworkLanguageOptions = ["English", "Arabic", "All Languages"]
@@ -119,6 +134,16 @@ final class SettingsViewModel {
         ("pt", "Portuguese"),
         ("tr", "Turkish")
     ]
+
+    func defaultAIModelPlaceholder(for provider: String) -> String {
+        switch provider {
+        case "Gemini": return "gemini-2.0-flash (default)"
+        case "Claude": return "claude-3-5-haiku-latest (default)"
+        case "Groq": return "llama-3.3-70b-versatile (default)"
+        case "Custom (Ollama / OpenAI)": return "llama3.2 (default)"
+        default: return "gpt-4o-mini (default)"
+        }
+    }
 
     func displayLanguageName(for code: String) -> String {
         Self.languageOptions.first(where: { $0.code == code })?.name ?? code.uppercased()
@@ -166,6 +191,17 @@ final class SettingsViewModel {
                 fixArabicRTL = settings.fixArabicRTL
                 fixReversedPunctuation = settings.fixReversedPunctuation
                 autoSyncSubtitles = settings.autoSyncSubtitles
+
+                aiTranslationEnabled = settings.aiTranslationEnabled
+                aiTranslationProvider = Self.aiTranslationProviderOptions.contains(settings.aiTranslationProvider)
+                    ? settings.aiTranslationProvider
+                    : "OpenAI"
+                aiTranslationApiKey = settings.aiTranslationApiKey
+                aiTranslationTargetLanguage = settings.aiTranslationTargetLanguage.isEmpty ? "ar" : settings.aiTranslationTargetLanguage
+                aiTranslationCustomEndpoint = settings.aiTranslationCustomEndpoint.isEmpty
+                    ? "http://localhost:11434/v1/chat/completions"
+                    : settings.aiTranslationCustomEndpoint
+                aiTranslationModel = settings.aiTranslationModel
 
                 resumePlaybackBehavior = settings.resumePlaybackBehavior
                 nextEpisodeBehavior = settings.nextEpisodeBehavior
@@ -252,6 +288,13 @@ final class SettingsViewModel {
             settings.fixArabicRTL = fixArabicRTL
             settings.fixReversedPunctuation = fixReversedPunctuation
             settings.autoSyncSubtitles = autoSyncSubtitles
+
+            settings.aiTranslationEnabled = aiTranslationEnabled
+            settings.aiTranslationProvider = aiTranslationProvider
+            settings.aiTranslationApiKey = aiTranslationApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            settings.aiTranslationTargetLanguage = aiTranslationTargetLanguage
+            settings.aiTranslationCustomEndpoint = aiTranslationCustomEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+            settings.aiTranslationModel = aiTranslationModel.trimmingCharacters(in: .whitespacesAndNewlines)
 
             settings.resumePlaybackBehavior = resumePlaybackBehavior
             settings.nextEpisodeBehavior = nextEpisodeBehavior

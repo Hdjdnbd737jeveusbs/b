@@ -138,9 +138,26 @@ final class PlayerViewModel {
     var syncStatusMessage: String?
     var showSubtitleStyleSheet: Bool = false
     var showSubtitleSyncSheet: Bool = false
+    var showSyncToLineSheet: Bool = false
+    var externalASSContent: String?
+    var isActiveEmbeddedASS: Bool = false
+    var embeddedPlainCuesForSync: [AuraSubtitleCue] = []
+    var aiTranslationConfig: SubtitleTranslationConfig = .disabled
+    var translatedCueTexts: [Int: String] = [:]
+    private var translationTask: Task<Void, Never>?
+    private var inFlightTranslationIds: Set<Int> = []
+    private var activeEmbeddedTrackLanguageCode: String?
     var subtitleSearchText: String = ""
     var imdbId: String = ""
     var preferredSubtitleLanguage: String = "ar"
+
+    var isASSTrackActive: Bool {
+        externalASSContent != nil || (selectedExternalSubtitle == nil && isActiveEmbeddedASS)
+    }
+
+    var syncableCueCandidates: [AuraSubtitleCue] {
+        !activeCues.isEmpty ? activeCues : embeddedPlainCuesForSync
+    }
 
     var filteredSubtitleTracks: [SubtitleTrackItem] {
         if subtitleSearchText.isEmpty {
@@ -162,7 +179,7 @@ final class PlayerViewModel {
     var showInfoPanel: Bool = false
 
     var hasActiveModalOverlay: Bool {
-        showAudioPicker || showSubtitlePicker || showOptionsMenu || showInfoPanel || showSubtitleSyncSheet || showSubtitleStyleSheet || showStreamPicker
+        showAudioPicker || showSubtitlePicker || showOptionsMenu || showInfoPanel || showSubtitleSyncSheet || showSubtitleStyleSheet || showSyncToLineSheet || showStreamPicker
     }
 
     // MARK: - Skip Intro / Credits & Up Next
@@ -308,6 +325,14 @@ final class PlayerViewModel {
         self.videoDynamicRangeBadge = nil
         self.activeEmbeddedTextCue = nil
         self.currentBitmapSubtitle = nil
+        self.externalASSContent = nil
+        self.isActiveEmbeddedASS = false
+        self.embeddedPlainCuesForSync = []
+        self.translatedCueTexts = [:]
+        self.inFlightTranslationIds = []
+        self.translationTask?.cancel()
+        self.translationTask = nil
+        self.activeEmbeddedTrackLanguageCode = nil
         self.availableAudioTracks = []
         self.availableSubtitleTracks = []
         self.selectedSubtitleTrackId = -1
@@ -453,6 +478,14 @@ final class PlayerViewModel {
         playbackError = nil
         activeEmbeddedTextCue = nil
         currentBitmapSubtitle = nil
+        externalASSContent = nil
+        isActiveEmbeddedASS = false
+        embeddedPlainCuesForSync = []
+        translatedCueTexts = [:]
+        inFlightTranslationIds = []
+        translationTask?.cancel()
+        translationTask = nil
+        activeEmbeddedTrackLanguageCode = nil
         selectedStream = stream
         resumeFromTime = currentTime
         streamURL = url
@@ -505,9 +538,16 @@ final class PlayerViewModel {
 
     func selectSubtitleTrack(_ trackId: Int) {
         selectedSubtitleTrackId = trackId
+        translatedCueTexts = [:]
+        inFlightTranslationIds = []
+        translationTask?.cancel()
+        translationTask = nil
         if trackId < 0 {
             activeEmbeddedTextCue = nil
             currentBitmapSubtitle = nil
+            isActiveEmbeddedASS = false
+            embeddedPlainCuesForSync = []
+            activeEmbeddedTrackLanguageCode = nil
             if selectedExternalSubtitle == nil && !isPreviewMode {
                 currentSubtitleCue = nil
             }
@@ -515,7 +555,13 @@ final class PlayerViewModel {
     }
 
     @MainActor
-    func updateEmbeddedSubtitle(text: String?, bitmap: CGImage?) {
+    func updateEmbeddedSubtitle(
+        text: String?,
+        bitmap: CGImage?,
+        cueId: Int? = nil,
+        languageCode: String? = nil
+    ) {
+        activeEmbeddedTrackLanguageCode = languageCode?.lowercased()
         guard selectedExternalSubtitle == nil, selectedSubtitleTrackId >= 0 else {
             activeEmbeddedTextCue = nil
             currentBitmapSubtitle = nil
@@ -524,16 +570,10 @@ final class PlayerViewModel {
 
         currentBitmapSubtitle = bitmap
 
-        if let text, !text.isEmpty {
-            let isArabic = text.unicodeScalars.contains { scalar in
-                (0x0600...0x06FF).contains(scalar.value) ||
-                (0x0750...0x077F).contains(scalar.value) ||
-                (0x08A0...0x08FF).contains(scalar.value) ||
-                (0xFB50...0xFDFF).contains(scalar.value) ||
-                (0xFE70...0xFEFF).contains(scalar.value)
-            }
+        if let text, !text.isEmpty, !isActiveEmbeddedASS {
+            let isArabic = SubtitleProcessor.containsArabicCharacters(text)
             let cue = AuraSubtitleCue(
-                id: -selectedSubtitleTrackId - 1,
+                id: cueId ?? (-selectedSubtitleTrackId - 1),
                 startTime: currentTime,
                 endTime: currentTime + 1.0,
                 text: text,
@@ -541,11 +581,35 @@ final class PlayerViewModel {
                 isArabic: isArabic
             )
             activeEmbeddedTextCue = cue
-            currentSubtitleCue = cue
+            currentSubtitleCue = applyTranslationIfAvailable(to: cue)
+            scheduleUpcomingTranslationIfNeeded(at: currentTime)
         } else {
             activeEmbeddedTextCue = nil
             if activeCues.isEmpty && !isPreviewMode {
                 currentSubtitleCue = nil
+            }
+        }
+    }
+
+    @MainActor
+    func applySyncToCue(_ cue: AuraSubtitleCue) {
+        let computed = currentTime - cue.startTime
+        let rounded = (computed * 100.0).rounded() / 100.0
+        subtitleSyncSettings.manualOffset = rounded
+        syncStatusMessage = "Synced to line (\(SubtitleSyncEngine.formatOffset(rounded)))"
+        showSyncToLineSheet = false
+        saveSubtitlePreferences()
+        onTimeUpdate(current: currentTime, total: totalDuration)
+    }
+
+    @MainActor
+    func appendReferenceEmbeddedCues(_ newCues: [AuraSubtitleCue]) {
+        guard !newCues.isEmpty, referenceEmbeddedCues.count < 5000 else { return }
+        var seenStarts = Set(referenceEmbeddedCues.map { Int(($0.startTime * 100.0).rounded()) })
+        for cue in newCues where !cue.text.isEmpty {
+            let bucket = Int((cue.startTime * 100.0).rounded())
+            if seenStarts.insert(bucket).inserted {
+                referenceEmbeddedCues.append(cue)
             }
         }
     }
@@ -674,13 +738,18 @@ final class PlayerViewModel {
         // Update active subtitle cue based on current time & manual offset
         if !activeCues.isEmpty {
             let offset = subtitleSyncSettings.manualOffset
-            currentSubtitleCue = activeCues.first { cue in
-                cue.isActive(at: current, offset: offset)
+            if let matchingCue = activeCues.first(where: { $0.isActive(at: current, offset: offset) }) {
+                currentSubtitleCue = externalASSContent == nil ? applyTranslationIfAvailable(to: matchingCue) : nil
+            } else {
+                currentSubtitleCue = nil
             }
+            scheduleUpcomingTranslationIfNeeded(at: current)
         } else if let embeddedCue = activeEmbeddedTextCue {
-            currentSubtitleCue = embeddedCue
+            currentSubtitleCue = isActiveEmbeddedASS ? nil : applyTranslationIfAvailable(to: embeddedCue)
+            scheduleUpcomingTranslationIfNeeded(at: current)
         } else if !isPreviewMode {
             currentSubtitleCue = nil
+            scheduleUpcomingTranslationIfNeeded(at: current)
         }
 
         // Auto-skip intro if configured in Settings
@@ -730,6 +799,11 @@ final class PlayerViewModel {
     @MainActor
     func selectExternalSubtitleTrack(_ track: SubtitleTrackItem?) async {
         selectedExternalSubtitle = track
+        externalASSContent = nil
+        translatedCueTexts = [:]
+        inFlightTranslationIds = []
+        translationTask?.cancel()
+        translationTask = nil
 
         guard let track else {
             activeCues = []
@@ -741,18 +815,128 @@ final class PlayerViewModel {
         selectedSubtitleTrackId = -1
         activeEmbeddedTextCue = nil
         currentBitmapSubtitle = nil
+        isActiveEmbeddedASS = false
 
         do {
-            let cues = try await SubtitleService.shared.loadAndParseCues(for: track)
-            self.activeCues = cues
-            self.syncStatusMessage = "\(cues.count) cues loaded (\(track.source.badgeName))"
+            let loaded = try await SubtitleService.shared.loadSubtitleTrack(for: track)
+            self.activeCues = loaded.cues
+            self.externalASSContent = loaded.rawASSContent
+
+            if loaded.rawASSContent != nil {
+                self.currentSubtitleCue = nil
+                self.syncStatusMessage = "\(loaded.cues.count) ASS cues loaded (\(track.source.badgeName))"
+            } else {
+                self.syncStatusMessage = "\(loaded.cues.count) cues loaded (\(track.source.badgeName))"
+            }
 
             if subtitleSyncSettings.autoSyncEnabled {
                 await performSyncNow()
             }
+
+            onTimeUpdate(current: currentTime, total: totalDuration)
         } catch {
             self.activeCues = []
+            self.externalASSContent = nil
             self.syncStatusMessage = "Could not load subtitle track."
+        }
+    }
+
+    // MARK: - AI Live Subtitle Translation
+
+    private func applyTranslationIfAvailable(to cue: AuraSubtitleCue) -> AuraSubtitleCue {
+        guard aiTranslationConfig.isConfigured,
+              !isASSTrackActive,
+              let translated = translatedCueTexts[cue.id],
+              !translated.isEmpty else {
+            return cue
+        }
+        var updated = cue
+        updated.text = translated
+        updated.isArabic = SubtitleProcessor.containsArabicCharacters(translated)
+        return updated
+    }
+
+    private func shouldTranslateCurrentTrack(trackLanguageCode: String?) -> Bool {
+        guard !isPreviewMode,
+              aiTranslationConfig.isConfigured,
+              !isASSTrackActive,
+              currentBitmapSubtitle == nil else {
+            return false
+        }
+
+        let targetCode = aiTranslationConfig.targetLanguageCode.lowercased()
+        if let lang = trackLanguageCode?.lowercased(), !lang.isEmpty {
+            if lang == targetCode || lang.hasPrefix(targetCode) {
+                return false
+            }
+        }
+        return true
+    }
+
+    @MainActor
+    private func scheduleUpcomingTranslationIfNeeded(at playbackTime: Double) {
+        let trackLang = selectedExternalSubtitle?.languageCode ?? activeEmbeddedTrackLanguageCode
+        guard shouldTranslateCurrentTrack(trackLanguageCode: trackLang) else { return }
+
+        let candidates: [AuraSubtitleCue]
+        let trackCacheKey: String
+        if !activeCues.isEmpty && externalASSContent == nil {
+            candidates = activeCues
+            trackCacheKey = "ext|\(selectedExternalSubtitle?.id ?? "unknown")"
+        } else if !isActiveEmbeddedASS && !embeddedPlainCuesForSync.isEmpty {
+            candidates = embeddedPlainCuesForSync
+            trackCacheKey = "emb|\(streamURL?.absoluteString ?? "\(tmdbId)")|\(selectedSubtitleTrackId)"
+        } else {
+            return
+        }
+
+        let offset = subtitleSyncSettings.manualOffset
+        let adjustedNow = playbackTime - offset
+        let windowEnd = adjustedNow + 45.0
+
+        let batch = candidates.filter { cue in
+            cue.endTime >= (adjustedNow - 1.5) &&
+            cue.startTime <= windowEnd &&
+            translatedCueTexts[cue.id] == nil &&
+            !inFlightTranslationIds.contains(cue.id) &&
+            !(aiTranslationConfig.targetLanguageCode.lowercased() == "ar" && cue.isArabic)
+        }
+        .prefix(12)
+
+        guard !batch.isEmpty else { return }
+        let batchArray = Array(batch)
+        for cue in batchArray {
+            inFlightTranslationIds.insert(cue.id)
+        }
+
+        let config = aiTranslationConfig
+        translationTask = Task { @MainActor [weak self] in
+            let results = await AITranslationService.shared.translateBatch(
+                cues: batchArray,
+                trackKey: trackCacheKey,
+                config: config
+            )
+            guard let self else { return }
+            for cue in batchArray {
+                self.inFlightTranslationIds.remove(cue.id)
+            }
+            guard !Task.isCancelled, !results.isEmpty else { return }
+            for (id, translated) in results {
+                self.translatedCueTexts[id] = translated
+            }
+
+            // Immediately update visible subtitle if the current cue just got translated.
+            if let current = self.currentSubtitleCue, let freshText = results[current.id] {
+                var refreshed = current
+                refreshed.text = freshText
+                refreshed.isArabic = SubtitleProcessor.containsArabicCharacters(freshText)
+                self.currentSubtitleCue = refreshed
+            } else if !self.activeCues.isEmpty {
+                let offset = self.subtitleSyncSettings.manualOffset
+                if let match = self.activeCues.first(where: { $0.isActive(at: self.currentTime, offset: offset) }) {
+                    self.currentSubtitleCue = self.applyTranslationIfAvailable(to: match)
+                }
+            }
         }
     }
 
@@ -788,6 +972,8 @@ final class PlayerViewModel {
         ) {
             subtitleSyncSettings.manualOffset = offset
             syncStatusMessage = "Auto-aligned by \(SubtitleSyncEngine.formatOffset(offset))"
+            saveSubtitlePreferences()
+            onTimeUpdate(current: currentTime, total: totalDuration)
         } else {
             syncStatusMessage = "Could not correlate timestamps automatically."
         }
@@ -833,6 +1019,18 @@ final class PlayerViewModel {
 
             SubtitleService.shared.subdlApiKey = settings.subdlApiKey
             SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
+
+            let targetCode = settings.aiTranslationTargetLanguage.isEmpty ? "ar" : settings.aiTranslationTargetLanguage
+            let targetName = SettingsViewModel.languageOptions.first(where: { $0.code == targetCode })?.name ?? targetCode.uppercased()
+            aiTranslationConfig = SubtitleTranslationConfig(
+                enabled: settings.aiTranslationEnabled,
+                provider: settings.aiTranslationProvider,
+                apiKey: settings.aiTranslationApiKey,
+                targetLanguageCode: targetCode,
+                targetLanguageName: targetName,
+                customEndpoint: settings.aiTranslationCustomEndpoint,
+                modelOverride: settings.aiTranslationModel
+            )
         }
     }
 
@@ -931,6 +1129,8 @@ final class PlayerViewModel {
 
     @MainActor
     func cleanup() {
+        translationTask?.cancel()
+        translationTask = nil
         hudHideTimer?.invalidate()
         hudHideTimer = nil
         sleepTimerCountdown?.invalidate()

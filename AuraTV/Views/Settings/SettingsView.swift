@@ -556,6 +556,44 @@ struct SettingsView: View {
                 isOn: $viewModel.fixReversedPunctuation
             )
 
+            toggleSettingRow(
+                title: "AI Live Subtitle Translation",
+                subtitle: "Translates upcoming SRT/VTT lines in batches ahead of playback (leaves ASS & PGS untouched).",
+                isOn: $viewModel.aiTranslationEnabled
+            )
+            cycleSettingRow(title: "Translation Provider", value: viewModel.aiTranslationProvider) {
+                viewModel.aiTranslationProvider = viewModel.nextValue(
+                    after: viewModel.aiTranslationProvider,
+                    in: SettingsViewModel.aiTranslationProviderOptions
+                )
+                viewModel.saveSettings(context: modelContext)
+            }
+            cycleSettingRow(title: "Target Language", value: viewModel.displayLanguageName(for: viewModel.aiTranslationTargetLanguage)) {
+                let codes = SettingsViewModel.languageOptions.map(\.code)
+                viewModel.aiTranslationTargetLanguage = viewModel.nextValue(after: viewModel.aiTranslationTargetLanguage, in: codes)
+                viewModel.saveSettings(context: modelContext)
+            }
+            textFieldSettingRow(
+                title: "Translation API Key",
+                placeholder: viewModel.aiTranslationProvider == "Custom (Ollama / OpenAI)" ? "Optional for local Ollama" : "Paste your provider API key",
+                text: $viewModel.aiTranslationApiKey,
+                isSecure: true
+            )
+            if viewModel.aiTranslationProvider == "Custom (Ollama / OpenAI)" {
+                textFieldSettingRow(
+                    title: "Custom Endpoint URL",
+                    placeholder: "http://localhost:11434/v1/chat/completions",
+                    text: $viewModel.aiTranslationCustomEndpoint,
+                    isSecure: false
+                )
+            }
+            textFieldSettingRow(
+                title: "Translation Model (Optional)",
+                placeholder: viewModel.defaultAIModelPlaceholder(for: viewModel.aiTranslationProvider),
+                text: $viewModel.aiTranslationModel,
+                isSecure: false
+            )
+
         case .skipIntroCredits:
             cycleSettingRow(title: "Skip Intro", value: viewModel.skipIntroMode) {
                 viewModel.skipIntroMode = viewModel.nextValue(after: viewModel.skipIntroMode, in: SettingsViewModel.skipModeOptions)

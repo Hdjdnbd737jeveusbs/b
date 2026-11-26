@@ -6,6 +6,9 @@ import Combine
 #if canImport(AetherEngine)
 import AetherEngine
 #endif
+#if canImport(SwiftAssRenderer)
+import SwiftAssRenderer
+#endif
 
 // MARK: - Player View
 
@@ -17,6 +20,9 @@ struct PlayerView: View {
 
     #if canImport(AetherEngine)
     @StateObject private var aetherCoordinator = AetherPlayerCoordinator()
+    #endif
+    #if canImport(SwiftAssRenderer)
+    @StateObject private var assCoordinator = ASSRenderCoordinator()
     #endif
 
     // MARK: - Init
@@ -36,14 +42,24 @@ struct PlayerView: View {
                 videoPlayerLayer
             }
 
-            // Live Subtitle Overlay Layer (shifted above scrubber when HUD is visible)
+            #if canImport(SwiftAssRenderer)
+            // Styled ASS/SSA Subtitle Overlay (HarfBuzz + FriBidi Arabic shaping)
+            if assCoordinator.isRenderingASS, let assRenderer = assCoordinator.renderer, viewModel.isASSTrackActive {
+                AssSubtitles(renderer: assRenderer)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
+            }
+            #endif
+
+            // Live Subtitle Overlay Layer (SRT/VTT text + PGS bitmaps; shifted above scrubber when HUD is visible)
             SubtitleOverlayView(
                 currentCue: viewModel.currentSubtitleCue,
                 bitmapCue: viewModel.currentBitmapSubtitle,
                 style: viewModel.subtitleStyle,
                 fixRTL: viewModel.subtitleSyncSettings.fixRTL,
                 fixReversedPunctuation: viewModel.subtitleSyncSettings.fixReversedPunctuation,
-                isHUDVisible: viewModel.hasStartedPlayback && viewModel.isHUDVisible && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet
+                isHUDVisible: viewModel.hasStartedPlayback && viewModel.isHUDVisible && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet && !viewModel.showSyncToLineSheet,
+                suppressPlainText: isASSOverlayActive
             )
 
             // Loading Overlay (shown while buffering & no playback yet)
@@ -58,7 +74,7 @@ struct PlayerView: View {
             }
 
             // Player HUD (Title top-left, 5 icons + scrubber bottom; hidden while Sync/Style popovers are open)
-            if viewModel.hasStartedPlayback && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet {
+            if viewModel.hasStartedPlayback && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet && !viewModel.showSyncToLineSheet {
                 PlayerHUDView(viewModel: viewModel)
                     .opacity(viewModel.isHUDVisible ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: viewModel.isHUDVisible)
@@ -90,6 +106,24 @@ struct PlayerView: View {
                     onDismiss: {
                         viewModel.saveSubtitlePreferences()
                         viewModel.showSubtitleStyleSheet = false
+                    }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
+            // Sync to a Line Overlay (Pick Spoken Line for Exact Offset)
+            if viewModel.showSyncToLineSheet {
+                SyncToLineSheet(
+                    cues: viewModel.syncableCueCandidates,
+                    currentTime: viewModel.currentTime,
+                    currentOffset: viewModel.subtitleSyncSettings.manualOffset,
+                    fixRTL: viewModel.subtitleSyncSettings.fixRTL,
+                    fixReversedPunctuation: viewModel.subtitleSyncSettings.fixReversedPunctuation,
+                    onSelectCue: { cue in
+                        viewModel.applySyncToCue(cue)
+                    },
+                    onDismiss: {
+                        viewModel.showSyncToLineSheet = false
                     }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -129,6 +163,9 @@ struct PlayerView: View {
         .onAppear {
             viewModel.loadSubtitleSettingsFromPreferences(context: modelContext)
             viewModel.startPeriodicSave(context: modelContext)
+            #if canImport(AetherEngine) && canImport(SwiftAssRenderer)
+            aetherCoordinator.assCoordinator = assCoordinator
+            #endif
             didResolveEnginePreference = true
         }
         .onChange(of: viewModel.subtitleSyncSettings) { _, _ in
@@ -136,10 +173,43 @@ struct PlayerView: View {
             #if canImport(AetherEngine)
             aetherCoordinator.refreshEmbeddedSubtitleCue()
             #endif
+            #if canImport(SwiftAssRenderer)
+            if viewModel.externalASSContent != nil {
+                assCoordinator.updateExternalTimeOffset(
+                    currentTime: viewModel.currentTime,
+                    manualOffset: viewModel.subtitleSyncSettings.manualOffset
+                )
+            }
+            #endif
         }
         .onChange(of: viewModel.subtitleStyle) { _, _ in
             viewModel.saveSubtitlePreferences()
         }
+        #if canImport(SwiftAssRenderer)
+        .onChange(of: viewModel.externalASSContent) { _, newContent in
+            if let newContent, let key = viewModel.selectedExternalSubtitle?.id {
+                assCoordinator.loadExternalASS(
+                    content: newContent,
+                    trackKey: key,
+                    currentTime: viewModel.currentTime,
+                    manualOffset: viewModel.subtitleSyncSettings.manualOffset
+                )
+            } else {
+                assCoordinator.clearExternalASS()
+                #if canImport(AetherEngine)
+                aetherCoordinator.refreshEmbeddedSubtitleCue()
+                #endif
+            }
+        }
+        .onChange(of: viewModel.currentTime) { _, newTime in
+            if viewModel.externalASSContent != nil {
+                assCoordinator.updateExternalTimeOffset(
+                    currentTime: newTime,
+                    manualOffset: viewModel.subtitleSyncSettings.manualOffset
+                )
+            }
+        }
+        #endif
         .sheet(isPresented: $viewModel.showStreamPicker) {
             StreamPickerSheet(
                 title: viewModel.title,
@@ -158,6 +228,9 @@ struct PlayerView: View {
                 aetherCoordinator.stop()
             }
             #endif
+            #if canImport(SwiftAssRenderer)
+            assCoordinator.clearAll()
+            #endif
             viewModel.cleanup()
         }
         .onPlayPauseCommand {
@@ -169,6 +242,14 @@ struct PlayerView: View {
         .onExitCommand {
             handleExit()
         }
+    }
+
+    private var isASSOverlayActive: Bool {
+        #if canImport(SwiftAssRenderer)
+        return assCoordinator.isRenderingASS && viewModel.isASSTrackActive
+        #else
+        return false
+        #endif
     }
 
     // MARK: - Preview Still Backdrop Layer
@@ -350,6 +431,8 @@ struct PlayerView: View {
         } else if viewModel.showSubtitleStyleSheet {
             viewModel.saveSubtitlePreferences()
             viewModel.showSubtitleStyleSheet = false
+        } else if viewModel.showSyncToLineSheet {
+            viewModel.showSyncToLineSheet = false
         } else if viewModel.showStreamPicker {
             viewModel.showStreamPicker = false
         } else if viewModel.showAudioPicker || viewModel.showSubtitlePicker || viewModel.showOptionsMenu || viewModel.showInfoPanel {
@@ -376,6 +459,9 @@ final class AetherPlayerCoordinator: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private weak var boundViewModel: PlayerViewModel?
+    #if canImport(SwiftAssRenderer)
+    weak var assCoordinator: ASSRenderCoordinator?
+    #endif
     private var loadTask: Task<Void, Never>?
     private var currentLoadedURL: URL?
     private var lastCues: [SubtitleCue] = []
@@ -406,6 +492,7 @@ final class AetherPlayerCoordinator: ObservableObject {
         }
 
         var options = LoadOptions()
+        options.preserveASSMarkup = true
         options.displayCriteriaOwner = viewModel.matchContentFrameRate ? .engine : .host
         options.matchContentEnabled = viewModel.hdrEnabled ? viewModel.matchContentFrameRate : false
         options.attemptsHDRMasterOnUnprovenPanel = viewModel.hdrEnabled
@@ -515,25 +602,111 @@ final class AetherPlayerCoordinator: ObservableObject {
     func refreshEmbeddedSubtitleCue() {
         guard let vm = boundViewModel else { return }
         guard vm.selectedExternalSubtitle == nil, vm.selectedSubtitleTrackId >= 0 else {
+            vm.isActiveEmbeddedASS = false
+            vm.embeddedPlainCuesForSync = []
+            #if canImport(SwiftAssRenderer)
+            assCoordinator?.clearEmbeddedASS()
+            #endif
             vm.updateEmbeddedSubtitle(text: nil, bitmap: nil)
             return
         }
 
+        let activeTrack = engine?.subtitleTracks.first(where: { $0.id == vm.selectedSubtitleTrackId && !$0.isExternal })
+        let codecLower = activeTrack?.codec.lowercased() ?? ""
+        let isASSTrack = (codecLower == "ass" || codecLower == "ssa") && (activeTrack?.assHeader?.isEmpty == false)
+
+        let plainCues = buildPlainEmbeddedCues(from: lastCues, stripASSFields: isASSTrack)
+        vm.embeddedPlainCuesForSync = plainCues
+        if activeTrack?.language?.lowercased().hasPrefix("en") == true {
+            vm.appendReferenceEmbeddedCues(plainCues)
+        }
+
+        #if canImport(SwiftAssRenderer)
+        if isASSTrack,
+           let assCoordinator,
+           assCoordinator.syncEmbeddedASS(
+               track: activeTrack,
+               cues: lastCues,
+               sourceTime: currentSourceTime,
+               manualOffset: vm.subtitleSyncSettings.manualOffset
+           ) {
+            vm.isActiveEmbeddedASS = true
+            vm.updateEmbeddedSubtitle(text: nil, bitmap: nil, languageCode: activeTrack?.language)
+            return
+        }
+        assCoordinator?.clearEmbeddedASS()
+        #endif
+
+        vm.isActiveEmbeddedASS = false
         let adjustedTime = currentSourceTime - vm.subtitleSyncSettings.manualOffset
         let matching = lastCues.filter { adjustedTime >= $0.startTime && adjustedTime <= $0.endTime }
 
         let textParts = matching
-            .compactMap { $0.text?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .compactMap { $0.text.map { Self.cleanEmbeddedDialogueText($0, stripASSFields: false) } }
             .filter { !$0.isEmpty }
         let bitmap = matching.compactMap { cue -> CGImage? in
             if case .image(let img) = cue.body { return img.cgImage }
             return nil
         }.last
+        let matchingCueId = matching.first.map { Self.stableEmbeddedCueID(start: $0.startTime, end: $0.endTime) }
 
         vm.updateEmbeddedSubtitle(
             text: textParts.isEmpty ? nil : textParts.joined(separator: "\n"),
-            bitmap: bitmap
+            bitmap: bitmap,
+            cueId: matchingCueId,
+            languageCode: activeTrack?.language
         )
+    }
+
+    private func buildPlainEmbeddedCues(from cues: [SubtitleCue], stripASSFields: Bool) -> [AuraSubtitleCue] {
+        var result: [AuraSubtitleCue] = []
+        var seenBuckets: Set<Int> = []
+        result.reserveCapacity(cues.count)
+        for cue in cues {
+            guard let raw = cue.text else { continue }
+            let cleaned = Self.cleanEmbeddedDialogueText(raw, stripASSFields: stripASSFields)
+            guard !cleaned.isEmpty else { continue }
+            let bucket = Self.stableEmbeddedCueID(start: cue.startTime, end: cue.endTime)
+            guard seenBuckets.insert(bucket).inserted else { continue }
+            result.append(AuraSubtitleCue(
+                id: bucket,
+                startTime: cue.startTime,
+                endTime: cue.endTime,
+                text: cleaned,
+                processedText: nil,
+                isArabic: SubtitleProcessor.containsArabicCharacters(cleaned)
+            ))
+        }
+        return result.sorted { $0.startTime < $1.startTime }
+    }
+
+    private static func stableEmbeddedCueID(start: Double, end: Double) -> Int {
+        let startCs = Int((start * 100.0).rounded())
+        let endCs = Int((end * 100.0).rounded())
+        return (startCs &* 31) ^ endCs
+    }
+
+    private static func cleanEmbeddedDialogueText(_ raw: String, stripASSFields: Bool) -> String {
+        var text = raw
+        if stripASSFields {
+            var extracted: [String] = []
+            for line in raw.split(separator: "\n", omittingEmptySubsequences: true) {
+                let fields = line.split(separator: ",", maxSplits: 8, omittingEmptySubsequences: false)
+                if fields.count == 9, Int(fields[0]) != nil {
+                    extracted.append(String(fields[8]))
+                } else {
+                    extracted.append(String(line))
+                }
+            }
+            text = extracted.joined(separator: "\n")
+        }
+        text = text
+            .replacingOccurrences(of: "\\N", with: "\n")
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\h", with: " ")
+            .replacingOccurrences(of: "\\{[^\\}]+\\}", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func stop() {
@@ -542,6 +715,9 @@ final class AetherPlayerCoordinator: ObservableObject {
         currentLoadedURL = nil
         lastCues = []
         cancellables.removeAll()
+        #if canImport(SwiftAssRenderer)
+        assCoordinator?.clearAll()
+        #endif
         engine?.stop()
         engine = nil
     }
@@ -738,11 +914,12 @@ final class AetherPlayerCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] activeId in
                 MainActor.assumeIsolated {
-                    guard let vm = self?.boundViewModel, vm.selectedExternalSubtitle == nil else { return }
+                    guard let self, let vm = self.boundViewModel, vm.selectedExternalSubtitle == nil else { return }
                     let resolved = activeId ?? -1
                     if vm.selectedSubtitleTrackId != resolved {
                         vm.selectedSubtitleTrackId = resolved
                     }
+                    self.refreshEmbeddedSubtitleCue()
                 }
             }
             .store(in: &cancellables)
@@ -757,6 +934,19 @@ final class AetherPlayerCoordinator: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        #if canImport(SwiftAssRenderer)
+        engine.$fontAttachments
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] attachments in
+                MainActor.assumeIsolated {
+                    guard let self, !attachments.isEmpty else { return }
+                    self.assCoordinator?.installFontAttachments(attachments)
+                    self.refreshEmbeddedSubtitleCue()
+                }
+            }
+            .store(in: &cancellables)
+        #endif
 
         engine.diagnostics.$liveTelemetry
             .receive(on: DispatchQueue.main)

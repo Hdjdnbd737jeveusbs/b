@@ -25,6 +25,14 @@ class AppSettings {
     var subtitleAutoMode: String = "Preferred Languages"
     var secondarySubtitleLanguage: String = "en"
 
+    // MARK: - AI Live Subtitle Translation
+    var aiTranslationEnabled: Bool = false
+    var aiTranslationProvider: String = "OpenAI"
+    var aiTranslationApiKey: String = ""
+    var aiTranslationTargetLanguage: String = "ar"
+    var aiTranslationCustomEndpoint: String = "http://localhost:11434/v1/chat/completions"
+    var aiTranslationModel: String = ""
+
     // MARK: - Playback Settings
     var resumePlaybackBehavior: String = "Ask"
     var nextEpisodeBehavior: String = "On · 10 s"
@@ -82,6 +90,12 @@ class AppSettings {
         autoSyncSubtitles: Bool = false,
         subtitleAutoMode: String = "Preferred Languages",
         secondarySubtitleLanguage: String = "en",
+        aiTranslationEnabled: Bool = false,
+        aiTranslationProvider: String = "OpenAI",
+        aiTranslationApiKey: String = "",
+        aiTranslationTargetLanguage: String = "ar",
+        aiTranslationCustomEndpoint: String = "http://localhost:11434/v1/chat/completions",
+        aiTranslationModel: String = "",
         resumePlaybackBehavior: String = "Ask",
         nextEpisodeBehavior: String = "On · 10 s",
         playerEngineName: String = "AetherEngine",
@@ -129,6 +143,12 @@ class AppSettings {
         self.autoSyncSubtitles = autoSyncSubtitles
         self.subtitleAutoMode = subtitleAutoMode
         self.secondarySubtitleLanguage = secondarySubtitleLanguage
+        self.aiTranslationEnabled = aiTranslationEnabled
+        self.aiTranslationProvider = aiTranslationProvider
+        self.aiTranslationApiKey = aiTranslationApiKey
+        self.aiTranslationTargetLanguage = aiTranslationTargetLanguage
+        self.aiTranslationCustomEndpoint = aiTranslationCustomEndpoint
+        self.aiTranslationModel = aiTranslationModel
         self.resumePlaybackBehavior = resumePlaybackBehavior
         self.nextEpisodeBehavior = nextEpisodeBehavior
         self.playerEngineName = playerEngineName

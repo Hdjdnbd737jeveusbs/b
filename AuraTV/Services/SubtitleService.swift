@@ -253,9 +253,19 @@ final class SubtitleService {
 
     // MARK: - Download & Parse Subtitles
 
+    struct LoadedSubtitleTrack: Sendable {
+        let cues: [AuraSubtitleCue]
+        let rawASSContent: String?
+    }
+
     /// Download external subtitle file and parse into structured cues
     func loadAndParseCues(for track: SubtitleTrackItem) async throws -> [AuraSubtitleCue] {
-        let cacheFile = cacheDirectory.appendingPathComponent("\(track.id).srt")
+        try await loadSubtitleTrack(for: track).cues
+    }
+
+    func loadSubtitleTrack(for track: SubtitleTrackItem) async throws -> LoadedSubtitleTrack {
+        let safeId = track.id.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
+        let cacheFile = cacheDirectory.appendingPathComponent("\(safeId).subcache")
 
         let rawContent: String
         if FileManager.default.fileExists(atPath: cacheFile.path) {
@@ -290,7 +300,9 @@ final class SubtitleService {
                 }
                 downloadData = fileBytes
             } else {
-                guard let url = track.downloadURL else { return [] }
+                guard let url = track.downloadURL else {
+                    return LoadedSubtitleTrack(cues: [], rawASSContent: nil)
+                }
                 var request = URLRequest(url: url)
                 if track.source == .openSubtitles && !openSubtitlesApiKey.isEmpty {
                     request.addValue(openSubtitlesApiKey, forHTTPHeaderField: "Api-Key")
@@ -331,7 +343,13 @@ final class SubtitleService {
             try? rawContent.write(to: cacheFile, atomically: true, encoding: .utf8)
         }
 
-        return parseSRTorVTT(rawContent)
+        if isASSScript(rawContent) {
+            let cues = parseASS(rawContent)
+            return LoadedSubtitleTrack(cues: cues, rawASSContent: rawContent)
+        } else {
+            let cues = parseSRTorVTT(rawContent)
+            return LoadedSubtitleTrack(cues: cues, rawASSContent: nil)
+        }
     }
 
     // MARK: - Zip Extraction Helper (SubDL ZIP Support)
@@ -356,7 +374,8 @@ final class SubtitleService {
             let fileNameData = data.subdata(in: offset+30..<offset+30+fileNameLen)
             let fileName = String(data: fileNameData, encoding: .utf8) ?? ""
 
-            if fileName.lowercased().hasSuffix(".srt") || fileName.lowercased().hasSuffix(".vtt") || fileName.lowercased().hasSuffix(".sub") {
+            let lowerName = fileName.lowercased()
+            if lowerName.hasSuffix(".srt") || lowerName.hasSuffix(".vtt") || lowerName.hasSuffix(".ass") || lowerName.hasSuffix(".ssa") || lowerName.hasSuffix(".sub") {
                 let fileCompressedData = data.subdata(in: fileDataStart..<fileDataStart+compressedSize)
                 if compressionMethod == 0 {
                     return fileCompressedData
@@ -487,6 +506,78 @@ final class SubtitleService {
         }
 
         return cues
+    }
+
+    // MARK: - ASS / SSA Detector & Plain Cue Parser
+
+    func isASSScript(_ content: String) -> Bool {
+        let lower = content.prefix(4096).lowercased()
+        return (lower.contains("[script info]") && lower.contains("[events]"))
+            || content.contains("Dialogue:")
+    }
+
+    /// Parses ASS/SSA `Dialogue:` events into `[AuraSubtitleCue]` for sync-to-line & auto-sync correlation
+    func parseASS(_ content: String) -> [AuraSubtitleCue] {
+        var cues: [AuraSubtitleCue] = []
+        let normalized = content
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        var formatColumns: [String] = ["Layer", "Start", "End", "Style", "Name", "MarginL", "MarginR", "MarginV", "Effect", "Text"]
+        var inEvents = false
+        var cueIndex = 1
+
+        for rawLine in normalized.components(separatedBy: "\n") {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            if line.hasPrefix("[") {
+                inEvents = line.lowercased() == "[events]"
+                continue
+            }
+            guard inEvents || line.hasPrefix("Dialogue:") else { continue }
+
+            if line.lowercased().hasPrefix("format:") {
+                let spec = line.dropFirst("format:".count)
+                formatColumns = spec.split(separator: ",").map {
+                    $0.trimmingCharacters(in: .whitespaces).lowercased()
+                }
+                continue
+            }
+
+            guard line.lowercased().hasPrefix("dialogue:") else { continue }
+            let body = String(line.dropFirst("dialogue:".count)).trimmingCharacters(in: .whitespaces)
+            let maxSplits = max(0, formatColumns.count - 1)
+            let fields = body.split(separator: ",", maxSplits: maxSplits, omittingEmptySubsequences: false)
+                .map { String($0) }
+            guard fields.count == formatColumns.count else { continue }
+
+            guard let startIdx = formatColumns.firstIndex(of: "start"),
+                  let endIdx = formatColumns.firstIndex(of: "end"),
+                  let textIdx = formatColumns.firstIndex(of: "text"),
+                  let startTime = parseTimestamp(fields[startIdx]),
+                  let endTime = parseTimestamp(fields[endIdx]) else {
+                continue
+            }
+
+            let rawDialogueText = fields[textIdx]
+                .replacingOccurrences(of: "\\N", with: "\n")
+                .replacingOccurrences(of: "\\n", with: "\n")
+                .replacingOccurrences(of: "\\h", with: " ")
+            let cleanedText = cleanSubtitleFormatting(rawDialogueText)
+            guard !cleanedText.isEmpty else { continue }
+
+            cues.append(AuraSubtitleCue(
+                id: cueIndex,
+                startTime: startTime,
+                endTime: endTime,
+                text: cleanedText,
+                processedText: nil,
+                isArabic: containsArabic(cleanedText)
+            ))
+            cueIndex += 1
+        }
+
+        return cues.sorted { $0.startTime < $1.startTime }
     }
 
     // MARK: - Helper Functions

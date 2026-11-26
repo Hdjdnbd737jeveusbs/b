@@ -10,12 +10,13 @@ struct SubtitleOverlayView: View {
     let fixRTL: Bool
     let fixReversedPunctuation: Bool
     var isHUDVisible: Bool = false
+    var suppressPlainText: Bool = false
 
     var body: some View {
         VStack {
             Spacer()
 
-            if let cue = currentCue {
+            if !suppressPlainText, let cue = currentCue {
                 let displayedText = SubtitleProcessor.process(
                     text: cue.text,
                     isArabic: cue.isArabic,
@@ -42,7 +43,7 @@ struct SubtitleOverlayView: View {
                     // Keep subtitles clearly above the scrubber bar whenever HUD is visible
                     .padding(.bottom, isHUDVisible ? max(CGFloat(style.bottomOffset), 132) : CGFloat(style.bottomOffset))
                     .transition(.opacity.animation(.easeInOut(duration: 0.15)))
-            } else if let cgImage = bitmapCue {
+            } else if !suppressPlainText, let cgImage = bitmapCue {
                 Image(decorative: cgImage, scale: 1.0)
                     .resizable()
                     .aspectRatio(contentMode: .fit)

@@ -145,10 +145,12 @@ final class SubtitleProcessor {
         return false
     }
 
-    // MARK: - Supported Arabic & System Fonts (Native tvOS 18+ Fonts)
+    // MARK: - Supported Arabic & System Fonts (Bundled OFL + Native tvOS Fonts)
 
     static let availableFonts: [String] = [
         "System",
+        "IBM Plex Sans Arabic",
+        "Tajawal",
         "GeezaPro",
         "Damascus",
         "AlBayan",
