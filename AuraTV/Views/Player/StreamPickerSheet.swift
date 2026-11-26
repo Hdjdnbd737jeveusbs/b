@@ -38,13 +38,13 @@ struct StreamPickerSheet: View {
 
                     Spacer()
 
-                    if let best = AIOStreamsService.shared.bestStream(matching: preferredQuality, in: streams) {
+                    if let first = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) {
                         Button {
-                            onSelect(best)
+                            onSelect(first)
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "bolt.fill")
-                                Text("Play Best (\(preferredQuality))")
+                                Text("Play First Stream")
                             }
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(.black)
@@ -83,8 +83,6 @@ struct StreamPickerSheet: View {
 
     @ViewBuilder
     private var streamsList: some View {
-        let grouped = groupedByResolution()
-
         if streams.isEmpty {
             VStack(spacing: 12) {
                 Spacer()
@@ -102,41 +100,18 @@ struct StreamPickerSheet: View {
             .frame(maxWidth: .infinity)
         } else {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 26) {
-                    ForEach(grouped, id: \.resolution) { group in
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text(group.resolution.displayName)
-                                    .font(.system(size: 24, weight: .bold))
-                                    .foregroundStyle(.white)
-
-                                Text("\(group.streams.count)")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.42))
-                            }
-
-                            ForEach(group.streams) { stream in
-                                StreamRowView(
-                                    stream: stream,
-                                    isActive: selectedStream?.id == stream.id,
-                                    isFocused: focusedControl == .stream(stream.id),
-                                    onSelect: { onSelect(stream) }
-                                )
-                                .focused($focusedControl, equals: .stream(stream.id))
-                            }
-                        }
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(streams.enumerated()), id: \.offset) { index, stream in
+                        StreamRowView(
+                            stream: stream,
+                            isActive: selectedStream?.id == stream.id,
+                            isFocused: focusedControl == .stream("\(index)_\(stream.id)"),
+                            onSelect: { onSelect(stream) }
+                        )
+                        .focused($focusedControl, equals: .stream("\(index)_\(stream.id)"))
                     }
                 }
             }
-        }
-    }
-
-    private func groupedByResolution() -> [(resolution: StreamResolution, streams: [StremioStream])] {
-        let grouped = Dictionary(grouping: streams) { $0.parsedInfo.resolution }
-        let order: [StreamResolution] = [.uhd4k, .fhd1080p, .hd720p, .sd480p, .unknown]
-        return order.compactMap { res in
-            guard let group = grouped[res], !group.isEmpty else { return nil }
-            return (resolution: res, streams: group)
         }
     }
 }
@@ -178,6 +153,9 @@ private struct StreamRowView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
+                    if stream.parsedInfo.resolution != .unknown {
+                        BadgeView(text: stream.parsedInfo.resolution.displayName, style: isFocused ? .darkPill : .filled, fontSize: 12)
+                    }
                     if stream.parsedInfo.isCached {
                         BadgeView(text: "⚡ Cached", style: isFocused ? .darkPill : .filled, fontSize: 12)
                     }

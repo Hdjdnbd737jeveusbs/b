@@ -59,6 +59,8 @@ struct AuraTVApp: App {
                     try? context.save()
                 }
                 AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
+                AIOStreamsService.shared.additionalManifestURLs = settings.aioStreamsAdditionalUrls
+                MDBListService.shared.apiKey = settings.mdblistApiKey
                 SubtitleService.shared.subdlApiKey = settings.subdlApiKey
                 SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
                 Self.logger.notice("Loaded existing AppSettings (TMDB key present: \(!TMDBService.shared.apiKey.isEmpty))")

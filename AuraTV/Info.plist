@@ -42,6 +42,8 @@
         <string>Tajawal-Medium.ttf</string>
         <string>Tajawal-Bold.ttf</string>
     </array>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>AuraTV runs a temporary local web server during Phone QR Setup so you can enter API keys and manifest URLs from your phone.</string>
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>infuse</string>

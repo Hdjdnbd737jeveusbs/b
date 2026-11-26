@@ -49,6 +49,18 @@ struct SeriesDetailView: View {
         settingsList.first?.preferredQuality ?? "4K"
     }
 
+    private var playAtOnceEnabled: Bool {
+        settingsList.first?.playAtOnce ?? false
+    }
+
+    private var blurUnwatchedThumbnails: Bool {
+        settingsList.first?.blurUnwatchedEpisodeThumbnails ?? false
+    }
+
+    private var hideUnwatchedDescriptions: Bool {
+        settingsList.first?.hideUnwatchedEpisodeDescriptions ?? false
+    }
+
     private func effectiveResumeTime(forSeason season: Int, episode: Int) -> Double {
         guard let progress = viewModel.watchProgress,
               progress.seasonNumber == season,
@@ -91,6 +103,10 @@ struct SeriesDetailView: View {
                             metadataLine
 
                             technicalBadgesRow
+
+                            if let ratings = viewModel.mdblistRatings, !ratings.isEmpty {
+                                MDBListRatingsRow(ratings: ratings)
+                            }
 
                             overviewSection
 
@@ -534,42 +550,68 @@ struct SeriesDetailView: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(.white)
 
-                    if !seasons.isEmpty {
-                        Menu {
-                            ForEach(seasons) { season in
-                                Button {
-                                    Task {
-                                        await viewModel.loadSeasonDetail(
-                                            seriesId: tmdbId,
-                                            seasonNumber: season.seasonNumber
-                                        )
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(season.name)
-                                        if season.seasonNumber == viewModel.selectedSeasonNumber {
-                                            Image(systemName: "checkmark")
+                    if !seasons.isEmpty || blurUnwatchedThumbnails || hideUnwatchedDescriptions {
+                        HStack(spacing: 12) {
+                            if !seasons.isEmpty {
+                                Menu {
+                                    ForEach(seasons) { season in
+                                        Button {
+                                            Task {
+                                                await viewModel.loadSeasonDetail(
+                                                    seriesId: tmdbId,
+                                                    seasonNumber: season.seasonNumber
+                                                )
+                                            }
+                                        } label: {
+                                            HStack {
+                                                Text(season.name)
+                                                if season.seasonNumber == viewModel.selectedSeasonNumber {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
                                         }
                                     }
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Text("Season \(viewModel.selectedSeasonNumber)")
+                                            .font(.system(size: 16, weight: .semibold))
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 12, weight: .bold))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.12), in: Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
                                 }
+                                .buttonStyle(.plain)
                             }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text("Season \(viewModel.selectedSeasonNumber)")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .bold))
+
+                            if blurUnwatchedThumbnails || hideUnwatchedDescriptions {
+                                Button {
+                                    viewModel.showAllSpoilers.toggle()
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: viewModel.showAllSpoilers ? "eye.fill" : "eye.slash.fill")
+                                            .font(.system(size: 13, weight: .semibold))
+                                        Text(viewModel.showAllSpoilers ? "Hide Unwatched Spoilers" : "Reveal Spoilers")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.12), in: Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .background(Color.white.opacity(0.12), in: Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                            )
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 80)
@@ -578,7 +620,33 @@ struct SeriesDetailView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 22) {
                             ForEach(episodes) { episode in
-                                EpisodeCardView(episode: episode) {
+                                EpisodeCardView(
+                                    episode: episode,
+                                    isWatched: viewModel.isEpisodeWatched(
+                                        tmdbId: tmdbId,
+                                        season: episode.seasonNumber,
+                                        episode: episode.episodeNumber
+                                    ),
+                                    blurThumbnail: blurUnwatchedThumbnails,
+                                    hideDescription: hideUnwatchedDescriptions,
+                                    isSpoilerRevealed: viewModel.isEpisodeSpoilerRevealed(
+                                        season: episode.seasonNumber,
+                                        episode: episode.episodeNumber
+                                    ),
+                                    onToggleWatched: {
+                                        viewModel.toggleEpisodeWatched(
+                                            tmdbId: tmdbId,
+                                            season: episode.seasonNumber,
+                                            episode: episode.episodeNumber
+                                        )
+                                    },
+                                    onToggleSpoilerReveal: {
+                                        viewModel.toggleEpisodeSpoilerReveal(
+                                            season: episode.seasonNumber,
+                                            episode: episode.episodeNumber
+                                        )
+                                    }
+                                ) {
                                     playEpisode(episode: episode)
                                 }
                             }
@@ -696,12 +764,12 @@ struct SeriesDetailView: View {
                     preferredQuality: preferredQuality
                 )
                 availableStreams = streams
-                let best = AIOStreamsService.shared.bestStream(matching: preferredQuality, in: streams)
-                selectedStream = best
+                let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
+                selectedStream = firstPlayable
                 isLoadingStreams = false
 
-                if (!forcePicker && streams.count == 1) || autoPlayBest,
-                   let chosen = best ?? streams.first,
+                if (!forcePicker && (playAtOnceEnabled || streams.count == 1)) || autoPlayBest,
+                   let chosen = firstPlayable,
                    let urlString = chosen.url,
                    let url = URL(string: urlString) {
                     startPlayback(

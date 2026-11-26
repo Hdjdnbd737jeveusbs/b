@@ -68,6 +68,10 @@
 		1059 /* AITranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2060 /* AITranslationService.swift */; };
 		1060 /* ASSRenderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2061 /* ASSRenderCoordinator.swift */; };
 		1061 /* SyncToLineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* SyncToLineSheet.swift */; };
+		1062 /* LocalConfigServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* LocalConfigServer.swift */; };
+		1063 /* MDBListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* MDBListService.swift */; };
+		1064 /* PhoneQRSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* PhoneQRSetupView.swift */; };
+		1065 /* MDBListRatingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* MDBListRatingsRow.swift */; };
 		B003 /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* AetherEngine */; };
 		B006 /* SwiftAssRenderer in Frameworks */ = {isa = PBXBuildFile; productRef = B005 /* SwiftAssRenderer */; };
 /* End PBXBuildFile section */
@@ -136,6 +140,10 @@
 		2060 /* AITranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITranslationService.swift; sourceTree = "<group>"; };
 		2061 /* ASSRenderCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASSRenderCoordinator.swift; sourceTree = "<group>"; };
 		2062 /* SyncToLineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncToLineSheet.swift; sourceTree = "<group>"; };
+		2063 /* LocalConfigServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalConfigServer.swift; sourceTree = "<group>"; };
+		2064 /* MDBListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBListService.swift; sourceTree = "<group>"; };
+		2065 /* PhoneQRSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneQRSetupView.swift; sourceTree = "<group>"; };
+		2066 /* MDBListRatingsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBListRatingsRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -188,6 +196,7 @@
 				2022 /* SeriesCardView.swift */,
 				2048 /* TitleLogoView.swift */,
 				2049 /* SeriesPosterCardView.swift */,
+				2066 /* MDBListRatingsRow.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -225,6 +234,8 @@
 				2044 /* SubtitleSyncEngine.swift */,
 				2052 /* ExternalPlayerService.swift */,
 				2060 /* AITranslationService.swift */,
+				2063 /* LocalConfigServer.swift */,
+				2064 /* MDBListService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -322,6 +333,7 @@
 			isa = PBXGroup;
 			children = (
 				2032 /* SettingsView.swift */,
+				2065 /* PhoneQRSetupView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -501,6 +513,10 @@
 				1059 /* AITranslationService.swift in Sources */,
 				1060 /* ASSRenderCoordinator.swift in Sources */,
 				1061 /* SyncToLineSheet.swift in Sources */,
+				1062 /* LocalConfigServer.swift in Sources */,
+				1063 /* MDBListService.swift in Sources */,
+				1064 /* PhoneQRSetupView.swift in Sources */,
+				1065 /* MDBListRatingsRow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

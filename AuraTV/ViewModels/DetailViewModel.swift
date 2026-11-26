@@ -14,6 +14,10 @@ final class DetailViewModel {
     var logoPath: String?
     var cast: [TMDBCastMember] = []
     var certification: String?
+    var mdblistRatings: MDBListRatingsSummary?
+    var episodeWatchedVersion: Int = 0
+    var revealedEpisodeTokens: Set<String> = []
+    var showAllSpoilers: Bool = false
     var isLoading: Bool = false
     var isInWatchlist: Bool = false
     var isWatched: Bool = false
@@ -47,6 +51,7 @@ final class DetailViewModel {
         logoPath = nil
         cast = []
         certification = nil
+        mdblistRatings = nil
 
         if let context {
             checkWatchlistStatus(tmdbId: id, mediaType: "movie", context: context)
@@ -60,11 +65,14 @@ final class DetailViewModel {
             do {
                 async let detailFetch = self.service.fetchMovieDetails(id: id)
                 async let logoFetch = self.service.fetchBestLogoPath(mediaType: "movie", id: id)
+                async let ratingsFetch = MDBListService.shared.fetchRatings(tmdbId: id, mediaType: "movie")
 
                 let detail = try await detailFetch
                 let resolvedLogo = await logoFetch
+                let resolvedRatings = await ratingsFetch
                 self.movieDetail = detail
                 self.logoPath = resolvedLogo
+                self.mdblistRatings = resolvedRatings
                 self.cast = detail.credits?.cast ?? []
                 self.certification = self.extractMovieCertification(from: detail)
             } catch {
@@ -90,6 +98,7 @@ final class DetailViewModel {
         logoPath = nil
         cast = []
         certification = nil
+        mdblistRatings = nil
 
         if let context {
             checkWatchlistStatus(tmdbId: id, mediaType: "series", context: context)
@@ -103,11 +112,14 @@ final class DetailViewModel {
             do {
                 async let detailFetch = self.service.fetchSeriesDetails(id: id)
                 async let logoFetch = self.service.fetchBestLogoPath(mediaType: "tv", id: id)
+                async let ratingsFetch = MDBListService.shared.fetchRatings(tmdbId: id, mediaType: "series")
 
                 let detail = try await detailFetch
                 let resolvedLogo = await logoFetch
+                let resolvedRatings = await ratingsFetch
                 self.seriesDetail = detail
                 self.logoPath = resolvedLogo
+                self.mdblistRatings = resolvedRatings
                 self.cast = detail.credits?.cast ?? []
                 self.certification = self.extractSeriesCertification(from: detail)
 
@@ -251,6 +263,47 @@ final class DetailViewModel {
             try context.save()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: - Episode Spoiler & Watched Helpers
+
+    @MainActor
+    func isEpisodeWatched(tmdbId: Int, season: Int, episode: Int) -> Bool {
+        _ = episodeWatchedVersion
+        if isWatched { return true }
+        if EpisodeWatchedStore.isWatched(tmdbId: tmdbId, season: season, episode: episode) {
+            return true
+        }
+        if let progress = watchProgress,
+           let ps = progress.seasonNumber,
+           let pe = progress.episodeNumber {
+            if ps > season { return true }
+            if ps == season && (pe > episode || (pe == episode && progress.isCompleted)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    @MainActor
+    func toggleEpisodeWatched(tmdbId: Int, season: Int, episode: Int) {
+        EpisodeWatchedStore.toggleWatched(tmdbId: tmdbId, season: season, episode: episode)
+        episodeWatchedVersion += 1
+    }
+
+    @MainActor
+    func isEpisodeSpoilerRevealed(season: Int, episode: Int) -> Bool {
+        showAllSpoilers || revealedEpisodeTokens.contains("S\(season)E\(episode)")
+    }
+
+    @MainActor
+    func toggleEpisodeSpoilerReveal(season: Int, episode: Int) {
+        let key = "S\(season)E\(episode)"
+        if revealedEpisodeTokens.contains(key) {
+            revealedEpisodeTokens.remove(key)
+        } else {
+            revealedEpisodeTokens.insert(key)
         }
     }
 

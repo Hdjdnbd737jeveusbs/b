@@ -71,3 +71,42 @@ class WatchHistory {
         self.isCompleted = isCompleted
     }
 }
+
+// MARK: - Per-Episode Watched State Store (Spoiler Protection & Progress Sync)
+
+enum EpisodeWatchedStore {
+    private static func storageKey(tmdbId: Int) -> String {
+        "auratv.watchedEpisodes.\(tmdbId)"
+    }
+
+    private static func token(season: Int, episode: Int) -> String {
+        "S\(season)E\(episode)"
+    }
+
+    static func watchedTokens(tmdbId: Int) -> Set<String> {
+        let arr = UserDefaults.standard.stringArray(forKey: storageKey(tmdbId: tmdbId)) ?? []
+        return Set(arr)
+    }
+
+    static func isWatched(tmdbId: Int, season: Int, episode: Int) -> Bool {
+        watchedTokens(tmdbId: tmdbId).contains(token(season: season, episode: episode))
+    }
+
+    static func markWatched(tmdbId: Int, season: Int, episode: Int, watched: Bool = true) {
+        var set = watchedTokens(tmdbId: tmdbId)
+        let key = token(season: season, episode: episode)
+        if watched {
+            set.insert(key)
+        } else {
+            set.remove(key)
+        }
+        UserDefaults.standard.set(Array(set), forKey: storageKey(tmdbId: tmdbId))
+    }
+
+    @discardableResult
+    static func toggleWatched(tmdbId: Int, season: Int, episode: Int) -> Bool {
+        let next = !isWatched(tmdbId: tmdbId, season: season, episode: episode)
+        markWatched(tmdbId: tmdbId, season: season, episode: episode, watched: next)
+        return next
+    }
+}

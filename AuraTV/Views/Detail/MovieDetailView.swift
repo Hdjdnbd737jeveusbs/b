@@ -45,6 +45,10 @@ struct MovieDetailView: View {
         settingsList.first?.preferredQuality ?? "4K"
     }
 
+    private var playAtOnceEnabled: Bool {
+        settingsList.first?.playAtOnce ?? false
+    }
+
     private var effectiveResumeTime: Double {
         let settings = settingsList.first
         return ExternalPlayerService.adjustedResumeTime(
@@ -82,6 +86,10 @@ struct MovieDetailView: View {
                             metadataLine
 
                             technicalBadgesRow
+
+                            if let ratings = viewModel.mdblistRatings, !ratings.isEmpty {
+                                MDBListRatingsRow(ratings: ratings)
+                            }
 
                             overviewSection
 
@@ -529,12 +537,14 @@ struct MovieDetailView: View {
                     preferredQuality: preferredQuality
                 )
                 availableStreams = streams
-                let best = AIOStreamsService.shared.bestStream(matching: preferredQuality, in: streams)
-                selectedStream = best
+                let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
+                selectedStream = firstPlayable
                 isLoadingStreams = false
 
-                if !forcePicker && streams.count == 1, let single = streams.first, let url = URL(string: single.url ?? "") {
-                    startPlayback(url: url, stream: single, resumeFrom: effectiveResumeTime)
+                if !forcePicker && (playAtOnceEnabled || streams.count == 1),
+                   let chosen = firstPlayable,
+                   let url = URL(string: chosen.url ?? "") {
+                    startPlayback(url: url, stream: chosen, resumeFrom: effectiveResumeTime)
                 } else {
                     showStreamPicker = true
                 }

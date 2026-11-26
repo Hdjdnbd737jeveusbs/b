@@ -1116,7 +1116,19 @@ final class PlayerViewModel {
             history.episodeStillPath = episodeStillPath
 
             if totalDuration > 0 {
-                history.isCompleted = (currentTime / totalDuration) >= 0.95
+                let completed = (currentTime / totalDuration) >= 0.95
+                history.isCompleted = completed
+                if mediaType == "series",
+                   (currentTime / totalDuration) >= 0.90,
+                   let seasonNumber,
+                   let episodeNumber {
+                    EpisodeWatchedStore.markWatched(
+                        tmdbId: tmdbId,
+                        season: seasonNumber,
+                        episode: episodeNumber,
+                        watched: true
+                    )
+                }
             }
 
             try context.save()

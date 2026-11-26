@@ -6,6 +6,8 @@ class AppSettings {
     @Attribute(.unique) var id: String = "default"
     var tmdbApiKey: String = "d767cb12181edaa01840442c704329be"
     var aioStreamsUrl: String = ""
+    var aioStreamsAdditionalUrls: String = ""
+    var mdblistApiKey: String = ""
     var preferredQuality: String = "4K"
     var preferredLanguage: String = "en"
     var subtitleLanguage: String = "ar"
@@ -36,6 +38,7 @@ class AppSettings {
     // MARK: - Playback Settings
     var resumePlaybackBehavior: String = "Ask"
     var nextEpisodeBehavior: String = "On · 10 s"
+    var playAtOnce: Bool = false
     var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
     var dolbyVisionEnabled: Bool = true
@@ -61,6 +64,8 @@ class AppSettings {
     var homeHeroStyle: String = "Ambient"
     var moviesLayoutStyle: String = "Grid"
     var showWatchedIndicators: Bool = true
+    var blurUnwatchedEpisodeThumbnails: Bool = false
+    var hideUnwatchedEpisodeDescriptions: Bool = false
     var includeLogosInHome: Bool = true
     var preferredArtworkLanguage: String = "English"
 
@@ -74,6 +79,8 @@ class AppSettings {
         id: String = "default",
         tmdbApiKey: String = "d767cb12181edaa01840442c704329be",
         aioStreamsUrl: String = "",
+        aioStreamsAdditionalUrls: String = "",
+        mdblistApiKey: String = "",
         preferredQuality: String = "4K",
         preferredLanguage: String = "en",
         subtitleLanguage: String = "ar",
@@ -98,6 +105,7 @@ class AppSettings {
         aiTranslationModel: String = "",
         resumePlaybackBehavior: String = "Ask",
         nextEpisodeBehavior: String = "On · 10 s",
+        playAtOnce: Bool = false,
         playerEngineName: String = "AetherEngine",
         audioOutputMode: String = "Dolby Digital Plus 5.1",
         dolbyVisionEnabled: Bool = true,
@@ -119,6 +127,8 @@ class AppSettings {
         homeHeroStyle: String = "Ambient",
         moviesLayoutStyle: String = "Grid",
         showWatchedIndicators: Bool = true,
+        blurUnwatchedEpisodeThumbnails: Bool = false,
+        hideUnwatchedEpisodeDescriptions: Bool = false,
         includeLogosInHome: Bool = true,
         preferredArtworkLanguage: String = "English",
         traktUsername: String = "",
@@ -127,6 +137,8 @@ class AppSettings {
         self.id = id
         self.tmdbApiKey = tmdbApiKey
         self.aioStreamsUrl = aioStreamsUrl
+        self.aioStreamsAdditionalUrls = aioStreamsAdditionalUrls
+        self.mdblistApiKey = mdblistApiKey
         self.preferredQuality = preferredQuality
         self.preferredLanguage = preferredLanguage
         self.subtitleLanguage = subtitleLanguage
@@ -151,6 +163,7 @@ class AppSettings {
         self.aiTranslationModel = aiTranslationModel
         self.resumePlaybackBehavior = resumePlaybackBehavior
         self.nextEpisodeBehavior = nextEpisodeBehavior
+        self.playAtOnce = playAtOnce
         self.playerEngineName = playerEngineName
         self.audioOutputMode = audioOutputMode
         self.dolbyVisionEnabled = dolbyVisionEnabled
@@ -172,6 +185,8 @@ class AppSettings {
         self.homeHeroStyle = homeHeroStyle
         self.moviesLayoutStyle = moviesLayoutStyle
         self.showWatchedIndicators = showWatchedIndicators
+        self.blurUnwatchedEpisodeThumbnails = blurUnwatchedEpisodeThumbnails
+        self.hideUnwatchedEpisodeDescriptions = hideUnwatchedEpisodeDescriptions
         self.includeLogosInHome = includeLogosInHome
         self.preferredArtworkLanguage = preferredArtworkLanguage
         self.traktUsername = traktUsername

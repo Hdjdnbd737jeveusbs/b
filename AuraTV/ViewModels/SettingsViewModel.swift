@@ -27,6 +27,8 @@ final class SettingsViewModel {
 
     var tmdbApiKey: String = "d767cb12181edaa01840442c704329be"
     var aioStreamsUrl: String = ""
+    var aioStreamsAdditionalUrls: String = ""
+    var mdblistApiKey: String = ""
     var preferredQuality: String = "4K"
     var preferredLanguage: String = "en"
     var subtitleLanguage: String = "ar"
@@ -53,6 +55,7 @@ final class SettingsViewModel {
     // Playback
     var resumePlaybackBehavior: String = "Ask"
     var nextEpisodeBehavior: String = "On · 10 s"
+    var playAtOnce: Bool = false
     var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
     var dolbyVisionEnabled: Bool = true
@@ -78,6 +81,8 @@ final class SettingsViewModel {
     var homeHeroStyle: String = "Ambient"
     var moviesLayoutStyle: String = "Grid"
     var showWatchedIndicators: Bool = true
+    var blurUnwatchedEpisodeThumbnails: Bool = false
+    var hideUnwatchedEpisodeDescriptions: Bool = false
     var includeLogosInHome: Bool = true
     var preferredArtworkLanguage: String = "English"
 
@@ -177,6 +182,8 @@ final class SettingsViewModel {
             if let settings = results.first {
                 tmdbApiKey = settings.tmdbApiKey
                 aioStreamsUrl = settings.aioStreamsUrl
+                aioStreamsAdditionalUrls = settings.aioStreamsAdditionalUrls
+                mdblistApiKey = settings.mdblistApiKey
                 preferredQuality = settings.preferredQuality
                 preferredLanguage = settings.preferredLanguage
                 subtitleLanguage = settings.subtitleLanguage
@@ -205,6 +212,7 @@ final class SettingsViewModel {
 
                 resumePlaybackBehavior = settings.resumePlaybackBehavior
                 nextEpisodeBehavior = settings.nextEpisodeBehavior
+                playAtOnce = settings.playAtOnce
                 playerEngineName = Self.playerEngineOptions.contains(settings.playerEngineName) ? settings.playerEngineName : "AetherEngine"
                 audioOutputMode = settings.audioOutputMode
                 dolbyVisionEnabled = settings.dolbyVisionEnabled
@@ -228,6 +236,8 @@ final class SettingsViewModel {
                 homeHeroStyle = settings.homeHeroStyle
                 moviesLayoutStyle = settings.moviesLayoutStyle
                 showWatchedIndicators = settings.showWatchedIndicators
+                blurUnwatchedEpisodeThumbnails = settings.blurUnwatchedEpisodeThumbnails
+                hideUnwatchedEpisodeDescriptions = settings.hideUnwatchedEpisodeDescriptions
                 includeLogosInHome = settings.includeLogosInHome
                 preferredArtworkLanguage = settings.preferredArtworkLanguage
 
@@ -274,6 +284,8 @@ final class SettingsViewModel {
 
             settings.tmdbApiKey = tmdbApiKey
             settings.aioStreamsUrl = aioStreamsUrl
+            settings.aioStreamsAdditionalUrls = aioStreamsAdditionalUrls
+            settings.mdblistApiKey = mdblistApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             settings.preferredQuality = preferredQuality
             settings.preferredLanguage = preferredLanguage
             settings.subtitleLanguage = subtitleLanguage
@@ -298,6 +310,7 @@ final class SettingsViewModel {
 
             settings.resumePlaybackBehavior = resumePlaybackBehavior
             settings.nextEpisodeBehavior = nextEpisodeBehavior
+            settings.playAtOnce = playAtOnce
             settings.playerEngineName = playerEngineName
             settings.audioOutputMode = audioOutputMode
             settings.dolbyVisionEnabled = dolbyVisionEnabled
@@ -321,6 +334,8 @@ final class SettingsViewModel {
             settings.homeHeroStyle = homeHeroStyle
             settings.moviesLayoutStyle = moviesLayoutStyle
             settings.showWatchedIndicators = showWatchedIndicators
+            settings.blurUnwatchedEpisodeThumbnails = blurUnwatchedEpisodeThumbnails
+            settings.hideUnwatchedEpisodeDescriptions = hideUnwatchedEpisodeDescriptions
             settings.includeLogosInHome = includeLogosInHome
             settings.preferredArtworkLanguage = preferredArtworkLanguage
 
@@ -331,6 +346,8 @@ final class SettingsViewModel {
 
             TMDBService.shared.apiKey = tmdbApiKey.isEmpty ? "d767cb12181edaa01840442c704329be" : tmdbApiKey
             AIOStreamsService.shared.manifestURL = aioStreamsUrl
+            AIOStreamsService.shared.additionalManifestURLs = aioStreamsAdditionalUrls
+            MDBListService.shared.apiKey = mdblistApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             SubtitleService.shared.subdlApiKey = subdlApiKey
             SubtitleService.shared.openSubtitlesApiKey = openSubtitlesApiKey
         } catch {

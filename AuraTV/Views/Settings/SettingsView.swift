@@ -12,6 +12,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case serversAccounts = "Servers & Accounts"
     case trakt = "Trakt"
     case artworkMetadata = "Artwork & Metadata"
+    case quickSetup = "Quick Setup / QR"
     case about = "About"
 
     var id: String { rawValue }
@@ -26,6 +27,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .serversAccounts: return "list.bullet.rectangle"
         case .trakt: return "checkmark.circle"
         case .artworkMetadata: return "photo.on.rectangle"
+        case .quickSetup: return "qrcode"
         case .about: return "info.circle"
         }
     }
@@ -39,15 +41,17 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .skipIntroCredits:
             return "What happens at intros, recaps, and end credits."
         case .appearance:
-            return "Interface language, Home hero layout, Movies layout, and watched badges."
+            return "Interface language, Home hero layout, Movies layout, and spoiler protection."
         case .library:
             return "Preferred quality, local watch history backup, and watchlist cleanup."
         case .serversAccounts:
-            return "TMDB metadata key, AIOStreams manifest URL, and subtitle provider keys."
+            return "TMDB, AIOStreams, MDBList ratings, and subtitle integrations."
         case .trakt:
             return "Scrobbling and watched history sync settings."
         case .artworkMetadata:
             return "Transparent title logos, artwork language preferences, and subtitle auto-sync."
+        case .quickSetup:
+            return "Scan a QR code from your phone to enter manifest URLs and API keys effortlessly."
         case .about:
             return "AuraTV build details, video engine, and design specifications."
         }
@@ -70,6 +74,7 @@ struct SettingsView: View {
     @State private var selectedCategory: SettingsCategory = .playback
     @State private var isEditingCategory: Bool = false
     @State private var showSavedAlert: Bool = false
+    @State private var showPhoneQRSetup: Bool = false
 
     @FocusState private var focusedCategory: SettingsCategory?
 
@@ -119,6 +124,14 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("All preferences and API settings have been saved.")
+        }
+        .sheet(isPresented: $showPhoneQRSetup) {
+            PhoneQRSetupView(settingsViewModel: viewModel) {
+                viewModel.loadSettings(context: modelContext)
+            }
+        }
+        .onDisappear {
+            viewModel.saveSettings(context: modelContext)
         }
     }
 
@@ -369,6 +382,13 @@ struct SettingsView: View {
                 SummaryTileItem(label: "Custom artwork", value: artworkOverrides.isEmpty ? "Default" : "\(artworkOverrides.count) titles"),
                 SummaryTileItem(label: "Auto sync subtitles", value: viewModel.autoSyncSubtitles ? "On" : "Off")
             ]
+        case .quickSetup:
+            return [
+                SummaryTileItem(label: "Phone Server", value: "On-Demand"),
+                SummaryTileItem(label: "AIOStreams", value: viewModel.aioStreamsUrl.isEmpty ? "Not Set" : "Configured"),
+                SummaryTileItem(label: "MDBList", value: viewModel.mdblistApiKey.isEmpty ? "Optional" : "Configured"),
+                SummaryTileItem(label: "AI Translation", value: viewModel.aiTranslationApiKey.isEmpty ? "Optional" : "Configured")
+            ]
         case .about:
             return [
                 SummaryTileItem(label: "Version", value: "1.0.0"),
@@ -461,6 +481,11 @@ struct SettingsView: View {
                 viewModel.nextEpisodeBehavior = viewModel.nextValue(after: viewModel.nextEpisodeBehavior, in: SettingsViewModel.nextEpisodeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            toggleSettingRow(
+                title: "Play at Once (Auto-Play First Stream)",
+                subtitle: "Preserves exact AIOStreams order and starts playing the first returned stream automatically.",
+                isOn: $viewModel.playAtOnce
+            )
             cycleSettingRow(title: "Player Engine", value: viewModel.playerEngineName) {
                 viewModel.playerEngineName = viewModel.nextValue(after: viewModel.playerEngineName, in: SettingsViewModel.playerEngineOptions)
                 viewModel.saveSettings(context: modelContext)
@@ -631,6 +656,16 @@ struct SettingsView: View {
                 subtitle: "Displays a small checkmark badge on watched movie and series posters.",
                 isOn: $viewModel.showWatchedIndicators
             )
+            toggleSettingRow(
+                title: "Blur Unwatched Episode Thumbnails",
+                subtitle: "Blurs Series episode thumbnails for unwatched episodes until watched or revealed.",
+                isOn: $viewModel.blurUnwatchedEpisodeThumbnails
+            )
+            toggleSettingRow(
+                title: "Hide Unwatched Episode Descriptions",
+                subtitle: "Hides Series episode synopses on unwatched episodes until watched, focused, or revealed.",
+                isOn: $viewModel.hideUnwatchedEpisodeDescriptions
+            )
             cycleSettingRow(title: "Interface Language", value: viewModel.displayLanguageName(for: viewModel.preferredLanguage)) {
                 let codes = SettingsViewModel.languageOptions.map(\.code)
                 viewModel.preferredLanguage = viewModel.nextValue(after: viewModel.preferredLanguage, in: codes)
@@ -654,6 +689,9 @@ struct SettingsView: View {
             }
 
         case .serversAccounts:
+            actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode") {
+                showPhoneQRSetup = true
+            }
             textFieldSettingRow(
                 title: "TMDB API Key (v3)",
                 placeholder: "Enter TMDB v3 API Key",
@@ -665,6 +703,12 @@ struct SettingsView: View {
                 placeholder: "https://aiostreams.example.com/manifest.json",
                 text: $viewModel.aioStreamsUrl,
                 isSecure: false
+            )
+            textFieldSettingRow(
+                title: "MDBList API Key (Optional)",
+                placeholder: "Enter MDBList API key (IMDb, RT, Metacritic, Letterboxd)",
+                text: $viewModel.mdblistApiKey,
+                isSecure: true
             )
             textFieldSettingRow(
                 title: "SubDL API Key (Optional)",
@@ -732,6 +776,27 @@ struct SettingsView: View {
             ) {
                 viewModel.clearCustomArtwork(context: modelContext)
             }
+
+        case .quickSetup:
+            actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode.viewfinder") {
+                showPhoneQRSetup = true
+            }
+            infoRow(
+                title: "Local Web Server",
+                value: "Starts only while Phone QR Setup is open and stops immediately on close"
+            )
+            infoRow(
+                title: "AIOStreams / Stremio URLs",
+                value: viewModel.aioStreamsUrl.isEmpty ? "Not Configured" : viewModel.aioStreamsUrl
+            )
+            infoRow(
+                title: "MDBList Ratings",
+                value: viewModel.mdblistApiKey.isEmpty ? "Optional (Not Set)" : "Configured"
+            )
+            infoRow(
+                title: "AI Translation Key",
+                value: viewModel.aiTranslationApiKey.isEmpty ? "Optional (Not Set)" : "Configured (\(viewModel.aiTranslationProvider))"
+            )
 
         case .about:
             infoRow(title: "Application", value: "AuraTV 1.0.0")

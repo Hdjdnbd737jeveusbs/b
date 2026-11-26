@@ -40,9 +40,33 @@ final class AIOStreamsService {
     static let shared = AIOStreamsService()
 
     var manifestURL: String = ""
+    var additionalManifestURLs: String = ""
+
+    var combinedManifestInput: String {
+        let extra = additionalManifestURLs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if extra.isEmpty { return manifestURL }
+        if manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return extra }
+        return "\(manifestURL)\n\(extra)"
+    }
+
+    var allManifestURLs: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        let rawList = ([manifestURL] + additionalManifestURLs.components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ","))))
+        for item in rawList {
+            let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+            result.append(trimmed)
+        }
+        return result
+    }
 
     var baseURL: String {
-        var url = manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.normalizedBaseURL(from: manifestURL)
+    }
+
+    private static func normalizedBaseURL(from rawURL: String) -> String {
+        var url = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
         while url.hasSuffix("/") { url = String(url.dropLast()) }
         if url.hasSuffix("/manifest.json") {
             url = String(url.dropLast("/manifest.json".count))
@@ -93,29 +117,44 @@ final class AIOStreamsService {
         }
     }
 
-    // MARK: - Fetch Streams (Raw)
+    // MARK: - Fetch Streams (Raw Order Preserved)
 
     func fetchStreams(type: String, stremioId: String) async throws -> [StremioStream] {
-        guard !manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let urls = allManifestURLs
+        guard !urls.isEmpty else {
             throw AIOStreamsError.missingManifestURL
         }
 
-        let endpoint = "\(baseURL)/stream/\(type)/\(stremioId).json"
-        guard let url = URL(string: endpoint) else {
-            throw AIOStreamsError.invalidURL
+        var combined: [StremioStream] = []
+        var firstError: Error?
+
+        for manifest in urls {
+            let root = Self.normalizedBaseURL(from: manifest)
+            let endpoint = "\(root)/stream/\(type)/\(stremioId).json"
+            guard let url = URL(string: endpoint) else {
+                if firstError == nil { firstError = AIOStreamsError.invalidURL }
+                continue
+            }
+
+            do {
+                let (data, response) = try await fetchData(from: url)
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    if firstError == nil { firstError = AIOStreamsError.httpError(statusCode: http.statusCode) }
+                    continue
+                }
+                let result = try decoder.decode(StremioStreamResponse.self, from: data)
+                if let items = result.streams {
+                    combined.append(contentsOf: items)
+                }
+            } catch {
+                if firstError == nil { firstError = (error as? AIOStreamsError) ?? AIOStreamsError.decodingError(error) }
+            }
         }
 
-        let (data, response) = try await fetchData(from: url)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw AIOStreamsError.httpError(statusCode: http.statusCode)
+        if combined.isEmpty, let firstError {
+            throw firstError
         }
-
-        do {
-            let result = try decoder.decode(StremioStreamResponse.self, from: data)
-            return result.streams ?? []
-        } catch {
-            throw AIOStreamsError.decodingError(error)
-        }
+        return combined
     }
 
     // MARK: - High-Level: Movie & Series
@@ -137,7 +176,8 @@ final class AIOStreamsService {
             throw AIOStreamsError.noStreamsFound
         }
 
-        streams = sortedStreams(result, preferredQuality: preferredQuality)
+        // Preserve exact stream order returned by AIOStreams without re-sorting or hiding streams.
+        streams = result
         return streams
     }
 
@@ -164,7 +204,8 @@ final class AIOStreamsService {
             throw AIOStreamsError.noStreamsFound
         }
 
-        streams = sortedStreams(result, preferredQuality: preferredQuality)
+        // Preserve exact stream order returned by AIOStreams without re-sorting or hiding streams.
+        streams = result
         return streams
     }
 
