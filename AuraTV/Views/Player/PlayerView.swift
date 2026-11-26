@@ -115,6 +115,12 @@ struct PlayerView: View {
             viewModel.startPeriodicSave(context: modelContext)
             didResolveEnginePreference = true
         }
+        .task(id: viewModel.streamURL) {
+            if !viewModel.isPreviewMode, let url = viewModel.streamURL {
+                viewModel.loadSubtitleSettingsFromPreferences(context: modelContext)
+                await viewModel.loadIntroMarker(for: url)
+            }
+        }
         .onChange(of: viewModel.subtitleSyncSettings) { _, _ in
             viewModel.saveSubtitlePreferences()
             #if canImport(AetherEngine)

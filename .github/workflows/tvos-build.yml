@@ -41,6 +41,9 @@ jobs:
                 resources[1].idPrefixes == ["tt"] else {
               fatalError("Unexpected manifest resources")
           }
+          for (label, cached) in [("Cached", true), ("[RD+] Uncached", false), ("Not Cached", false), ("[RD]", false)] {
+              precondition(StremioStream(name: label).parsedInfo.isCached == cached, label)
+          }
           SWIFT
           xcrun swift "$RUNNER_TEMP/manifest-check.swift"
 

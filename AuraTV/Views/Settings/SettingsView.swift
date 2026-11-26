@@ -552,14 +552,18 @@ struct SettingsView: View {
             }
 
         case .library:
+            textFieldSettingRow(title: "Backup File URL", placeholder: "https://…/history.json", text: $viewModel.backupURL, isSecure: false)
+            Text("Use a direct HTTPS file URL you control. Export uploads with PUT and replaces that file. Import downloads with GET.")
             actionSettingRow(title: "Export Watch History (JSON)", icon: "square.and.arrow.up") {
-                _ = viewModel.exportWatchHistory(context: modelContext)
+                Task { await viewModel.transferBackup(exporting: true, context: modelContext) }
             }
+            .disabled(viewModel.transferringBackup)
             actionSettingRow(title: "Import Watch History (JSON)", icon: "square.and.arrow.down") {
-                if let data = viewModel.exportData {
-                    viewModel.importWatchHistory(data: data, context: modelContext)
-                }
+                Task { await viewModel.transferBackup(exporting: false, context: modelContext) }
             }
+            .disabled(viewModel.transferringBackup)
+            if viewModel.transferringBackup { ProgressView() }
+            if let error = viewModel.error { Text(error).foregroundStyle(.red) }
             actionSettingRow(title: "Clear Watch History", icon: "trash") {
                 viewModel.clearWatchHistory(context: modelContext)
             }

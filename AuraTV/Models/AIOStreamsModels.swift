@@ -200,16 +200,10 @@ struct ParsedStreamInfo: Hashable {
         }
 
         // Cached (debrid)
-        self.isCached = combined.contains("⚡")
-            || combined.contains("CACHED")
-            || combined.contains("[RD+]")
-            || combined.contains("[AD+]")
-            || combined.contains("[PM+]")
-            || combined.contains("[TB+]")
-            || combined.contains("[RD")
-            || combined.contains("[AD")
-            || combined.contains("[PM")
-            || combined.contains("[DL")
+        let explicitlyUncached = combined.range(of: #"\b(?:UN[\s-]?CACHED|NOT\s+CACHED)\b"#, options: .regularExpression) != nil
+        let cachedWord = combined.range(of: #"\bCACHED\b"#, options: .regularExpression) != nil
+        let cachedTags = ["⚡", "[RD+]", "[AD+]", "[PM+]", "[TB+]"]
+        self.isCached = !explicitlyUncached && (cachedWord || cachedTags.contains(where: combined.contains))
 
         // Provider name (first line of `name`)
         self.providerName = name?

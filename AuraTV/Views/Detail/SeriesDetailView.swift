@@ -23,6 +23,7 @@ struct SeriesDetailView: View {
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
     @State private var pendingEpisodeSeason: Int?
+    @State private var startEpisodeFromBeginning = false
     @State private var pendingEpisodeNumber: Int?
     @State private var pendingEpisodeTitle: String?
     @State private var pendingEpisodeStillPath: String?
@@ -50,7 +51,7 @@ struct SeriesDetailView: View {
     }
 
     private func effectiveResumeTime(forSeason season: Int, episode: Int) -> Double {
-        if settingsList.first?.resumePlaybackBehavior == "Start Over" {
+        if startEpisodeFromBeginning || settingsList.first?.resumePlaybackBehavior == "Start Over" {
             return 0
         }
         guard let progress = viewModel.watchProgress,
@@ -329,12 +330,9 @@ struct SeriesDetailView: View {
     @ViewBuilder
     private var technicalBadgesRow: some View {
         HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .filled, fontSize: 12)
-            DolbyVisionBadgeView()
-            BadgeView(text: "5.1", style: .outlined, fontSize: 12)
-            BadgeView(text: "CC", style: .outlined, fontSize: 12)
-            BadgeView(text: "SDH", style: .outlined, fontSize: 12)
-            BadgeView(text: "AR", style: .outlined, fontSize: 12)
+            ForEach(selectedStream?.parsedInfo.techBadges ?? [], id: \.self) { badge in
+                BadgeView(text: badge, style: .outlined, fontSize: 12)
+            }
 
             if let vote = viewModel.seriesDetail?.voteAverage, vote > 0 {
                 HStack(spacing: 4) {
@@ -627,7 +625,7 @@ struct SeriesDetailView: View {
         let s = viewModel.watchProgress?.seasonNumber ?? viewModel.selectedSeasonNumber
         let e = viewModel.watchProgress?.episodeNumber ?? 1
         let ep = viewModel.seasonDetail?.episodes?.first(where: { $0.seasonNumber == s && $0.episodeNumber == e })
-            ?? viewModel.seasonDetail?.episodes?.first
+
 
         if let ep {
             fetchAndPlayEpisode(
@@ -643,18 +641,8 @@ struct SeriesDetailView: View {
     }
 
     private func rewatchSeries() {
-        if let progress = viewModel.watchProgress {
-            progress.currentTime = 0
-            progress.isCompleted = false
-            progress.seasonNumber = 1
-            progress.episodeNumber = 1
-            try? modelContext.save()
-        }
-        if let firstEp = viewModel.seasonDetail?.episodes?.first(where: { $0.episodeNumber == 1 }) {
-            playEpisode(episode: firstEp)
-        } else {
-            fetchAndPlayEpisode(season: 1, episode: 1, title: nil, stillPath: nil)
-        }
+        let first = viewModel.seasonDetail?.episodes?.first { $0.seasonNumber == 1 && $0.episodeNumber == 1 }
+        fetchAndPlayEpisode(season: 1, episode: 1, title: first?.name, stillPath: first?.stillPath, fromBeginning: true)
     }
 
     func playEpisode(episode: TMDBEpisode) {
@@ -672,8 +660,11 @@ struct SeriesDetailView: View {
         title: String?,
         stillPath: String?,
         forcePicker: Bool = false,
+        fromBeginning: Bool = false,
         autoPlayBest: Bool = false
     ) {
+        selectedStream = nil
+        startEpisodeFromBeginning = fromBeginning
         pendingEpisodeSeason = season
         pendingEpisodeNumber = episode
         pendingEpisodeTitle = title
