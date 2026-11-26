@@ -60,6 +60,10 @@ final class PlayerViewModel {
 
     // MARK: - Track Selection
 
+    var audioDelayMs = UserDefaults.standard.integer(forKey: "audioDelayMs") {
+        didSet { UserDefaults.standard.set(audioDelayMs, forKey: "audioDelayMs") }
+    }
+    var engineAudioControlsActive = false
     var availableAudioTracks: [MediaTrack] = []
     var availableSubtitleTracks: [MediaTrack] = []
     var selectedAudioTrackId: Int = 0

@@ -66,10 +66,7 @@ final class SubtitleSyncEngine {
         // Find bucket with highest number of matching cues
         guard let bestBucket = bucketCounts.max(by: { $0.value.count < $1.value.count }),
               bestBucket.value.count >= 3 else {
-            // Fallback to median
-            let sorted = deltas.sorted()
-            let median = sorted[sorted.count / 2]
-            return (median * 100).rounded() / 100
+            return nil
         }
 
         // Average of the best cluster

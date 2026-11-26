@@ -56,6 +56,9 @@ final class SubtitleService {
         // Clean IMDb ID (ensure "tt" prefix)
         let cleanImdb = imdbId.hasPrefix("tt") ? imdbId : "tt\(imdbId)"
 
+        let episodeId = season.flatMap { s in episode.map { "\(cleanImdb):\(s):\($0)" } }
+        results += await AIOStreamsService.shared.addonSubtitles(type: episodeId == nil ? "movie" : "series", id: episodeId ?? cleanImdb)
+
         // 1. Fetch from Wyzie (no key needed, fast)
         let wyzieTracks = await fetchFromWyzie(imdbId: cleanImdb, season: season, episode: episode)
         results.append(contentsOf: wyzieTracks)

@@ -664,6 +664,14 @@ struct PlayerHUDView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 4) {
+                        if viewModel.engineAudioControlsActive {
+                            Text("Audio offset: \(viewModel.audioDelayMs) ms")
+                            HStack {
+                                Button("−50 ms") { viewModel.audioDelayMs = max(-2000, viewModel.audioDelayMs - 50) }
+                                Button("Reset") { viewModel.audioDelayMs = 0 }
+                                Button("+50 ms") { viewModel.audioDelayMs = min(2000, viewModel.audioDelayMs + 50) }
+                            }
+                        }
                         ForEach(viewModel.availableAudioTracks) { track in
                             trackRow(
                                 id: "audio_\(track.id)",

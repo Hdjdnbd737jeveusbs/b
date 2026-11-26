@@ -347,3 +347,14 @@ final class TMDBService {
         }
     }
 }
+
+extension TMDBService {
+    func resolveIMDb(_ id: String, type: String) async throws -> Int {
+        struct Hit: Decodable { let id: Int }
+        struct Matches: Decodable { let movieResults: [Hit]; let tvResults: [Hit] }
+        let found: Matches = try await request(endpoint: "find/" + id,
+            queryItems: [.init(name: "external_source", value: "imdb_id")])
+        guard let hit = (type == "movie" ? found.movieResults : found.tvResults).first else { throw TMDBError.noData }
+        return hit.id
+    }
+}

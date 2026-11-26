@@ -7,6 +7,7 @@ struct StremioManifest: Codable {
     let name: String?
     let description: String?
     let version: String?
+    var idPrefixes: [String]? = nil
     let catalogs: [StremioCatalog]?
     let resources: [StremioResource]?
     let types: [String]?
@@ -241,4 +242,37 @@ enum StreamHDR: String, Hashable {
     case dolbyVision = "Dolby Vision"
 
     var displayName: String { rawValue }
+}
+
+struct InstalledAddon: Codable, Identifiable {
+    let endpoint: URL
+    let manifest: StremioManifest
+    var enabled = true
+    var id: URL { endpoint }
+    var name: String { manifest.name ?? manifest.id ?? "Add-on" }
+
+    func supports(_ resource: String, type: String, id: String) -> Bool {
+        manifest.resources?.contains {
+            $0.name == resource && ($0.types ?? manifest.types ?? []).contains(type)
+                && ($0.idPrefixes ?? manifest.idPrefixes)?.contains(where: id.hasPrefix) != false
+        } == true
+    }
+
+    func url(_ resource: String, _ type: String, _ id: String) -> URL {
+        endpoint.deletingLastPathComponent().appendingPathComponent(resource)
+            .appendingPathComponent(type).appendingPathComponent(id).appendingPathExtension("json")
+    }
+}
+
+struct AddonTitle: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let poster: URL?
+}
+
+struct AddonShelf: Identifiable {
+    let id: URL
+    let name: String
+    let type: String
+    let titles: [AddonTitle]
 }

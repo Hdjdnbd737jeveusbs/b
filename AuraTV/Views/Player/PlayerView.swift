@@ -229,6 +229,10 @@ struct PlayerView: View {
                 viewModel.seekTrigger = nil
                 aetherCoordinator.seek(to: targetTime)
             }
+            .onDisappear { viewModel.engineAudioControlsActive = false }
+            .onChange(of: viewModel.audioDelayMs) { _, ms in
+                aetherCoordinator.engine?.setAudioDelay(Double(ms) / 1000)
+            }
             .onChange(of: viewModel.selectedAudioTrackId) { _, trackId in
                 aetherCoordinator.selectAudioTrack(trackId)
             }
@@ -403,6 +407,10 @@ final class AetherPlayerCoordinator: ObservableObject {
                     options: options
                 )
                 guard !Task.isCancelled else { return }
+                if let viewModel {
+                    viewModel.engineAudioControlsActive = true
+                    engine.setAudioDelay(Double(viewModel.audioDelayMs) / 1000)
+                }
                 if let viewModel, let probe, !self.didNotifyReadyForCurrentLoad, probe.durationSeconds > 0 {
                     viewModel.totalDuration = probe.durationSeconds
                 }
