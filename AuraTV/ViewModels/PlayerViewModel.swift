@@ -151,6 +151,7 @@ final class PlayerViewModel {
     private var activeEmbeddedTrackLanguageCode: String?
     var subtitleSearchText: String = ""
     var imdbId: String = ""
+    private var subtitleAutoMode = "Preferred Languages"
     var preferredSubtitleLanguage: String = "ar"
 
     var isASSTrackActive: Bool {
@@ -366,9 +367,6 @@ final class PlayerViewModel {
         self.didAutoSkipIntro = false
         self.upNextTriggered = false
 
-        Task {
-            await fetchSubtitles()
-        }
     }
 
     enum PreviewScreenMode {
@@ -817,9 +815,9 @@ final class PlayerViewModel {
 
         externalSubtitleTracks = externalTracks
 
-        if revision == subtitleRevision, selectedExternalSubtitle == nil {
+        if !Task.isCancelled, subtitleAutoMode != "Off", revision == subtitleRevision, selectedExternalSubtitle == nil {
             if let preferredTrack = externalTracks.first(where: { $0.languageCode.lowercased() == preferredSubtitleLanguage.lowercased() })
-                ?? externalTracks.first(where: { $0.languageCode == "ar" }) {
+                ?? (subtitleAutoMode == "Always On" ? externalTracks.first : nil) {
                 await selectExternalSubtitleTrack(preferredTrack)
             }
         }
@@ -1034,6 +1032,7 @@ final class PlayerViewModel {
             subtitleSyncSettings.fixReversedPunctuation = settings.fixReversedPunctuation
             subtitleSyncSettings.autoSyncEnabled = settings.autoSyncSubtitles
 
+            subtitleAutoMode = settings.subtitleAutoMode
             preferredSubtitleLanguage = settings.subtitleLanguage
             preferredQuality = settings.preferredQuality
             skipIntroMode = settings.skipIntroMode

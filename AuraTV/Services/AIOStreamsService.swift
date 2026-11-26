@@ -144,7 +144,10 @@ final class AIOStreamsService {
                 }
                 let result = try decoder.decode(StremioStreamResponse.self, from: data)
                 if let items = result.streams {
-                    combined.append(contentsOf: items)
+                    combined.append(contentsOf: items.filter { stream in
+                        guard let raw = stream.url, let url = URL(string: raw), url.host != nil else { return false }
+                        return ["https", "http"].contains(url.scheme?.lowercased() ?? "")
+                    })
                 }
             } catch {
                 if firstError == nil { firstError = (error as? AIOStreamsError) ?? AIOStreamsError.decodingError(error) }
