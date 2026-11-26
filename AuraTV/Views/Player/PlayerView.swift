@@ -716,6 +716,17 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
             }
         }
 
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { status in
+                guard status == .failed else { return }
+                viewModel.isBuffering = false
+                viewModel.isPlaying = false
+                viewModel.playbackError = playerItem.error?.localizedDescription
+                    ?? "The stream could not be played."
+            }
+            .store(in: &context.coordinator.cancellables)
+
         playerItem.publisher(for: \.isPlaybackBufferEmpty)
             .receive(on: DispatchQueue.main)
             .sink { empty in
