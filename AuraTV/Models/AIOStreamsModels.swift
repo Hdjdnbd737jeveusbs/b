@@ -22,6 +22,21 @@ struct StremioResource: Codable {
     let name: String?
     let types: [String]?
     let idPrefixes: [String]?
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let shortName = try? value.decode(String.self) {
+            name = shortName
+            types = nil
+            idPrefixes = nil
+            return
+        }
+
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        name = try fields.decodeIfPresent(String.self, forKey: .name)
+        types = try fields.decodeIfPresent([String].self, forKey: .types)
+        idPrefixes = try fields.decodeIfPresent([String].self, forKey: .idPrefixes)
+    }
 }
 
 // MARK: - Stremio Stream Response
