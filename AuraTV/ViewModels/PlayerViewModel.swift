@@ -67,6 +67,7 @@ final class PlayerViewModel {
     // MARK: - Subtitles, Styling & Sync State
 
     var externalSubtitleTracks: [SubtitleTrackItem] = []
+    private var subtitleSelectionRevision = 0
     var selectedExternalSubtitle: SubtitleTrackItem?
     var activeCues: [AuraSubtitleCue] = []
     var currentSubtitleCue: AuraSubtitleCue?
@@ -613,10 +614,14 @@ final class PlayerViewModel {
 
     @MainActor
     func selectExternalSubtitleTrack(_ track: SubtitleTrackItem?) async {
+        subtitleSelectionRevision += 1
+        let revision = subtitleSelectionRevision
         selectedExternalSubtitle = track
+        isSyncingSubtitles = false
+        activeCues = []
+        if !isPreviewMode { currentSubtitleCue = nil }
 
         guard let track else {
-            activeCues = []
             if !isPreviewMode && activeEmbeddedTextCue == nil { currentSubtitleCue = nil }
             selectedSubtitleTrackId = -1
             return
@@ -628,6 +633,7 @@ final class PlayerViewModel {
 
         do {
             let cues = try await SubtitleService.shared.loadAndParseCues(for: track)
+            guard revision == subtitleSelectionRevision else { return }
             self.activeCues = cues
             self.syncStatusMessage = "\(cues.count) cues loaded (\(track.source.badgeName))"
 
@@ -635,6 +641,7 @@ final class PlayerViewModel {
                 await performSyncNow()
             }
         } catch {
+            guard revision == subtitleSelectionRevision else { return }
             self.activeCues = []
             self.syncStatusMessage = "Could not load subtitle track."
         }
@@ -642,9 +649,12 @@ final class PlayerViewModel {
 
     @MainActor
     func performSyncNow() async {
+        let revision = subtitleSelectionRevision
         isSyncingSubtitles = true
         syncStatusMessage = "Analyzing timing offset..."
-        defer { isSyncingSubtitles = false }
+        defer {
+            if revision == subtitleSelectionRevision { isSyncingSubtitles = false }
+        }
 
         guard !activeCues.isEmpty else {
             syncStatusMessage = isPreviewMode
@@ -656,11 +666,13 @@ final class PlayerViewModel {
         if referenceEmbeddedCues.isEmpty {
             if let englishTrack = externalSubtitleTracks.first(where: { $0.languageCode == "en" && $0.id != selectedExternalSubtitle?.id }) {
                 if let refCues = try? await SubtitleService.shared.loadAndParseCues(for: englishTrack) {
+                    guard revision == subtitleSelectionRevision else { return }
                     self.referenceEmbeddedCues = refCues
                 }
             }
         }
 
+        guard revision == subtitleSelectionRevision else { return }
         guard !referenceEmbeddedCues.isEmpty else {
             syncStatusMessage = "No English reference track found for auto-alignment."
             return
