@@ -94,6 +94,8 @@ final class MoviesViewModel {
                 self.upcomingPage = upcomingRes.page
                 self.upcomingTotalPages = upcomingRes.totalPages
 
+                self.prefetchMovies(Array(popularRes.results.prefix(20)))
+
                 Self.logger.notice("Loaded \(popularRes.results.count) popular, \(topRatedRes.results.count) topRated, \(nowPlayingRes.results.count) nowPlaying, \(upcomingRes.results.count) upcoming movies")
                 print("[MoviesViewModel] Loaded \(popularRes.results.count) popular movies")
             } catch {
@@ -165,6 +167,23 @@ final class MoviesViewModel {
         }
 
         isLoadingMore = false
+    }
+
+    @MainActor
+    func prefetchMovies(_ items: [TMDBMovie]) {
+        var urls: [URL] = []
+        urls.reserveCapacity(items.count + 8)
+        for item in items {
+            if let poster = service.imageURL(path: item.posterPath, size: "w500") {
+                urls.append(poster)
+            }
+        }
+        for item in items.prefix(8) {
+            if let backdrop = service.imageURL(path: item.backdropPath, size: "w1280") {
+                urls.append(backdrop)
+            }
+        }
+        AuraImageCache.shared.prefetch(urls: urls)
     }
 
     // MARK: - Helpers

@@ -8,30 +8,48 @@ struct PosterCardView: View {
     var overridePosterPath: String? = nil
     var isWatched: Bool = false
     var showWatchedBadge: Bool = true
+    var autoPlayTrailersOnFocus: Bool = false
 
     @FocusState private var isFocused: Bool
+    @State private var themeCoordinator = AppThemeCoordinator.shared
+
+    private var isTrailerExpanded: Bool {
+        autoPlayTrailersOnFocus && themeCoordinator.expandedHomeCardKey == "movie_\(movie.id)"
+    }
 
     var body: some View {
         NavigationLink(destination: MovieDetailView(tmdbId: movie.id)) {
             ZStack(alignment: .topTrailing) {
                 if let path = overridePosterPath ?? movie.posterPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(2 / 3, contentMode: .fill)
-                                .frame(width: 215, height: 322)
-                                .clipped()
-                        case .failure, .empty:
-                            posterPlaceholder
-                        @unknown default:
-                            posterPlaceholder
-                        }
+                    AuraCachedImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(2 / 3, contentMode: .fill)
+                            .frame(width: 215, height: 322)
+                            .clipped()
+                    } placeholder: {
+                        posterPlaceholder
                     }
                 } else {
                     posterPlaceholder
+                }
+
+                if isTrailerExpanded {
+                    VStack {
+                        HStack {
+                            Label("Trailer", systemImage: "play.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color.black.opacity(0.75), in: Capsule())
+                                .padding(10)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .transition(.opacity)
                 }
 
                 // Watched indicator badge (top-right circle checkmark)
@@ -54,17 +72,35 @@ struct PosterCardView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
-            .scaleEffect(isFocused ? 1.07 : 1.0)
+            .scaleEffect(isTrailerExpanded ? 1.11 : (isFocused ? 1.07 : 1.0))
             .shadow(
-                color: isFocused ? Color.white.opacity(0.18) : Color.black.opacity(0.45),
-                radius: isFocused ? 18 : 6,
+                color: isFocused ? Color.white.opacity(isTrailerExpanded ? 0.28 : 0.18) : Color.black.opacity(0.45),
+                radius: isFocused ? (isTrailerExpanded ? 24 : 18) : 6,
                 y: isFocused ? 8 : 3
             )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .animation(.easeOut(duration: 0.22), value: isFocused)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isTrailerExpanded)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                themeCoordinator.onHomeCardFocused(
+                    mediaType: "movie",
+                    tmdbId: movie.id,
+                    title: movie.title,
+                    overview: movie.overview,
+                    posterPath: overridePosterPath ?? movie.posterPath,
+                    backdropPath: movie.backdropPath,
+                    releaseYear: movie.releaseDate.map { String($0.prefix(4)) },
+                    voteAverage: movie.voteAverage,
+                    autoPlayTrailers: autoPlayTrailersOnFocus
+                )
+            } else if autoPlayTrailersOnFocus {
+                themeCoordinator.onHomeCardBlurred(mediaType: "movie", tmdbId: movie.id)
+            }
+        }
         .modifier(MediaPosterContextMenuModifier(
             tmdbId: movie.id,
             mediaType: "movie",

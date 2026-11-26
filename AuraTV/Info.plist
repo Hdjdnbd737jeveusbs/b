@@ -44,6 +44,19 @@
     </array>
     <key>NSLocalNetworkUsageDescription</key>
     <string>AuraTV runs a temporary local web server during Phone QR Setup so you can enter API keys and manifest URLs from your phone.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>com.auratv.AuraTV</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>auratv</string>
+            </array>
+        </dict>
+    </array>
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>infuse</string>

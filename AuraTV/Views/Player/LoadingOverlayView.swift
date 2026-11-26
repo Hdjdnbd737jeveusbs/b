@@ -70,18 +70,13 @@ struct LoadingOverlayView: View {
     private var backdropLayer: some View {
         if let path = backdropPath,
            let url = TMDBService.shared.imageURL(path: path, size: "original") {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .ignoresSafeArea()
-                case .failure, .empty:
-                    Color.black.ignoresSafeArea()
-                @unknown default:
-                    Color.black.ignoresSafeArea()
-                }
+            AuraCachedImage(url: url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .ignoresSafeArea()
+            } placeholder: {
+                Color.black.ignoresSafeArea()
             }
         } else {
             Color.black.ignoresSafeArea()

@@ -72,6 +72,9 @@ final class HomeViewModel {
                 let topSeven = Array(movies.results.prefix(7))
                 self.spotlightItems = topSeven
 
+                self.prefetchHomeImages()
+                self.syncTopShelfSnapshot()
+
                 Self.logger.notice("Loaded \(movies.results.count) trending movies and \(series.results.count) trending series")
                 print("[HomeViewModel] Loaded \(movies.results.count) trending movies and \(series.results.count) trending series")
 
@@ -147,9 +150,104 @@ final class HomeViewModel {
 
         do {
             continueWatching = try context.fetch(descriptor)
+            prefetchContinueWatchingImages()
+            syncTopShelfSnapshot()
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func prefetchContinueWatchingImages() {
+        let urls: [URL] = continueWatching.prefix(12).compactMap { item in
+            let path = item.episodeStillPath ?? item.backdropPath ?? item.posterPath
+            return service.imageURL(path: path, size: "w780")
+        }
+        AuraImageCache.shared.prefetch(urls: urls)
+    }
+
+    @MainActor
+    private func prefetchHomeImages() {
+        var urls: [URL] = []
+        urls.reserveCapacity(48)
+
+        for movie in spotlightItems {
+            if let url = service.imageURL(path: movie.backdropPath ?? movie.posterPath, size: "w1280") {
+                urls.append(url)
+            }
+        }
+        for movie in trendingMovies.prefix(20) {
+            if let url = service.imageURL(path: movie.posterPath, size: "w500") {
+                urls.append(url)
+            }
+        }
+        for show in trendingSeries.prefix(20) {
+            if let url = service.imageURL(path: show.posterPath, size: "w500") {
+                urls.append(url)
+            }
+        }
+
+        AuraImageCache.shared.prefetch(urls: urls)
+    }
+
+    @MainActor
+    func syncTopShelfSnapshot() {
+        let cwEntries: [TopShelfEntry] = continueWatching.prefix(10).map { item in
+            let subtitle: String
+            if item.mediaType == "series", let s = item.seasonNumber, let e = item.episodeNumber {
+                if let epTitle = item.episodeTitle, !epTitle.isEmpty {
+                    subtitle = "S\(s) E\(e) · \(epTitle)"
+                } else {
+                    subtitle = "S\(s) E\(e) · \(item.remainingTimeFormatted) left"
+                }
+            } else {
+                subtitle = "\(item.remainingTimeFormatted) left"
+            }
+
+            return TopShelfEntry(
+                tmdbId: item.tmdbId,
+                mediaType: item.mediaType,
+                title: item.title,
+                subtitle: subtitle,
+                imagePath: item.episodeStillPath ?? item.backdropPath ?? item.posterPath,
+                isContinueWatching: true
+            )
+        }
+
+        var featuredEntries: [TopShelfEntry] = []
+        let maxPairs = max(trendingMovies.prefix(6).count, trendingSeries.prefix(6).count)
+        for idx in 0..<maxPairs {
+            if idx < trendingMovies.count {
+                let movie = trendingMovies[idx]
+                featuredEntries.append(TopShelfEntry(
+                    tmdbId: movie.id,
+                    mediaType: "movie",
+                    title: movie.title,
+                    subtitle: movie.releaseDate.map { String($0.prefix(4)) },
+                    imagePath: movie.posterPath ?? movie.backdropPath,
+                    isContinueWatching: false
+                ))
+            }
+            if idx < trendingSeries.count {
+                let show = trendingSeries[idx]
+                featuredEntries.append(TopShelfEntry(
+                    tmdbId: show.id,
+                    mediaType: "series",
+                    title: show.name,
+                    subtitle: show.firstAirDate.map { String($0.prefix(4)) },
+                    imagePath: show.posterPath ?? show.backdropPath,
+                    isContinueWatching: false
+                ))
+            }
+        }
+
+        let snapshot = TopShelfSnapshot(
+            tmdbApiKey: service.apiKey,
+            updatedAt: Date(),
+            continueWatching: cwEntries,
+            featured: featuredEntries
+        )
+        TopShelfSharedStore.save(snapshot)
     }
 
     @MainActor

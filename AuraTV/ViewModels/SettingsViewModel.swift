@@ -83,6 +83,8 @@ final class SettingsViewModel {
     var showWatchedIndicators: Bool = true
     var blurUnwatchedEpisodeThumbnails: Bool = false
     var hideUnwatchedEpisodeDescriptions: Bool = false
+    var backgroundStyle: String = "Soft Glow"
+    var autoPlayMutedTrailers: Bool = true
     var includeLogosInHome: Bool = true
     var preferredArtworkLanguage: String = "English"
 
@@ -105,6 +107,7 @@ final class SettingsViewModel {
     static let qualityOptions = ["4K", "1080p", "720p", "480p"]
     static let homeLayoutOptions = ["Ambient", "Spotlight"]
     static let moviesLayoutOptions = ["Grid", "List"]
+    static let backgroundStyleOptions = AuraBackgroundStyle.allCases.map(\.rawValue)
     static let resumeOptions = ["Ask", "Resume", "Start Over"]
     static let nextEpisodeOptions = ["On · 10 s", "On · 5 s", "Off"]
     static let playerEngineOptions = ["AetherEngine", "AVPlayer"]
@@ -238,6 +241,8 @@ final class SettingsViewModel {
                 showWatchedIndicators = settings.showWatchedIndicators
                 blurUnwatchedEpisodeThumbnails = settings.blurUnwatchedEpisodeThumbnails
                 hideUnwatchedEpisodeDescriptions = settings.hideUnwatchedEpisodeDescriptions
+                backgroundStyle = Self.backgroundStyleOptions.contains(settings.backgroundStyle) ? settings.backgroundStyle : "Soft Glow"
+                autoPlayMutedTrailers = settings.autoPlayMutedTrailers
                 includeLogosInHome = settings.includeLogosInHome
                 preferredArtworkLanguage = settings.preferredArtworkLanguage
 
@@ -336,6 +341,8 @@ final class SettingsViewModel {
             settings.showWatchedIndicators = showWatchedIndicators
             settings.blurUnwatchedEpisodeThumbnails = blurUnwatchedEpisodeThumbnails
             settings.hideUnwatchedEpisodeDescriptions = hideUnwatchedEpisodeDescriptions
+            settings.backgroundStyle = backgroundStyle
+            settings.autoPlayMutedTrailers = autoPlayMutedTrailers
             settings.includeLogosInHome = includeLogosInHome
             settings.preferredArtworkLanguage = preferredArtworkLanguage
 

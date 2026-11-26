@@ -13,19 +13,14 @@ struct CastCardView: View {
                 // Circular profile image
                 if let path = member.profilePath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w185") {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 112, height: 112)
-                                .clipShape(Circle())
-                        case .failure, .empty:
-                            castPlaceholder
-                        @unknown default:
-                            castPlaceholder
-                        }
+                    AuraCachedImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 112, height: 112)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        castPlaceholder
                     }
                 } else {
                     castPlaceholder

@@ -14,6 +14,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "5002"
+               BuildableName = "AuraTVTopShelf.appex"
+               BlueprintName = "AuraTVTopShelf"
+               ReferencedContainer = "container:AuraTV.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "5001"
                BuildableName = "AuraTV.app"
                BlueprintName = "AuraTV"

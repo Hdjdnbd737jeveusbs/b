@@ -50,18 +50,13 @@ struct EpisodeCardView: View {
                     Group {
                         if let path = episode.stillPath,
                            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(16/9, contentMode: .fill)
-                                        .frame(width: 360, height: 202)
-                                case .failure, .empty:
-                                    episodePlaceholder
-                                @unknown default:
-                                    episodePlaceholder
-                                }
+                            AuraCachedImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(16/9, contentMode: .fill)
+                                    .frame(width: 360, height: 202)
+                            } placeholder: {
+                                episodePlaceholder
                             }
                         } else {
                             episodePlaceholder

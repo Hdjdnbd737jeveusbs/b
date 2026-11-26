@@ -66,6 +66,8 @@ class AppSettings {
     var showWatchedIndicators: Bool = true
     var blurUnwatchedEpisodeThumbnails: Bool = false
     var hideUnwatchedEpisodeDescriptions: Bool = false
+    var backgroundStyle: String = "Soft Glow"
+    var autoPlayMutedTrailers: Bool = true
     var includeLogosInHome: Bool = true
     var preferredArtworkLanguage: String = "English"
 
@@ -129,6 +131,8 @@ class AppSettings {
         showWatchedIndicators: Bool = true,
         blurUnwatchedEpisodeThumbnails: Bool = false,
         hideUnwatchedEpisodeDescriptions: Bool = false,
+        backgroundStyle: String = "Soft Glow",
+        autoPlayMutedTrailers: Bool = true,
         includeLogosInHome: Bool = true,
         preferredArtworkLanguage: String = "English",
         traktUsername: String = "",
@@ -187,6 +191,8 @@ class AppSettings {
         self.showWatchedIndicators = showWatchedIndicators
         self.blurUnwatchedEpisodeThumbnails = blurUnwatchedEpisodeThumbnails
         self.hideUnwatchedEpisodeDescriptions = hideUnwatchedEpisodeDescriptions
+        self.backgroundStyle = backgroundStyle
+        self.autoPlayMutedTrailers = autoPlayMutedTrailers
         self.includeLogosInHome = includeLogosInHome
         self.preferredArtworkLanguage = preferredArtworkLanguage
         self.traktUsername = traktUsername

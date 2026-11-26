@@ -75,6 +75,11 @@ final class DetailViewModel {
                 self.mdblistRatings = resolvedRatings
                 self.cast = detail.credits?.cast ?? []
                 self.certification = self.extractMovieCertification(from: detail)
+                self.prefetchDetailAssets(
+                    backdropPath: detail.backdropPath,
+                    posterPath: detail.posterPath,
+                    cast: self.cast
+                )
             } catch {
                 self.error = error.localizedDescription
             }
@@ -129,6 +134,12 @@ final class DetailViewModel {
                     self.selectedSeasonNumber = targetSeason
                     await self.loadSeasonDetail(seriesId: id, seasonNumber: targetSeason)
                 }
+                self.prefetchDetailAssets(
+                    backdropPath: detail.backdropPath,
+                    posterPath: detail.posterPath,
+                    cast: self.cast,
+                    episodes: self.seasonDetail?.episodes ?? []
+                )
             } catch {
                 self.error = error.localizedDescription
             }
@@ -146,9 +157,37 @@ final class DetailViewModel {
             let detail = try await service.fetchSeasonDetails(seriesId: seriesId, seasonNumber: seasonNumber)
             seasonDetail = detail
             selectedSeasonNumber = seasonNumber
+            prefetchDetailAssets(episodes: detail.episodes ?? [])
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func prefetchDetailAssets(
+        backdropPath: String? = nil,
+        posterPath: String? = nil,
+        cast: [TMDBCastMember] = [],
+        episodes: [TMDBEpisode] = []
+    ) {
+        var urls: [URL] = []
+        if let backdrop = service.imageURL(path: backdropPath, size: "original") {
+            urls.append(backdrop)
+        }
+        if let poster = service.imageURL(path: posterPath, size: "w500") {
+            urls.append(poster)
+        }
+        for member in cast.prefix(15) {
+            if let profile = service.imageURL(path: member.profilePath, size: "w185") {
+                urls.append(profile)
+            }
+        }
+        for ep in episodes.prefix(16) {
+            if let still = service.imageURL(path: ep.stillPath, size: "w500") {
+                urls.append(still)
+            }
+        }
+        AuraImageCache.shared.prefetch(urls: urls)
     }
 
     // MARK: - Watchlist Management

@@ -8,9 +8,18 @@ struct HomeView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = HomeViewModel()
+    @State private var themeCoordinator = AppThemeCoordinator.shared
 
     private var heroStyle: HomeHeroStyle {
         HomeHeroStyle(settingValue: settingsList.first?.homeHeroStyle ?? "Ambient")
+    }
+
+    private var backgroundStyle: String {
+        settingsList.first?.backgroundStyle ?? "Soft Glow"
+    }
+
+    private var autoPlayTrailersOnFocus: Bool {
+        settingsList.first?.autoPlayMutedTrailers ?? true
     }
 
     private var showWatchedIndicators: Bool {
@@ -68,7 +77,13 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            Color.auraBackground.ignoresSafeArea()
+            AuraDynamicBackgroundView(
+                styleSetting: backgroundStyle,
+                fallbackBackdropURL: TMDBService.shared.imageURL(
+                    path: viewModel.spotlightItems.first?.backdropPath,
+                    size: "w1280"
+                )
+            )
 
             if viewModel.isLoading && viewModel.trendingMovies.isEmpty {
                 ProgressView()
@@ -85,13 +100,15 @@ struct HomeView: View {
                             runtimes: viewModel.spotlightRuntimes,
                             certifications: viewModel.spotlightCertifications,
                             customBackdrops: customMovieBackdrops,
-                            showLogos: includeLogos
+                            showLogos: includeLogos,
+                            trailerPreview: autoPlayTrailersOnFocus ? themeCoordinator.heroTrailerPreview : nil
                         )
 
                         // Continue Watching Row (16:9 cards with flush bottom progress bar)
                         ContinueWatchingRow(
                             items: viewModel.continueWatching,
-                            backdropOverrides: customContinueBackdrops
+                            backdropOverrides: customContinueBackdrops,
+                            autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
                         )
 
                         // Series Shelf (2:3 clean portrait posters with count)
@@ -101,7 +118,8 @@ struct HomeView: View {
                                     series: series,
                                     overridePosterPath: customSeriesPosters[series.id],
                                     isWatched: viewModel.watchedSeriesIds.contains(series.id),
-                                    showWatchedBadge: showWatchedIndicators
+                                    showWatchedBadge: showWatchedIndicators,
+                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
                                 )
                             }
                         }
@@ -113,7 +131,8 @@ struct HomeView: View {
                                     movie: movie,
                                     overridePosterPath: customMoviePosters[movie.id],
                                     isWatched: viewModel.watchedMovieIds.contains(movie.id),
-                                    showWatchedBadge: showWatchedIndicators
+                                    showWatchedBadge: showWatchedIndicators,
+                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
                                 )
                             }
                         }
@@ -129,6 +148,9 @@ struct HomeView: View {
         }
         .refreshable {
             await viewModel.refresh(context: modelContext)
+        }
+        .onDisappear {
+            themeCoordinator.clearHomePreview()
         }
     }
 }

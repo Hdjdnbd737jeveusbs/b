@@ -94,6 +94,8 @@ final class SeriesViewModel {
                 self.onTheAirPage = onTheAirRes.page
                 self.onTheAirTotalPages = onTheAirRes.totalPages
 
+                self.prefetchSeries(Array(popularRes.results.prefix(20)))
+
                 Self.logger.notice("Loaded \(popularRes.results.count) popular, \(topRatedRes.results.count) topRated, \(airingTodayRes.results.count) airingToday, \(onTheAirRes.results.count) onTheAir series")
                 print("[SeriesViewModel] Loaded \(popularRes.results.count) popular series")
             } catch {
@@ -165,6 +167,23 @@ final class SeriesViewModel {
         }
 
         isLoadingMore = false
+    }
+
+    @MainActor
+    func prefetchSeries(_ items: [TMDBSeries]) {
+        var urls: [URL] = []
+        urls.reserveCapacity(items.count + 8)
+        for item in items {
+            if let poster = service.imageURL(path: item.posterPath, size: "w500") {
+                urls.append(poster)
+            }
+        }
+        for item in items.prefix(8) {
+            if let backdrop = service.imageURL(path: item.backdropPath, size: "w1280") {
+                urls.append(backdrop)
+            }
+        }
+        AuraImageCache.shared.prefetch(urls: urls)
     }
 
     // MARK: - Helpers

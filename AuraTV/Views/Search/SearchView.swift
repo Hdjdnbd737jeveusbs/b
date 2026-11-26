@@ -1,8 +1,10 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Search View (tvOS Native Search)
 
 struct SearchView: View {
+    @Query private var settingsList: [AppSettings]
     @State private var viewModel = SearchViewModel()
     @FocusState private var isFieldFocused: Bool
 
@@ -12,7 +14,7 @@ struct SearchView: View {
 
     var body: some View {
         ZStack {
-            Color.auraBackground.ignoresSafeArea()
+            AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
 
             VStack(alignment: .leading, spacing: 28) {
                 // Search Input Header
@@ -110,17 +112,14 @@ private struct SearchResultCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = result.posterPath ?? result.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(2/3, contentMode: .fill)
-                                    .frame(width: 220, height: 330)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                            default:
-                                placeholder
-                            }
+                        AuraCachedImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(2/3, contentMode: .fill)
+                                .frame(width: 220, height: 330)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } placeholder: {
+                            placeholder
                         }
                     } else {
                         placeholder

@@ -15,19 +15,14 @@ struct SeriesCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     if let path = overrideBackdropPath ?? series.backdropPath ?? series.posterPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(16/9, contentMode: .fill)
-                                    .frame(width: 380, height: 214)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                            case .failure, .empty:
-                                backdropPlaceholder
-                            @unknown default:
-                                backdropPlaceholder
-                            }
+                        AuraCachedImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(16/9, contentMode: .fill)
+                                .frame(width: 380, height: 214)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } placeholder: {
+                            backdropPlaceholder
                         }
                     } else {
                         backdropPlaceholder

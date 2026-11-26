@@ -422,16 +422,13 @@ struct ChangeArtworkView: View {
             ZStack {
                 Group {
                     if let url = TMDBService.shared.imageURL(path: asset.filePath, size: sizeParam) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: selectedTab == .logos ? .fit : .fill)
-                                    .padding(selectedTab == .logos ? 16 : 0)
-                            default:
-                                Color.auraSurface
-                            }
+                        AuraCachedImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: selectedTab == .logos ? .fit : .fill)
+                                .padding(selectedTab == .logos ? 16 : 0)
+                        } placeholder: {
+                            Color.auraSurface
                         }
                     } else {
                         Color.auraSurface
@@ -501,16 +498,14 @@ struct ChangeArtworkView: View {
             ZStack(alignment: .bottomLeading) {
                 if let backdrop = previewBackdropPath,
                    let url = TMDBService.shared.imageURL(path: backdrop, size: "w780") {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 376, height: 190)
-                                .clipped()
-                        } else {
-                            Color.auraSurface.frame(width: 376, height: 190)
-                        }
+                    AuraCachedImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 376, height: 190)
+                            .clipped()
+                    } placeholder: {
+                        Color.auraSurface.frame(width: 376, height: 190)
                     }
                 } else {
                     Color.auraSurface.frame(width: 376, height: 190)
@@ -593,18 +588,16 @@ struct ChangeArtworkView: View {
                     VStack(spacing: 4) {
                         if let poster = previewPosterPath,
                            let posterURL = TMDBService.shared.imageURL(path: poster, size: "w342") {
-                            AsyncImage(url: posterURL) { phase in
-                                if let image = phase.image {
-                                    image
-                                        .resizable()
-                                        .aspectRatio(2 / 3, contentMode: .fill)
-                                        .frame(width: 68, height: 102)
-                                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                                } else {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.auraSurface)
-                                        .frame(width: 68, height: 102)
-                                }
+                            AuraCachedImage(url: posterURL) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(2 / 3, contentMode: .fill)
+                                    .frame(width: 68, height: 102)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.auraSurface)
+                                    .frame(width: 68, height: 102)
                             }
                         }
                         Text(title)

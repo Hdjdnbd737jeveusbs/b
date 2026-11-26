@@ -5,6 +5,7 @@ import SwiftData
 
 struct CollectionsView: View {
     @Query(sort: \WatchlistItem.addedDate, order: .reverse) private var watchlist: [WatchlistItem]
+    @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @Environment(\.modelContext) private var modelContext
 
@@ -23,7 +24,7 @@ struct CollectionsView: View {
 
     var body: some View {
         ZStack {
-            Color.auraBackground.ignoresSafeArea()
+            AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
 
             VStack(alignment: .leading, spacing: 24) {
                 // Header
@@ -97,17 +98,14 @@ private struct WatchlistCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = overridePosterPath ?? item.posterPath ?? item.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(2/3, contentMode: .fill)
-                                    .frame(width: 220, height: 330)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                            default:
-                                placeholder
-                            }
+                        AuraCachedImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(2/3, contentMode: .fill)
+                                .frame(width: 220, height: 330)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } placeholder: {
+                            placeholder
                         }
                     } else {
                         placeholder

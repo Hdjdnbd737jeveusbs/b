@@ -69,6 +69,16 @@ jobs:
           echo "Packaging app bundle: $APP_PATH"
           ls -la "$APP_PATH"
           ls -la "$APP_PATH/Frameworks" || true
+          ls -la "$APP_PATH/PlugIns" || true
+
+          if [ ! -s "$APP_PATH/Assets.car" ]; then
+            echo "::error::Compiled Assets.car missing from $APP_PATH"
+            exit 1
+          fi
+          if [ ! -d "$APP_PATH/PlugIns/AuraTVTopShelf.appex" ]; then
+            echo "::error::Embedded AuraTVTopShelf.appex missing from $APP_PATH/PlugIns"
+            exit 1
+          fi
 
           rm -rf ipa_staging AuraTV.ipa
           mkdir -p ipa_staging/Payload
@@ -81,7 +91,8 @@ jobs:
           fi
 
           ls -lh AuraTV.ipa
-          unzip -l AuraTV.ipa | head -n 40
+          unzip -l AuraTV.ipa | grep -E 'Assets\.car|AuraTVTopShelf\.appex' || true
+          unzip -l AuraTV.ipa | head -n 45
 
       - name: Upload AuraTV.ipa as artifact
         uses: actions/upload-artifact@v4

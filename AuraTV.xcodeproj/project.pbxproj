@@ -72,12 +72,45 @@
 		1063 /* MDBListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* MDBListService.swift */; };
 		1064 /* PhoneQRSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* PhoneQRSetupView.swift */; };
 		1065 /* MDBListRatingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* MDBListRatingsRow.swift */; };
+		1066 /* ImageCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2067 /* ImageCacheService.swift */; };
+		1067 /* TrailerPreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2068 /* TrailerPreviewService.swift */; };
+		1068 /* AppThemeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2069 /* AppThemeCoordinator.swift */; };
+		1069 /* TopShelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* TopShelfStore.swift */; };
+		1070 /* ContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2071 /* ContentProvider.swift */; };
+		1071 /* AuraTVTopShelf.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0002 /* AuraTVTopShelf.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1072 /* TopShelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* TopShelfStore.swift */; };
 		B003 /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* AetherEngine */; };
 		B006 /* SwiftAssRenderer in Frameworks */ = {isa = PBXBuildFile; productRef = B005 /* SwiftAssRenderer */; };
+		B009 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = B008 /* Nuke */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5002;
+			remoteInfo = AuraTVTopShelf;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8501 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1071 /* AuraTVTopShelf.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0001 /* AuraTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AuraTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0002 /* AuraTVTopShelf.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AuraTVTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2001 /* AuraTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuraTVApp.swift; sourceTree = "<group>"; };
 		2002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -144,6 +177,14 @@
 		2064 /* MDBListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBListService.swift; sourceTree = "<group>"; };
 		2065 /* PhoneQRSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneQRSetupView.swift; sourceTree = "<group>"; };
 		2066 /* MDBListRatingsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBListRatingsRow.swift; sourceTree = "<group>"; };
+		2067 /* ImageCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCacheService.swift; sourceTree = "<group>"; };
+		2068 /* TrailerPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerPreviewService.swift; sourceTree = "<group>"; };
+		2069 /* AppThemeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeCoordinator.swift; sourceTree = "<group>"; };
+		2070 /* TopShelfStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopShelfStore.swift; sourceTree = "<group>"; };
+		2071 /* ContentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentProvider.swift; sourceTree = "<group>"; };
+		2072 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2073 /* AuraTVTopShelf.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AuraTVTopShelf.entitlements; sourceTree = "<group>"; };
+		2074 /* AuraTV.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AuraTV.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +194,14 @@
 			files = (
 				B003 /* AetherEngine in Frameworks */,
 				B006 /* SwiftAssRenderer in Frameworks */,
+				B009 /* Nuke in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -163,6 +212,8 @@
 			isa = PBXGroup;
 			children = (
 				4001 /* AuraTV */,
+				4019 /* Shared */,
+				4020 /* AuraTVTopShelf */,
 				4007 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -173,6 +224,7 @@
 				2001 /* AuraTVApp.swift */,
 				2002 /* ContentView.swift */,
 				2033 /* Info.plist */,
+				2074 /* AuraTV.entitlements */,
 				2003 /* Assets.xcassets */,
 				4017 /* Resources */,
 				4002 /* Components */,
@@ -206,6 +258,7 @@
 			children = (
 				2004 /* Color+Theme.swift */,
 				2005 /* View+Focus.swift */,
+				2069 /* AppThemeCoordinator.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -236,6 +289,8 @@
 				2060 /* AITranslationService.swift */,
 				2063 /* LocalConfigServer.swift */,
 				2064 /* MDBListService.swift */,
+				2067 /* ImageCacheService.swift */,
+				2068 /* TrailerPreviewService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -258,6 +313,7 @@
 			isa = PBXGroup;
 			children = (
 				0001 /* AuraTV.app */,
+				0002 /* AuraTVTopShelf.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -376,6 +432,24 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
+		4019 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				2070 /* TopShelfStore.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		4020 /* AuraTVTopShelf */ = {
+			isa = PBXGroup;
+			children = (
+				2071 /* ContentProvider.swift */,
+				2072 /* Info.plist */,
+				2073 /* AuraTVTopShelf.entitlements */,
+			);
+			path = AuraTVTopShelf;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -386,19 +460,39 @@
 				7001 /* Sources */,
 				3001 /* Frameworks */,
 				8001 /* Resources */,
+				8501 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C001 /* PBXTargetDependency */,
 			);
 			name = AuraTV;
 			packageProductDependencies = (
 				B002 /* AetherEngine */,
 				B005 /* SwiftAssRenderer */,
+				B008 /* Nuke */,
 			);
 			productName = AuraTV;
 			productReference = 0001 /* AuraTV.app */;
 			productType = "com.apple.product-type.application";
+		};
+		5002 /* AuraTVTopShelf */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6002 /* Build configuration list for PBXNativeTarget "AuraTVTopShelf" */;
+			buildPhases = (
+				7002 /* Sources */,
+				3002 /* Frameworks */,
+				8002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AuraTVTopShelf;
+			productName = AuraTVTopShelf;
+			productReference = 0002 /* AuraTVTopShelf.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -411,6 +505,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					5001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					5002 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -427,12 +524,14 @@
 			packageReferences = (
 				B001 /* XCRemoteSwiftPackageReference "AetherEngine" */,
 				B004 /* XCRemoteSwiftPackageReference "swift-ass-renderer" */,
+				B007 /* XCRemoteSwiftPackageReference "Nuke" */,
 			);
 			productRefGroup = 4007 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				5001 /* AuraTV */,
+				5002 /* AuraTVTopShelf */,
 			);
 		};
 /* End PBXProject section */
@@ -449,6 +548,13 @@
 				1056 /* Tajawal-Regular.ttf in Resources */,
 				1057 /* Tajawal-Medium.ttf in Resources */,
 				1058 /* Tajawal-Bold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -517,10 +623,31 @@
 				1063 /* MDBListService.swift in Sources */,
 				1064 /* PhoneQRSetupView.swift in Sources */,
 				1065 /* MDBListRatingsRow.swift in Sources */,
+				1066 /* ImageCacheService.swift in Sources */,
+				1067 /* TrailerPreviewService.swift in Sources */,
+				1068 /* AppThemeCoordinator.swift in Sources */,
+				1069 /* TopShelfStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1070 /* ContentProvider.swift in Sources */,
+				1072 /* TopShelfStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5002 /* AuraTVTopShelf */;
+			targetProxy = C002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		9001 /* Debug */ = {
@@ -573,6 +700,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AuraTV/AuraTV.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -596,6 +724,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AuraTV/AuraTV.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -608,6 +737,54 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.auratv.AuraTV;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
+		9005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AuraTVTopShelf/AuraTVTopShelf.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AuraTVTopShelf/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.auratv.AuraTV.TopShelf;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		9006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AuraTVTopShelf/AuraTVTopShelf.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AuraTVTopShelf/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.auratv.AuraTV.TopShelf;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
 				TVOS_DEPLOYMENT_TARGET = 18.0;
@@ -635,6 +812,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		6002 /* Build configuration list for PBXNativeTarget "AuraTVTopShelf" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9005 /* Debug */,
+				9006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -654,6 +840,14 @@
 				version = 1.3.1;
 			};
 		};
+		B007 /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.8.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -666,6 +860,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B004 /* XCRemoteSwiftPackageReference "swift-ass-renderer" */;
 			productName = SwiftAssRenderer;
+		};
+		B008 /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B007 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
 		};
 /* End XCSwiftPackageProductDependency section */
 

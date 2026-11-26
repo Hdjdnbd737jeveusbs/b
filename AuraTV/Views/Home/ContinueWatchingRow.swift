@@ -5,6 +5,7 @@ import SwiftUI
 struct ContinueWatchingRow: View {
     let items: [WatchHistory]
     var backdropOverrides: [String: String] = [:]
+    var autoPlayTrailersOnFocus: Bool = false
 
     var body: some View {
         if !items.isEmpty {
@@ -18,7 +19,11 @@ struct ContinueWatchingRow: View {
                     LazyHStack(spacing: 24) {
                         ForEach(items) { item in
                             let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
-                            ContinueWatchingCard(item: item, overrideBackdropPath: backdropOverrides[key])
+                            ContinueWatchingCard(
+                                item: item,
+                                overrideBackdropPath: backdropOverrides[key],
+                                autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
+                            )
                         }
                     }
                     .padding(.horizontal, 80)
@@ -34,8 +39,10 @@ struct ContinueWatchingRow: View {
 private struct ContinueWatchingCard: View {
     let item: WatchHistory
     var overrideBackdropPath: String? = nil
+    var autoPlayTrailersOnFocus: Bool = false
 
     @FocusState private var isFocused: Bool
+    @State private var themeCoordinator = AppThemeCoordinator.shared
 
     var body: some View {
         NavigationLink(destination: destinationView) {
@@ -86,6 +93,23 @@ private struct ContinueWatchingCard: View {
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                themeCoordinator.onHomeCardFocused(
+                    mediaType: item.mediaType,
+                    tmdbId: item.tmdbId,
+                    title: item.title,
+                    overview: nil,
+                    posterPath: item.posterPath,
+                    backdropPath: overrideBackdropPath ?? item.backdropPath ?? item.episodeStillPath,
+                    releaseYear: nil,
+                    voteAverage: nil,
+                    autoPlayTrailers: autoPlayTrailersOnFocus
+                )
+            } else if autoPlayTrailersOnFocus {
+                themeCoordinator.onHomeCardBlurred(mediaType: item.mediaType, tmdbId: item.tmdbId)
+            }
+        }
     }
 
     private var subtitleText: String {
@@ -116,19 +140,14 @@ private struct ContinueWatchingCard: View {
         let imagePath = item.episodeStillPath ?? overrideBackdropPath ?? item.backdropPath ?? item.posterPath
         if let path = imagePath,
            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(16 / 9, contentMode: .fill)
-                        .frame(width: 340, height: 191)
-                        .clipped()
-                case .failure, .empty:
-                    placeholder
-                @unknown default:
-                    placeholder
-                }
+            AuraCachedImage(url: url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(16 / 9, contentMode: .fill)
+                    .frame(width: 340, height: 191)
+                    .clipped()
+            } placeholder: {
+                placeholder
             }
         } else {
             placeholder

@@ -259,13 +259,13 @@ struct PlayerView: View {
         ZStack {
             if let path = viewModel.backdropPath,
                let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .ignoresSafeArea()
-                    }
+                AuraCachedImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .ignoresSafeArea()
+                } placeholder: {
+                    Color.black.ignoresSafeArea()
                 }
             }
             Color.black.opacity(0.28).ignoresSafeArea()

@@ -80,7 +80,12 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            Color.auraBackground.ignoresSafeArea()
+            AuraDynamicBackgroundView(
+                styleSetting: viewModel.backgroundStyle,
+                fallbackBackdropURL: viewModel.ambientBannerBackdropPath.flatMap {
+                    TMDBService.shared.imageURL(path: $0, size: "w780")
+                }
+            )
 
             HStack(alignment: .top, spacing: 48) {
                 // LEFT COLUMN: Settings Title + Vertical 9-Item Sidebar
@@ -222,16 +227,16 @@ struct SettingsView: View {
             ZStack {
                 if let path = viewModel.ambientBannerBackdropPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: geo.size.width, height: 240)
-                                .clipped()
-                                .blur(radius: 16)
-                                .opacity(0.45)
-                        }
+                    AuraCachedImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: 240)
+                            .clipped()
+                            .blur(radius: 16)
+                            .opacity(0.45)
+                    } placeholder: {
+                        Color.clear.frame(width: geo.size.width, height: 240)
                     }
                 } else {
                     LinearGradient(
@@ -643,6 +648,15 @@ struct SettingsView: View {
             )
 
         case .appearance:
+            cycleSettingRow(title: "Background Style", value: viewModel.backgroundStyle) {
+                viewModel.backgroundStyle = viewModel.nextValue(after: viewModel.backgroundStyle, in: SettingsViewModel.backgroundStyleOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
+            toggleSettingRow(
+                title: "Auto-Play Muted Trailers on Focus",
+                subtitle: "Expands focused Home cards and plays muted TMDB trailer previews after 2 seconds.",
+                isOn: $viewModel.autoPlayMutedTrailers
+            )
             cycleSettingRow(title: "Home Hero Layout", value: viewModel.homeHeroStyle) {
                 viewModel.homeHeroStyle = viewModel.nextValue(after: viewModel.homeHeroStyle, in: SettingsViewModel.homeLayoutOptions)
                 viewModel.saveSettings(context: modelContext)

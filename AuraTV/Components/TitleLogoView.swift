@@ -23,22 +23,15 @@ struct TitleLogoView: View {
         Group {
             if let path = effectivePath,
                let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
-                            .shadow(color: .black.opacity(0.65), radius: 12, y: 4)
-                    case .failure:
-                        fallbackTitleView
-                    case .empty:
-                        fallbackTitleView
-                            .opacity(0.85)
-                    @unknown default:
-                        fallbackTitleView
-                    }
+                AuraCachedImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
+                        .shadow(color: .black.opacity(0.65), radius: 12, y: 4)
+                } placeholder: {
+                    fallbackTitleView
+                        .opacity(0.85)
                 }
             } else {
                 fallbackTitleView

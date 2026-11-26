@@ -69,7 +69,10 @@ struct MovieDetailView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                Color.auraBackground.ignoresSafeArea()
+                AuraDynamicBackgroundView(
+                    styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow",
+                    fallbackBackdropURL: effectiveBackdropPath.flatMap { TMDBService.shared.imageURL(path: $0, size: "original") }
+                )
 
                 // Full-bleed dark cinema backdrop + left & bottom vignettes
                 backdropLayer(geometry: geometry)
@@ -110,6 +113,10 @@ struct MovieDetailView: View {
         .ignoresSafeArea()
         .task {
             await viewModel.loadMovieDetail(id: tmdbId, context: modelContext)
+            AppThemeCoordinator.shared.updateFocusedArtwork(
+                posterPath: effectivePosterPath,
+                backdropPath: effectiveBackdropPath
+            )
         }
         .sheet(isPresented: $showStreamPicker) {
             StreamPickerSheet(
@@ -201,50 +208,43 @@ struct MovieDetailView: View {
         ZStack(alignment: .topTrailing) {
             if let path = effectiveBackdropPath,
                let url = TMDBService.shared.imageURL(path: path, size: "original") {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geometry.size.width * 0.78, height: height)
-                            .clipped()
-                    case .failure, .empty:
-                        backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
-                    @unknown default:
-                        backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
-                    }
+                AuraCachedImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width * 0.78, height: height)
+                        .clipped()
+                } placeholder: {
+                    backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
                 }
             } else {
                 backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
             }
         }
         .frame(width: geometry.size.width, height: height, alignment: .topTrailing)
-        .overlay {
-            // Left horizontal fade into #090B10
+        .mask(
             LinearGradient(
                 stops: [
-                    .init(color: Color.auraBackground, location: 0.0),
-                    .init(color: Color.auraBackground.opacity(0.95), location: 0.24),
-                    .init(color: Color.auraBackground.opacity(0.68), location: 0.45),
-                    .init(color: .clear, location: 0.85)
+                    .init(color: .clear, location: 0.0),
+                    .init(color: .black.opacity(0.06), location: 0.24),
+                    .init(color: .black.opacity(0.34), location: 0.46),
+                    .init(color: .black, location: 0.85)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
             )
-        }
-        .overlay {
-            // Bottom vertical vignette into #090B10
+        )
+        .mask(
             LinearGradient(
                 stops: [
-                    .init(color: .clear, location: 0.45),
-                    .init(color: Color.auraBackground.opacity(0.75), location: 0.80),
-                    .init(color: Color.auraBackground, location: 1.0)
+                    .init(color: .black, location: 0.45),
+                    .init(color: .black.opacity(0.25), location: 0.80),
+                    .init(color: .clear, location: 1.0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-        }
+        )
     }
 
     @ViewBuilder

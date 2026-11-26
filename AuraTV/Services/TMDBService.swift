@@ -158,6 +158,13 @@ final class TMDBService {
         try await request(endpoint: "tv/\(id)/external_ids")
     }
 
+    // MARK: - Videos / Trailers
+
+    func fetchVideos(mediaType: String, id: Int) async throws -> TMDBVideosResponse {
+        let normalizedType = mediaType == "series" ? "tv" : mediaType
+        return try await request(endpoint: "\(normalizedType)/\(id)/videos")
+    }
+
     // MARK: - Images & Title Logos
 
     /// Fetch available logos, backdrops, and posters for a movie or TV series.

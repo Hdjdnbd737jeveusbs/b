@@ -62,6 +62,13 @@ struct ContentView: View {
 
     @State private var selectedTab: AppTab = ContentView.initialTabFromArguments()
     @State private var launchMode: ScreenshotLaunchMode = ContentView.screenshotLaunchModeFromArguments()
+    @State private var deepLinkDestination: DeepLinkDestination?
+
+    private struct DeepLinkDestination: Identifiable, Hashable {
+        let mediaType: String
+        let tmdbId: Int
+        var id: String { "\(mediaType)-\(tmdbId)" }
+    }
 
     enum AppTab: String, Hashable, CaseIterable {
         case search = "Search"
@@ -184,6 +191,53 @@ struct ContentView: View {
             Self.logger.notice("ContentView active tab: \(activeMode, privacy: .public)")
             print("[AuraTV] ContentView active tab: \(activeMode)")
         }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab != .home {
+                AppThemeCoordinator.shared.clearHomePreview()
+            }
+        }
+        .onOpenURL { url in
+            guard let destination = Self.parseDeepLink(url) else { return }
+            Self.logger.notice("Opening Top Shelf deep link: \(destination.mediaType, privacy: .public) id=\(destination.tmdbId)")
+            if case .standard = launchMode {
+                selectedTab = .home
+            }
+            deepLinkDestination = destination
+        }
+        .sheet(item: $deepLinkDestination) { dest in
+            NavigationStack {
+                if dest.mediaType == "series" {
+                    SeriesDetailView(tmdbId: dest.tmdbId)
+                } else {
+                    MovieDetailView(tmdbId: dest.tmdbId)
+                }
+            }
+        }
+    }
+
+    private static func parseDeepLink(_ url: URL) -> DeepLinkDestination? {
+        guard url.scheme?.lowercased() == "auratv" else { return nil }
+        let host = url.host?.lowercased() ?? ""
+
+        if host == "detail",
+           let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let queryItems = components.queryItems {
+            let typeVal = queryItems.first(where: { $0.name == "type" })?.value?.lowercased() ?? "movie"
+            if let rawId = queryItems.first(where: { $0.name == "id" })?.value,
+               let tmdbId = Int(rawId), tmdbId > 0 {
+                let normalizedType = (typeVal == "series" || typeVal == "tv") ? "series" : "movie"
+                return DeepLinkDestination(mediaType: normalizedType, tmdbId: tmdbId)
+            }
+        }
+
+        if (host == "movie" || host == "series" || host == "tv"),
+           let idSegment = url.pathComponents.first(where: { Int($0) != nil }),
+           let tmdbId = Int(idSegment), tmdbId > 0 {
+            let normalizedType = (host == "series" || host == "tv") ? "series" : "movie"
+            return DeepLinkDestination(mediaType: normalizedType, tmdbId: tmdbId)
+        }
+
+        return nil
     }
 }
 

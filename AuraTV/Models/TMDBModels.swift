@@ -216,6 +216,21 @@ struct TMDBExternalIds: Codable {
     let twitterId: String?
 }
 
+// MARK: - Videos / Trailers
+
+struct TMDBVideosResponse: Codable {
+    let results: [TMDBVideo]?
+}
+
+struct TMDBVideo: Codable, Identifiable, Hashable {
+    let id: String
+    let key: String
+    let name: String?
+    let site: String?
+    let type: String?
+    let official: Bool?
+}
+
 // MARK: - Genre ID Dictionaries
 
 struct TMDBGenres {

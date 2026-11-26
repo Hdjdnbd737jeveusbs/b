@@ -29,6 +29,10 @@ struct MoviesView: View {
         settingsList.first?.moviesLayoutStyle == "List"
     }
 
+    private var backgroundStyle: String {
+        settingsList.first?.backgroundStyle ?? "Soft Glow"
+    }
+
     private var customPosters: [Int: String] {
         Dictionary(
             artworkOverrides.filter { $0.mediaType == "movie" }.compactMap { item in
@@ -96,10 +100,23 @@ struct MoviesView: View {
         }
         .onChange(of: focusedMovieId) { _, newId in
             guard let newId else { return }
-            focusedMovie = viewModel.movies(for: viewModel.selectedCategory).first { $0.id == newId }
+            let target = viewModel.movies(for: viewModel.selectedCategory).first { $0.id == newId }
+            focusedMovie = target
+            if let target {
+                AppThemeCoordinator.shared.updateFocusedArtwork(
+                    posterPath: customPosters[target.id] ?? target.posterPath,
+                    backdropPath: customBackdrops[target.id] ?? target.backdropPath
+                )
+            }
         }
         .task {
             await viewModel.loadMovies()
+            if let first = focusedMovie ?? viewModel.movies(for: viewModel.selectedCategory).first ?? viewModel.popularMovies.first {
+                AppThemeCoordinator.shared.updateFocusedArtwork(
+                    posterPath: customPosters[first.id] ?? first.posterPath,
+                    backdropPath: customBackdrops[first.id] ?? first.backdropPath
+                )
+            }
         }
     }
 
@@ -107,25 +124,12 @@ struct MoviesView: View {
 
     @ViewBuilder
     private var ambientBackdropView: some View {
-        ZStack {
-            Color.auraBackground.ignoresSafeArea()
-
-            let targetMovie = focusedMovie ?? viewModel.movies(for: viewModel.selectedCategory).first ?? viewModel.popularMovies.first
-            if let path = targetMovie.flatMap({ customBackdrops[$0.id] ?? $0.backdropPath ?? $0.posterPath }),
-               let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .ignoresSafeArea()
-                            .blur(radius: 40)
-                            .opacity(0.32)
-                            .overlay(Color.auraBackground.opacity(0.65))
-                    }
-                }
-            }
-        }
+        let targetMovie = focusedMovie ?? viewModel.movies(for: viewModel.selectedCategory).first ?? viewModel.popularMovies.first
+        let fallbackPath = targetMovie.flatMap { customBackdrops[$0.id] ?? $0.backdropPath ?? $0.posterPath }
+        AuraDynamicBackgroundView(
+            styleSetting: backgroundStyle,
+            fallbackBackdropURL: TMDBService.shared.imageURL(path: fallbackPath, size: "w1280")
+        )
     }
 
     // MARK: - Category Bar
@@ -181,18 +185,16 @@ private struct MovieListRowView: View {
             HStack(spacing: 24) {
                 if let path = overridePosterPath ?? movie.posterPath ?? movie.backdropPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w342") {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .aspectRatio(2 / 3, contentMode: .fill)
-                                .frame(width: 96, height: 144)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        } else {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.auraSurface)
-                                .frame(width: 96, height: 144)
-                        }
+                    AuraCachedImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(2 / 3, contentMode: .fill)
+                            .frame(width: 96, height: 144)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.auraSurface)
+                            .frame(width: 96, height: 144)
                     }
                 } else {
                     RoundedRectangle(cornerRadius: 12)
