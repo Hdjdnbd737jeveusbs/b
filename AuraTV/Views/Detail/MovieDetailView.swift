@@ -46,10 +46,12 @@ struct MovieDetailView: View {
     }
 
     private var effectiveResumeTime: Double {
-        if settingsList.first?.resumePlaybackBehavior == "Start Over" {
-            return 0
-        }
-        return viewModel.watchProgress?.currentTime ?? 0
+        let settings = settingsList.first
+        return ExternalPlayerService.adjustedResumeTime(
+            rawTime: viewModel.watchProgress?.currentTime ?? 0,
+            behavior: settings?.resumePlaybackBehavior ?? "Ask",
+            rewindSeconds: settings?.rewindOnResumeSeconds ?? 5
+        )
     }
 
     enum DetailButton: Hashable {
@@ -554,21 +556,35 @@ struct MovieDetailView: View {
 
     private func startPlayback(url: URL, stream: StremioStream? = nil, resumeFrom: Double = 0) {
         let detail = viewModel.movieDetail
-        playerViewModel = PlayerViewModel()
-        playerViewModel.configure(
-            url: url,
-            title: detail?.title ?? "Movie",
-            overview: detail?.overview ?? "",
-            backdropPath: effectiveBackdropPath,
-            posterPath: effectivePosterPath,
-            tmdbId: tmdbId,
-            mediaType: "movie",
-            resumeFrom: resumeFrom,
-            imdbId: movieImdbId ?? "",
-            availableStreams: availableStreams,
-            selectedStream: stream ?? selectedStream
-        )
-        showStreamPicker = false
-        showPlayer = true
+        let movieTitle = detail?.title ?? "Movie"
+        let externalName = settingsList.first?.externalPlayer ?? "Built-in AetherEngine"
+
+        ExternalPlayerService.openExternalPlayerIfConfigured(
+            playerName: externalName,
+            streamURL: url,
+            title: movieTitle
+        ) { openedExternally in
+            if openedExternally {
+                showStreamPicker = false
+                return
+            }
+
+            playerViewModel = PlayerViewModel()
+            playerViewModel.configure(
+                url: url,
+                title: movieTitle,
+                overview: detail?.overview ?? "",
+                backdropPath: effectiveBackdropPath,
+                posterPath: effectivePosterPath,
+                tmdbId: tmdbId,
+                mediaType: "movie",
+                resumeFrom: resumeFrom,
+                imdbId: movieImdbId ?? "",
+                availableStreams: availableStreams,
+                selectedStream: stream ?? selectedStream
+            )
+            showStreamPicker = false
+            showPlayer = true
+        }
     }
 }

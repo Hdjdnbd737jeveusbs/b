@@ -3,6 +3,29 @@ import SwiftData
 import Observation
 import CoreGraphics
 
+// MARK: - Aspect Ratio & Live Playback Stats
+
+enum AspectRatioMode: String, CaseIterable {
+    case fit = "Fit"
+    case fill = "Fill"
+    case stretch = "Stretch"
+}
+
+struct PlaybackStats: Equatable {
+    var videoCodec: String = "—"
+    var resolution: String = "—"
+    var dynamicRange: String = "SDR"
+    var observedFPS: String = "—"
+    var droppedFrames: Int = 0
+    var audioCodec: String = "—"
+    var audioChannels: String = "—"
+    var audioBitrate: String = "—"
+    var forwardBuffer: String = "—"
+    var throughput: String = "—"
+    var avSyncGap: String = "—"
+    var activeEngine: String = "AetherEngine"
+}
+
 // MARK: - Audio/Subtitle Track Model
 
 struct MediaTrack: Identifiable, Hashable {
@@ -36,8 +59,43 @@ final class PlayerViewModel {
     var isPreviewMode: Bool = false
     var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
+    var dolbyVisionEnabled: Bool = true
+    var dolbyVisionP7ToHDR10Fallback: Bool = true
+    var hdrEnabled: Bool = true
+    var matchContentFrameRate: Bool = true
+    var losslessMultichannelAudio: Bool = true
+    var objectAudioEnabled: Bool = true
+    var seekCacheEnabled: Bool = true
+    var bufferAheadMode: String = "Standard"
+    var audioSyncOffsetMs: Int = 0
     var playbackError: String?
     var videoDynamicRangeBadge: String?
+
+    // MARK: - Live Stats & Quick Controls
+
+    var showLiveStatsHUD: Bool = false
+    var playbackStats = PlaybackStats()
+    var aspectRatioMode: AspectRatioMode = .fit
+    static let speedOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    static let sleepTimerOptions: [Int] = [0, 15, 30, 45, 60, -1] // -1 = End of Episode
+    var sleepTimerOption: Int = 0
+    var sleepTimerRemainingSeconds: Int?
+    private var sleepTimerCountdown: Timer?
+
+    var speedDisplayText: String {
+        playbackRate == 1.0 ? "1.0x" : String(format: "%gx", playbackRate)
+    }
+
+    var sleepTimerDisplayText: String {
+        if sleepTimerOption == 0 { return "Off" }
+        if sleepTimerOption == -1 { return "End of Episode" }
+        if let remaining = sleepTimerRemainingSeconds, remaining > 0 {
+            let mins = remaining / 60
+            let secs = remaining % 60
+            return String(format: "%d:%02d", mins, secs)
+        }
+        return "\(sleepTimerOption)m"
+    }
 
     // MARK: - Streams & Quality
 
@@ -100,10 +158,11 @@ final class PlayerViewModel {
     var isHUDVisible: Bool = true
     var showAudioPicker: Bool = false
     var showSubtitlePicker: Bool = false
+    var showOptionsMenu: Bool = false
     var showInfoPanel: Bool = false
 
     var hasActiveModalOverlay: Bool {
-        showAudioPicker || showSubtitlePicker || showInfoPanel || showSubtitleSyncSheet || showSubtitleStyleSheet || showStreamPicker
+        showAudioPicker || showSubtitlePicker || showOptionsMenu || showInfoPanel || showSubtitleSyncSheet || showSubtitleStyleSheet || showStreamPicker
     }
 
     // MARK: - Skip Intro / Credits & Up Next
@@ -503,7 +562,63 @@ final class PlayerViewModel {
         isHUDVisible = false
         showAudioPicker = false
         showSubtitlePicker = false
+        showOptionsMenu = false
         showInfoPanel = false
+    }
+
+    func cycleAspectRatio() {
+        let all = AspectRatioMode.allCases
+        if let idx = all.firstIndex(of: aspectRatioMode) {
+            aspectRatioMode = all[(idx + 1) % all.count]
+        } else {
+            aspectRatioMode = .fit
+        }
+        resetHUDTimer()
+    }
+
+    func cyclePlaybackSpeed() {
+        let speeds = Self.speedOptions
+        if let idx = speeds.firstIndex(where: { abs($0 - playbackRate) < 0.01 }) {
+            playbackRate = speeds[(idx + 1) % speeds.count]
+        } else {
+            playbackRate = 1.0
+        }
+        resetHUDTimer()
+    }
+
+    func cycleSleepTimer() {
+        let opts = Self.sleepTimerOptions
+        let currentIdx = opts.firstIndex(of: sleepTimerOption) ?? 0
+        let next = opts[(currentIdx + 1) % opts.count]
+        setSleepTimer(option: next)
+        resetHUDTimer()
+    }
+
+    private func setSleepTimer(option: Int) {
+        sleepTimerCountdown?.invalidate()
+        sleepTimerCountdown = nil
+        sleepTimerOption = option
+
+        guard option > 0 else {
+            sleepTimerRemainingSeconds = nil
+            return
+        }
+
+        sleepTimerRemainingSeconds = option * 60
+        sleepTimerCountdown = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let rem = self.sleepTimerRemainingSeconds else { return }
+                if rem <= 1 {
+                    self.sleepTimerCountdown?.invalidate()
+                    self.sleepTimerCountdown = nil
+                    self.sleepTimerRemainingSeconds = nil
+                    self.sleepTimerOption = 0
+                    self.pause()
+                } else {
+                    self.sleepTimerRemainingSeconds = rem - 1
+                }
+            }
+        }
     }
 
     func toggleHUD() {
@@ -576,9 +691,10 @@ final class PlayerViewModel {
             skipIntro()
         }
 
-        // Auto-advance to next episode if Up Next countdown reaches 0
+        // Auto-advance to next episode if Up Next countdown reaches 0 (unless Sleep Timer is set to End of Episode)
         if showUpNextOverlay,
            !upNextTriggered,
+           sleepTimerOption != -1,
            upNextCountdownRemaining == 0,
            (totalDuration - currentTime) <= 2 {
             playNextEpisodeNow()
@@ -704,6 +820,16 @@ final class PlayerViewModel {
                 ? settings.playerEngineName
                 : "AetherEngine"
             audioOutputMode = settings.audioOutputMode
+            dolbyVisionEnabled = settings.dolbyVisionEnabled
+            dolbyVisionP7ToHDR10Fallback = settings.dolbyVisionP7ToHDR10Fallback
+            hdrEnabled = settings.hdrEnabled
+            matchContentFrameRate = settings.matchContentFrameRate
+            losslessMultichannelAudio = settings.losslessMultichannelAudio
+            objectAudioEnabled = settings.objectAudioEnabled
+            seekCacheEnabled = settings.seekCacheEnabled
+            bufferAheadMode = SettingsViewModel.bufferAheadOptions.contains(settings.bufferAheadMode) ? settings.bufferAheadMode : "Standard"
+            audioSyncOffsetMs = max(-2000, min(2000, settings.audioSyncOffsetMs))
+            playbackStats.activeEngine = playerEngineName
 
             SubtitleService.shared.subdlApiKey = settings.subdlApiKey
             SubtitleService.shared.openSubtitlesApiKey = settings.openSubtitlesApiKey
@@ -807,6 +933,8 @@ final class PlayerViewModel {
     func cleanup() {
         hudHideTimer?.invalidate()
         hudHideTimer = nil
+        sleepTimerCountdown?.invalidate()
+        sleepTimerCountdown = nil
         stopPeriodicSave()
         saveProgress()
     }

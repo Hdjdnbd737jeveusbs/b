@@ -47,6 +47,17 @@ final class SettingsViewModel {
     var nextEpisodeBehavior: String = "On · 10 s"
     var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
+    var dolbyVisionEnabled: Bool = true
+    var dolbyVisionP7ToHDR10Fallback: Bool = true
+    var hdrEnabled: Bool = true
+    var matchContentFrameRate: Bool = true
+    var losslessMultichannelAudio: Bool = true
+    var objectAudioEnabled: Bool = true
+    var seekCacheEnabled: Bool = true
+    var bufferAheadMode: String = "Standard"
+    var rewindOnResumeSeconds: Int = 5
+    var audioSyncOffsetMs: Int = 0
+    var externalPlayer: String = "Built-in AetherEngine"
 
     // Skip Intro & Credits
     var skipIntroMode: String = "Skip After Delay"
@@ -85,6 +96,9 @@ final class SettingsViewModel {
     static let nextEpisodeOptions = ["On · 10 s", "On · 5 s", "Off"]
     static let playerEngineOptions = ["AetherEngine", "AVPlayer"]
     static let audioModeOptions = ["Dolby Digital Plus 5.1", "Stereo"]
+    static let bufferAheadOptions = ["Standard", "Extended", "Unlimited"]
+    static let rewindOnResumeOptions = [0, 3, 5, 10]
+    static let externalPlayerOptions = ["Built-in AetherEngine", "Infuse", "VidHub", "VLC", "SenPlayer"]
     static let subtitleAutoOptions = ["Preferred Languages", "Always On", "Off"]
     static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
     static let fontWeightOptions = ["Regular", "Medium", "Semibold", "Bold"]
@@ -108,6 +122,19 @@ final class SettingsViewModel {
 
     func displayLanguageName(for code: String) -> String {
         Self.languageOptions.first(where: { $0.code == code })?.name ?? code.uppercased()
+    }
+
+    func displayRewindOnResume(_ seconds: Int) -> String {
+        seconds == 0 ? "Off" : "\(seconds) s"
+    }
+
+    func formatAudioSyncOffset(_ ms: Int) -> String {
+        if ms == 0 { return "0 ms" }
+        return ms > 0 ? "+\(ms) ms" : "\(ms) ms"
+    }
+
+    func adjustAudioSyncOffset(by deltaMs: Int) {
+        audioSyncOffsetMs = max(-2000, min(2000, audioSyncOffsetMs + deltaMs))
     }
 
     // MARK: - Load Settings
@@ -144,6 +171,17 @@ final class SettingsViewModel {
                 nextEpisodeBehavior = settings.nextEpisodeBehavior
                 playerEngineName = Self.playerEngineOptions.contains(settings.playerEngineName) ? settings.playerEngineName : "AetherEngine"
                 audioOutputMode = settings.audioOutputMode
+                dolbyVisionEnabled = settings.dolbyVisionEnabled
+                dolbyVisionP7ToHDR10Fallback = settings.dolbyVisionP7ToHDR10Fallback
+                hdrEnabled = settings.hdrEnabled
+                matchContentFrameRate = settings.matchContentFrameRate
+                losslessMultichannelAudio = settings.losslessMultichannelAudio
+                objectAudioEnabled = settings.objectAudioEnabled
+                seekCacheEnabled = settings.seekCacheEnabled
+                bufferAheadMode = Self.bufferAheadOptions.contains(settings.bufferAheadMode) ? settings.bufferAheadMode : "Standard"
+                rewindOnResumeSeconds = Self.rewindOnResumeOptions.contains(settings.rewindOnResumeSeconds) ? settings.rewindOnResumeSeconds : 5
+                audioSyncOffsetMs = max(-2000, min(2000, settings.audioSyncOffsetMs))
+                externalPlayer = Self.externalPlayerOptions.contains(settings.externalPlayer) ? settings.externalPlayer : "Built-in AetherEngine"
 
                 skipIntroMode = settings.skipIntroMode
                 skipRecapMode = settings.skipRecapMode
@@ -219,6 +257,17 @@ final class SettingsViewModel {
             settings.nextEpisodeBehavior = nextEpisodeBehavior
             settings.playerEngineName = playerEngineName
             settings.audioOutputMode = audioOutputMode
+            settings.dolbyVisionEnabled = dolbyVisionEnabled
+            settings.dolbyVisionP7ToHDR10Fallback = dolbyVisionP7ToHDR10Fallback
+            settings.hdrEnabled = hdrEnabled
+            settings.matchContentFrameRate = matchContentFrameRate
+            settings.losslessMultichannelAudio = losslessMultichannelAudio
+            settings.objectAudioEnabled = objectAudioEnabled
+            settings.seekCacheEnabled = seekCacheEnabled
+            settings.bufferAheadMode = bufferAheadMode
+            settings.rewindOnResumeSeconds = rewindOnResumeSeconds
+            settings.audioSyncOffsetMs = audioSyncOffsetMs
+            settings.externalPlayer = externalPlayer
 
             settings.skipIntroMode = skipIntroMode
             settings.skipRecapMode = skipRecapMode

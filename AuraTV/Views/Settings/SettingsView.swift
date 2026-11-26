@@ -453,12 +453,20 @@ struct SettingsView: View {
                 viewModel.resumePlaybackBehavior = viewModel.nextValue(after: viewModel.resumePlaybackBehavior, in: SettingsViewModel.resumeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            cycleSettingRow(title: "Rewind on Resume", value: viewModel.displayRewindOnResume(viewModel.rewindOnResumeSeconds)) {
+                viewModel.rewindOnResumeSeconds = viewModel.nextValue(after: viewModel.rewindOnResumeSeconds, in: SettingsViewModel.rewindOnResumeOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
             cycleSettingRow(title: "Next Episode", value: viewModel.nextEpisodeBehavior) {
                 viewModel.nextEpisodeBehavior = viewModel.nextValue(after: viewModel.nextEpisodeBehavior, in: SettingsViewModel.nextEpisodeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
             cycleSettingRow(title: "Player Engine", value: viewModel.playerEngineName) {
                 viewModel.playerEngineName = viewModel.nextValue(after: viewModel.playerEngineName, in: SettingsViewModel.playerEngineOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
+            cycleSettingRow(title: "External Player", value: viewModel.externalPlayer) {
+                viewModel.externalPlayer = viewModel.nextValue(after: viewModel.externalPlayer, in: SettingsViewModel.externalPlayerOptions)
                 viewModel.saveSettings(context: modelContext)
             }
             cycleSettingRow(title: "Audio Output", value: viewModel.audioOutputMode) {
@@ -469,6 +477,46 @@ struct SettingsView: View {
                 viewModel.preferredQuality = viewModel.nextValue(after: viewModel.preferredQuality, in: SettingsViewModel.qualityOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            cycleSettingRow(title: "Buffer Ahead", value: viewModel.bufferAheadMode) {
+                viewModel.bufferAheadMode = viewModel.nextValue(after: viewModel.bufferAheadMode, in: SettingsViewModel.bufferAheadOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
+            audioSyncOffsetRow
+            toggleSettingRow(
+                title: "Dolby Vision Enabled",
+                subtitle: "Present Dolby Vision on compatible displays.",
+                isOn: $viewModel.dolbyVisionEnabled
+            )
+            toggleSettingRow(
+                title: "Dolby Vision Profile 7 to HDR10 Fallback",
+                subtitle: "Convert Profile 7 enhancement streams to HDR10 for incompatible displays.",
+                isOn: $viewModel.dolbyVisionP7ToHDR10Fallback
+            )
+            toggleSettingRow(
+                title: "HDR Enabled",
+                subtitle: "Allow HDR10 and HLG dynamic range output; turn off to force SDR tone-mapping.",
+                isOn: $viewModel.hdrEnabled
+            )
+            toggleSettingRow(
+                title: "Match Content Frame Rate",
+                subtitle: "Automatically switch display refresh rate and dynamic range criteria.",
+                isOn: $viewModel.matchContentFrameRate
+            )
+            toggleSettingRow(
+                title: "Lossless Multichannel Audio",
+                subtitle: "Bridge TrueHD and DTS tracks up to 7.1 lossless LPCM/FLAC.",
+                isOn: $viewModel.losslessMultichannelAudio
+            )
+            toggleSettingRow(
+                title: "TrueHD Atmos & DTS:X",
+                subtitle: "Enable spatial height and object audio rendering when supported.",
+                isOn: $viewModel.objectAudioEnabled
+            )
+            toggleSettingRow(
+                title: "Seek Cache",
+                subtitle: "Keep decoded media segments cached across seeks and reopens.",
+                isOn: $viewModel.seekCacheEnabled
+            )
 
         case .subtitles:
             cycleSettingRow(title: "Turn On Subtitles", value: viewModel.subtitleAutoMode) {
@@ -756,6 +804,57 @@ struct SettingsView: View {
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
+    }
+
+    private var audioSyncOffsetRow: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Audio Sync Offset")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Current delay: \(viewModel.formatAudioSyncOffset(viewModel.audioSyncOffsetMs))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                Button("-25 ms") {
+                    viewModel.adjustAudioSyncOffset(by: -25)
+                    viewModel.saveSettings(context: modelContext)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .modifier(SettingsFocusablePillModifier())
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+
+                Button("Reset") {
+                    viewModel.audioSyncOffsetMs = 0
+                    viewModel.saveSettings(context: modelContext)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .modifier(SettingsFocusablePillModifier())
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+
+                Button("+25 ms") {
+                    viewModel.adjustAudioSyncOffset(by: 25)
+                    viewModel.saveSettings(context: modelContext)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .modifier(SettingsFocusablePillModifier())
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private func infoRow(title: String, value: String) -> some View {

@@ -95,6 +95,22 @@ struct PlayerView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
+            // Live Playback Stats Overlay (Top-Right Floating Telemetry HUD)
+            if viewModel.showLiveStatsHUD && !viewModel.isPreviewMode {
+                VStack {
+                    HStack {
+                        Spacer()
+                        PlaybackStatsOverlay(stats: viewModel.playbackStats) {
+                            viewModel.showLiveStatsHUD = false
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.top, 52)
+                .padding(.trailing, 70)
+                .transition(.opacity)
+            }
+
             // Buffering indicator during active playback
             if viewModel.isBuffering && viewModel.hasStartedPlayback && !viewModel.isPreviewMode && viewModel.playbackError == nil {
                 ProgressView()
@@ -229,6 +245,15 @@ struct PlayerView: View {
             .onChange(of: viewModel.selectedSubtitleTrackId) { _, trackId in
                 aetherCoordinator.selectSubtitleTrack(trackId)
             }
+            .onChange(of: viewModel.playbackRate) { _, newRate in
+                aetherCoordinator.setPlaybackRate(Float(newRate))
+            }
+            .onChange(of: viewModel.aspectRatioMode) { _, mode in
+                aetherCoordinator.setAspectRatio(mode)
+            }
+            .onChange(of: viewModel.audioSyncOffsetMs) { _, offsetMs in
+                aetherCoordinator.setAudioDelayMs(offsetMs)
+            }
         }
     }
     #endif
@@ -327,9 +352,10 @@ struct PlayerView: View {
             viewModel.showSubtitleStyleSheet = false
         } else if viewModel.showStreamPicker {
             viewModel.showStreamPicker = false
-        } else if viewModel.showAudioPicker || viewModel.showSubtitlePicker || viewModel.showInfoPanel {
+        } else if viewModel.showAudioPicker || viewModel.showSubtitlePicker || viewModel.showOptionsMenu || viewModel.showInfoPanel {
             viewModel.showAudioPicker = false
             viewModel.showSubtitlePicker = false
+            viewModel.showOptionsMenu = false
             viewModel.showInfoPanel = false
         } else if viewModel.isHUDVisible && !viewModel.isPreviewMode {
             viewModel.hideHUD()
@@ -379,14 +405,33 @@ final class AetherPlayerCoordinator: ObservableObject {
             viewModel.resumeFromTime = 0
         }
 
-        let options = LoadOptions(
-            displayCriteriaOwner: .engine,
-            dolbyVisionHandling: .automatic,
-            matchContentEnabled: true,
-            attemptsHDRMasterOnUnprovenPanel: true,
-            audioBridgeMode: .surroundCompat,
-            confirmAtmos: true
-        )
+        var options = LoadOptions()
+        options.displayCriteriaOwner = viewModel.matchContentFrameRate ? .engine : .host
+        options.matchContentEnabled = viewModel.hdrEnabled ? viewModel.matchContentFrameRate : false
+        options.attemptsHDRMasterOnUnprovenPanel = viewModel.hdrEnabled
+        if !viewModel.hdrEnabled || !viewModel.dolbyVisionEnabled {
+            options.dolbyVisionHandling = .baseLayerOnly
+        } else {
+            options.dolbyVisionHandling = .automatic
+        }
+        options.preferDualLayerDolbyVision = viewModel.hdrEnabled && viewModel.dolbyVisionEnabled && !viewModel.dolbyVisionP7ToHDR10Fallback
+        options.audioBridgeMode = viewModel.losslessMultichannelAudio ? .lossless : .surroundCompat
+        options.confirmAtmos = viewModel.objectAudioEnabled
+        options.objectAudioRendering = viewModel.objectAudioEnabled ? .render(.l714) : .off
+        options.retainsSessionCacheAfterStop = viewModel.seekCacheEnabled
+        options.sessionCacheByteBudget = viewModel.seekCacheEnabled ? nil : 0
+        switch viewModel.bufferAheadMode {
+        case "Extended":
+            options.forwardBufferSegments = 45
+        case "Unlimited":
+            options.forwardBufferSegments = Int.max
+        default:
+            options.forwardBufferSegments = 10
+        }
+        options.audioDelaySeconds = Double(viewModel.audioSyncOffsetMs) / 1000.0
+
+        engine.videoGravity = Self.videoGravity(for: viewModel.aspectRatioMode)
+        viewModel.playbackStats.activeEngine = "AetherEngine"
 
         loadTask = Task { @MainActor [weak self, weak viewModel] in
             guard let self else { return }
@@ -427,6 +472,26 @@ final class AetherPlayerCoordinator: ObservableObject {
         guard let engine else { return }
         Task { @MainActor in
             await engine.seek(to: seconds)
+        }
+    }
+
+    func setPlaybackRate(_ rate: Float) {
+        engine?.setRate(rate)
+    }
+
+    func setAspectRatio(_ mode: AspectRatioMode) {
+        engine?.videoGravity = Self.videoGravity(for: mode)
+    }
+
+    func setAudioDelayMs(_ offsetMs: Int) {
+        engine?.setAudioDelay(Double(offsetMs) / 1000.0)
+    }
+
+    private static func videoGravity(for mode: AspectRatioMode) -> AVLayerVideoGravity {
+        switch mode {
+        case .fit: return .resizeAspect
+        case .fill: return .resizeAspectFill
+        case .stretch: return .resize
         }
     }
 
@@ -544,6 +609,10 @@ final class AetherPlayerCoordinator: ObservableObject {
                         if !self.didNotifyReadyForCurrentLoad {
                             self.didNotifyReadyForCurrentLoad = true
                             vm.onPlaybackReady(duration: engine.duration)
+                            if abs(vm.playbackRate - 1.0) > 0.01 {
+                                engine.setRate(Float(vm.playbackRate))
+                            }
+                            self.refreshStats(telemetry: engine.liveTelemetry)
                         } else {
                             vm.onBufferingEnded()
                             vm.isPlaying = true
@@ -559,6 +628,9 @@ final class AetherPlayerCoordinator: ObservableObject {
                     case .ended:
                         vm.onBufferingEnded()
                         vm.isPlaying = false
+                        if vm.sleepTimerOption == -1 {
+                            vm.sleepTimerOption = 0
+                        }
                         vm.saveProgress()
                     case .error(let message):
                         vm.onBufferingEnded()
@@ -685,6 +757,101 @@ final class AetherPlayerCoordinator: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        engine.diagnostics.$liveTelemetry
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] telemetry in
+                MainActor.assumeIsolated {
+                    self?.refreshStats(telemetry: telemetry)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func refreshStats(telemetry: LiveTelemetry?) {
+        guard let engine, let vm = boundViewModel else { return }
+
+        var stats = PlaybackStats()
+        stats.activeEngine = "AetherEngine"
+
+        if let codec = engine.sourceVideoCodecName, !codec.isEmpty {
+            stats.videoCodec = codec.uppercased()
+        } else if let decoder = engine.activeVideoDecoder, !decoder.isEmpty {
+            stats.videoCodec = decoder
+        }
+
+        if engine.sourceVideoWidth > 0 && engine.sourceVideoHeight > 0 {
+            stats.resolution = "\(engine.sourceVideoWidth)x\(engine.sourceVideoHeight)"
+        }
+
+        if engine.videoFormat == .dolbyVision || engine.sourceDVProfile != nil {
+            if engine.dolbyVisionConversion == .profile7ToProfile81 {
+                stats.dynamicRange = "Dolby Vision (P7 -> P8.1)"
+            } else if let profile = engine.sourceDVProfile {
+                stats.dynamicRange = engine.videoFormat == .hdr10
+                    ? "HDR10 (DV P\(profile) Fallback)"
+                    : "Dolby Vision P\(profile)"
+            } else {
+                stats.dynamicRange = "Dolby Vision"
+            }
+        } else {
+            switch engine.videoFormat {
+            case .hdr10Plus: stats.dynamicRange = "HDR10+"
+            case .hdr10:     stats.dynamicRange = "HDR10"
+            case .hlg:       stats.dynamicRange = "HLG"
+            case .sdr:       stats.dynamicRange = "SDR"
+            case .dolbyVision: stats.dynamicRange = "Dolby Vision"
+            }
+        }
+
+        if let fps = telemetry?.observedFps ?? engine.sourceVideoFrameRate, fps > 0 {
+            stats.observedFPS = String(format: "%.2f fps", fps)
+        }
+        stats.droppedFrames = telemetry?.droppedFrameCount ?? 0
+
+        let activeAudioTrack = engine.audioTracks.first(where: { $0.id == engine.activeAudioTrackIndex })
+        if let activeAudioDecoder = engine.activeAudioDecoder, !activeAudioDecoder.isEmpty {
+            stats.audioCodec = activeAudioDecoder
+        } else if let trackCodec = activeAudioTrack?.codec, !trackCodec.isEmpty {
+            stats.audioCodec = trackCodec.uppercased()
+        }
+
+        if let obj = telemetry?.objectAudio {
+            stats.audioChannels = "\(obj.layout.rawValue) (\(obj.activeObjects) obj)"
+        } else if let ch = activeAudioTrack?.channels, ch > 0 {
+            stats.audioChannels = ch == 8 ? "7.1" : (ch == 6 ? "5.1" : "\(ch)ch")
+        }
+
+        if let bridgeMbps = telemetry?.audioBridgeBitrateMbps, bridgeMbps > 0 {
+            stats.audioBitrate = String(format: "%.2f Mbps", bridgeMbps)
+        } else if let bps = activeAudioTrack?.bitrate, bps > 0 {
+            stats.audioBitrate = bps >= 1_000_000
+                ? String(format: "%.2f Mbps", Double(bps) / 1_000_000.0)
+                : "\(bps / 1000) kbps"
+        }
+
+        let clockBuffer = max(0, engine.clock.bufferedPosition - engine.clock.currentTime)
+        if let fwd = telemetry?.forwardBufferSeconds {
+            stats.forwardBuffer = String(format: "%.1f s", fwd)
+        } else if clockBuffer > 0 {
+            stats.forwardBuffer = String(format: "%.1f s", clockBuffer)
+        }
+
+        if let throughput = telemetry?.networkThroughputMbps, throughput > 0 {
+            stats.throughput = String(format: "%.1f Mbps", throughput)
+        } else if let instant = telemetry?.instantBitrateMbps, instant > 0 {
+            stats.throughput = String(format: "%.1f Mbps (media)", instant)
+        }
+
+        if let gapMs = telemetry?.avSyncGapMs {
+            stats.avSyncGap = String(format: "%+.1f ms", gapMs)
+        } else if vm.audioSyncOffsetMs != 0 {
+            stats.avSyncGap = String(format: "%+d ms (offset)", vm.audioSyncOffsetMs)
+        } else {
+            stats.avSyncGap = "0.0 ms"
+        }
+
+        vm.playbackStats = stats
     }
 }
 #endif
@@ -701,8 +868,17 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
         controller.showsPlaybackControls = false
 
         let playerItem = AVPlayerItem(url: url)
+        switch viewModel.bufferAheadMode {
+        case "Extended":
+            playerItem.preferredForwardBufferDuration = 180
+        case "Unlimited":
+            playerItem.preferredForwardBufferDuration = 0
+        default:
+            playerItem.preferredForwardBufferDuration = 40
+        }
         let player = AVPlayer(playerItem: playerItem)
         controller.player = player
+        controller.videoGravity = Self.avVideoGravity(for: viewModel.aspectRatioMode)
 
         let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
@@ -710,8 +886,26 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
             let current = CMTimeGetSeconds(time)
             let total = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
             if !current.isNaN && !total.isNaN {
+                let loadedRanges = player.currentItem?.loadedTimeRanges.compactMap { $0.timeRangeValue } ?? []
+                let bufferedAhead = loadedRanges
+                    .filter { current >= CMTimeGetSeconds($0.start) && current <= CMTimeGetSeconds($0.end) }
+                    .map { CMTimeGetSeconds($0.end) - current }
+                    .max() ?? 0
+                let accessEvent = player.currentItem?.accessLog()?.events.last
+                let droppedCount = accessEvent?.numberOfDroppedVideoFrames
+                let observedBitrate = accessEvent?.observedBitrate
                 Task { @MainActor in
                     viewModel.onTimeUpdate(current: current, total: total)
+                    var stats = viewModel.playbackStats
+                    stats.activeEngine = "AVPlayer"
+                    stats.forwardBuffer = bufferedAhead > 0 ? String(format: "%.1f s", bufferedAhead) : "—"
+                    if let droppedCount {
+                        stats.droppedFrames = droppedCount
+                    }
+                    if let observedBitrate, observedBitrate > 0 {
+                        stats.throughput = String(format: "%.1f Mbps", observedBitrate / 1_000_000.0)
+                    }
+                    viewModel.playbackStats = stats
                 }
             }
         }
@@ -744,8 +938,12 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        controller.videoGravity = Self.avVideoGravity(for: viewModel.aspectRatioMode)
         if viewModel.isPlaying {
-            controller.player?.play()
+            let targetRate = Float(viewModel.playbackRate)
+            if controller.player?.rate != targetRate {
+                controller.player?.rate = targetRate
+            }
         } else {
             controller.player?.pause()
         }
@@ -755,6 +953,14 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
             Task { @MainActor in
                 viewModel.seekTrigger = nil
             }
+        }
+    }
+
+    private static func avVideoGravity(for mode: AspectRatioMode) -> AVLayerVideoGravity {
+        switch mode {
+        case .fit: return .resizeAspect
+        case .fill: return .resizeAspectFill
+        case .stretch: return .resize
         }
     }
 

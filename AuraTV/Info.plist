@@ -33,5 +33,12 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>infuse</string>
+        <string>vidhub</string>
+        <string>vlc-x-callback</string>
+        <string>senplayer</string>
+    </array>
 </dict>
 </plist>

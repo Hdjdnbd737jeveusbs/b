@@ -50,15 +50,17 @@ struct SeriesDetailView: View {
     }
 
     private func effectiveResumeTime(forSeason season: Int, episode: Int) -> Double {
-        if settingsList.first?.resumePlaybackBehavior == "Start Over" {
-            return 0
-        }
         guard let progress = viewModel.watchProgress,
               progress.seasonNumber == season,
               progress.episodeNumber == episode else {
             return 0
         }
-        return progress.currentTime
+        let settings = settingsList.first
+        return ExternalPlayerService.adjustedResumeTime(
+            rawTime: progress.currentTime,
+            behavior: settings?.resumePlaybackBehavior ?? "Ask",
+            rewindSeconds: settings?.rewindOnResumeSeconds ?? 5
+        )
     }
 
     enum SeriesButton: Hashable {
@@ -735,38 +737,53 @@ struct SeriesDetailView: View {
             $0.seasonNumber == season && $0.episodeNumber == episode + 1
         })
 
-        playerViewModel = PlayerViewModel()
-        playerViewModel.configure(
-            url: url,
-            title: detail?.name ?? "Series",
-            overview: detail?.overview ?? "",
-            backdropPath: effectiveBackdropPath,
-            posterPath: effectivePosterPath,
-            tmdbId: tmdbId,
-            mediaType: "series",
-            seasonNumber: season,
-            episodeNumber: episode,
-            episodeTitle: episodeTitle,
-            episodeStillPath: stillPath,
-            resumeFrom: resumeFrom,
-            imdbId: seriesImdbId ?? "",
-            availableStreams: availableStreams,
-            selectedStream: stream ?? selectedStream,
-            nextEpisode: nextEp,
-            onPlayNextEpisode: { ep in
-                showPlayer = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    fetchAndPlayEpisode(
-                        season: ep.seasonNumber,
-                        episode: ep.episodeNumber,
-                        title: ep.name,
-                        stillPath: ep.stillPath,
-                        autoPlayBest: true
-                    )
-                }
+        let seriesTitle = detail?.name ?? "Series"
+        let displayTitle = episodeTitle.map { "\(seriesTitle) — S\(season) • E\(episode): \($0)" } ?? seriesTitle
+        let externalName = settingsList.first?.externalPlayer ?? "Built-in AetherEngine"
+
+        ExternalPlayerService.openExternalPlayerIfConfigured(
+            playerName: externalName,
+            streamURL: url,
+            title: displayTitle
+        ) { openedExternally in
+            if openedExternally {
+                showStreamPicker = false
+                return
             }
-        )
-        showStreamPicker = false
-        showPlayer = true
+
+            playerViewModel = PlayerViewModel()
+            playerViewModel.configure(
+                url: url,
+                title: seriesTitle,
+                overview: detail?.overview ?? "",
+                backdropPath: effectiveBackdropPath,
+                posterPath: effectivePosterPath,
+                tmdbId: tmdbId,
+                mediaType: "series",
+                seasonNumber: season,
+                episodeNumber: episode,
+                episodeTitle: episodeTitle,
+                episodeStillPath: stillPath,
+                resumeFrom: resumeFrom,
+                imdbId: seriesImdbId ?? "",
+                availableStreams: availableStreams,
+                selectedStream: stream ?? selectedStream,
+                nextEpisode: nextEp,
+                onPlayNextEpisode: { ep in
+                    showPlayer = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        fetchAndPlayEpisode(
+                            season: ep.seasonNumber,
+                            episode: ep.episodeNumber,
+                            title: ep.name,
+                            stillPath: ep.stillPath,
+                            autoPlayBest: true
+                        )
+                    }
+                }
+            )
+            showStreamPicker = false
+            showPlayer = true
+        }
     }
 }

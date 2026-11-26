@@ -77,6 +77,12 @@ struct PlayerHUDView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
+            // Right-anchored Playback Options popover
+            if viewModel.showOptionsMenu {
+                optionsMenuOverlay
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
             // Right-anchored Info popover
             if viewModel.showInfoPanel {
                 infoPanelOverlay
@@ -102,6 +108,24 @@ struct PlayerHUDView: View {
             } else {
                 isSearchFieldActive = false
                 focusedControl = .subtitles
+            }
+        }
+        .onChange(of: viewModel.showOptionsMenu) { _, isOpen in
+            if isOpen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    focusedTrackId = "opt_aspect"
+                }
+            } else {
+                focusedControl = .chapters
+            }
+        }
+        .onChange(of: viewModel.showInfoPanel) { _, isOpen in
+            if isOpen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    focusedTrackId = "info_toggle_stats"
+                }
+            } else {
+                focusedControl = .info
             }
         }
         .onTapGesture {
@@ -188,6 +212,7 @@ struct PlayerHUDView: View {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 viewModel.showSubtitlePicker.toggle()
                                 viewModel.showAudioPicker = false
+                                viewModel.showOptionsMenu = false
                                 viewModel.showInfoPanel = false
                             }
                         }
@@ -200,6 +225,7 @@ struct PlayerHUDView: View {
                                 viewModel.showSubtitleStyleSheet = true
                                 viewModel.showSubtitlePicker = false
                                 viewModel.showAudioPicker = false
+                                viewModel.showOptionsMenu = false
                                 viewModel.showInfoPanel = false
                             }
                         }
@@ -211,6 +237,7 @@ struct PlayerHUDView: View {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 viewModel.showAudioPicker.toggle()
                                 viewModel.showSubtitlePicker = false
+                                viewModel.showOptionsMenu = false
                                 viewModel.showInfoPanel = false
                             }
                         }
@@ -219,8 +246,8 @@ struct PlayerHUDView: View {
                             icon: "list.bullet.rectangle",
                             control: .chapters
                         ) {
-                            if !viewModel.availableStreams.isEmpty {
-                                viewModel.showStreamPicker = true
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                viewModel.showOptionsMenu.toggle()
                                 viewModel.showSubtitlePicker = false
                                 viewModel.showAudioPicker = false
                                 viewModel.showInfoPanel = false
@@ -235,6 +262,7 @@ struct PlayerHUDView: View {
                                 viewModel.showInfoPanel.toggle()
                                 viewModel.showSubtitlePicker = false
                                 viewModel.showAudioPicker = false
+                                viewModel.showOptionsMenu = false
                             }
                         }
                     }
@@ -698,6 +726,127 @@ struct PlayerHUDView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 
+    // MARK: - Playback Options Popover (Right-Anchored)
+
+    @ViewBuilder
+    private var optionsMenuOverlay: some View {
+        VStack(alignment: .trailing) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Playback Options")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+
+                Divider().background(Color.white.opacity(0.14))
+
+                VStack(spacing: 4) {
+                    optionCycleRow(
+                        id: "opt_aspect",
+                        icon: "aspectratio",
+                        title: "Aspect Ratio",
+                        value: viewModel.aspectRatioMode.rawValue
+                    ) {
+                        viewModel.cycleAspectRatio()
+                    }
+
+                    optionCycleRow(
+                        id: "opt_speed",
+                        icon: "gauge.with.dots.needle.67percent",
+                        title: "Playback Speed",
+                        value: viewModel.speedDisplayText
+                    ) {
+                        viewModel.cyclePlaybackSpeed()
+                    }
+
+                    optionCycleRow(
+                        id: "opt_sleep",
+                        icon: "moon.zzz",
+                        title: "Sleep Timer",
+                        value: viewModel.sleepTimerDisplayText
+                    ) {
+                        viewModel.cycleSleepTimer()
+                    }
+
+                    optionCycleRow(
+                        id: "opt_stats",
+                        icon: "chart.bar.xaxis",
+                        title: "Live Playback Stats",
+                        value: viewModel.showLiveStatsHUD ? "On" : "Off"
+                    ) {
+                        viewModel.showLiveStatsHUD.toggle()
+                    }
+
+                    if !viewModel.availableStreams.isEmpty {
+                        optionCycleRow(
+                            id: "opt_streams",
+                            icon: "rectangle.stack",
+                            title: "Stream Sources...",
+                            value: viewModel.selectedStream?.parsedInfo.resolution.displayName ?? "Switch"
+                        ) {
+                            viewModel.showOptionsMenu = false
+                            viewModel.showStreamPicker = true
+                        }
+                    }
+                }
+                .padding(10)
+            }
+            .frame(width: 420)
+            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
+            .padding(.trailing, 70)
+            .padding(.bottom, 145)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+    }
+
+    @ViewBuilder
+    private func optionCycleRow(
+        id: String,
+        icon: String,
+        title: String,
+        value: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let isFocused = focusedTrackId == id
+
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.85))
+                    .frame(width: 18)
+
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(isFocused ? Color.black : Color.white)
+
+                Spacer()
+
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.65))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isFocused ? Color.white : Color.clear)
+            )
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+        .focused($focusedTrackId, equals: id)
+        .scaleEffect(isFocused ? 1.01 : 1.0)
+        .animation(.easeOut(duration: 0.14), value: isFocused)
+    }
+
     // MARK: - Stream & Media Info Popover
 
     @ViewBuilder
@@ -711,12 +860,14 @@ struct PlayerHUDView: View {
                         .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(.white)
                     Spacer()
-                    BadgeView(text: viewModel.selectedStream?.parsedInfo.resolution.displayName ?? "4K", style: .filled, fontSize: 12)
+                    BadgeView(text: viewModel.selectedStream?.parsedInfo.resolution.displayName ?? viewModel.playbackStats.resolution, style: .filled, fontSize: 12)
                 }
 
                 Divider().background(Color.white.opacity(0.12))
 
                 infoItem(label: "Title", value: viewModel.title)
+                infoItem(label: "Engine", value: viewModel.playbackStats.activeEngine)
+                infoItem(label: "Dynamic Range", value: viewModel.playbackStats.dynamicRange)
 
                 if let provider = viewModel.selectedStream?.parsedInfo.providerName {
                     infoItem(label: "Provider", value: provider)
@@ -736,6 +887,17 @@ struct PlayerHUDView: View {
                         .foregroundStyle(.white.opacity(0.72))
                         .lineLimit(3)
                         .padding(.top, 4)
+                }
+
+                Divider().background(Color.white.opacity(0.12))
+
+                optionCycleRow(
+                    id: "info_toggle_stats",
+                    icon: "chart.bar.xaxis",
+                    title: viewModel.showLiveStatsHUD ? "Hide Live Stats HUD" : "Show Live Stats HUD",
+                    value: viewModel.showLiveStatsHUD ? "On" : "Off"
+                ) {
+                    viewModel.showLiveStatsHUD.toggle()
                 }
             }
             .padding(22)

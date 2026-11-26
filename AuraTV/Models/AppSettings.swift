@@ -30,6 +30,17 @@ class AppSettings {
     var nextEpisodeBehavior: String = "On · 10 s"
     var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
+    var dolbyVisionEnabled: Bool = true
+    var dolbyVisionP7ToHDR10Fallback: Bool = true
+    var hdrEnabled: Bool = true
+    var matchContentFrameRate: Bool = true
+    var losslessMultichannelAudio: Bool = true
+    var objectAudioEnabled: Bool = true
+    var seekCacheEnabled: Bool = true
+    var bufferAheadMode: String = "Standard"
+    var rewindOnResumeSeconds: Int = 5
+    var audioSyncOffsetMs: Int = 0
+    var externalPlayer: String = "Built-in AetherEngine"
 
     // MARK: - Skip Intro & Credits
     var skipIntroMode: String = "Skip After Delay"
@@ -75,6 +86,17 @@ class AppSettings {
         nextEpisodeBehavior: String = "On · 10 s",
         playerEngineName: String = "AetherEngine",
         audioOutputMode: String = "Dolby Digital Plus 5.1",
+        dolbyVisionEnabled: Bool = true,
+        dolbyVisionP7ToHDR10Fallback: Bool = true,
+        hdrEnabled: Bool = true,
+        matchContentFrameRate: Bool = true,
+        losslessMultichannelAudio: Bool = true,
+        objectAudioEnabled: Bool = true,
+        seekCacheEnabled: Bool = true,
+        bufferAheadMode: String = "Standard",
+        rewindOnResumeSeconds: Int = 5,
+        audioSyncOffsetMs: Int = 0,
+        externalPlayer: String = "Built-in AetherEngine",
         skipIntroMode: String = "Skip After Delay",
         skipRecapMode: String = "Skip After Delay",
         skipCreditsMode: String = "Show Button",
@@ -111,6 +133,17 @@ class AppSettings {
         self.nextEpisodeBehavior = nextEpisodeBehavior
         self.playerEngineName = playerEngineName
         self.audioOutputMode = audioOutputMode
+        self.dolbyVisionEnabled = dolbyVisionEnabled
+        self.dolbyVisionP7ToHDR10Fallback = dolbyVisionP7ToHDR10Fallback
+        self.hdrEnabled = hdrEnabled
+        self.matchContentFrameRate = matchContentFrameRate
+        self.losslessMultichannelAudio = losslessMultichannelAudio
+        self.objectAudioEnabled = objectAudioEnabled
+        self.seekCacheEnabled = seekCacheEnabled
+        self.bufferAheadMode = bufferAheadMode
+        self.rewindOnResumeSeconds = rewindOnResumeSeconds
+        self.audioSyncOffsetMs = audioSyncOffsetMs
+        self.externalPlayer = externalPlayer
         self.skipIntroMode = skipIntroMode
         self.skipRecapMode = skipRecapMode
         self.skipCreditsMode = skipCreditsMode

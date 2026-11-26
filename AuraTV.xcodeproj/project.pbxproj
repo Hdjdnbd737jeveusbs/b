@@ -57,6 +57,8 @@
 		1048 /* SeriesPosterCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2049 /* SeriesPosterCardView.swift */; };
 		1049 /* CustomArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050 /* CustomArtwork.swift */; };
 		1050 /* ChangeArtworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2051 /* ChangeArtworkView.swift */; };
+		1051 /* ExternalPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052 /* ExternalPlayerService.swift */; };
+		1052 /* PlaybackStatsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2053 /* PlaybackStatsOverlay.swift */; };
 		B003 /* AetherEngine in Frameworks */ = {isa = PBXBuildFile; productRef = B002 /* AetherEngine */; };
 /* End PBXBuildFile section */
 
@@ -113,6 +115,8 @@
 		2049 /* SeriesPosterCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesPosterCardView.swift; sourceTree = "<group>"; };
 		2050 /* CustomArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomArtwork.swift; sourceTree = "<group>"; };
 		2051 /* ChangeArtworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeArtworkView.swift; sourceTree = "<group>"; };
+		2052 /* ExternalPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalPlayerService.swift; sourceTree = "<group>"; };
+		2053 /* PlaybackStatsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackStatsOverlay.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -198,6 +202,7 @@
 				2042 /* SubtitleService.swift */,
 				2043 /* SubtitleProcessor.swift */,
 				2044 /* SubtitleSyncEngine.swift */,
+				2052 /* ExternalPlayerService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -309,6 +314,7 @@
 				2045 /* SubtitleOverlayView.swift */,
 				2046 /* SubtitleSyncSheet.swift */,
 				2047 /* SubtitleStyleSheet.swift */,
+				2053 /* PlaybackStatsOverlay.swift */,
 			);
 			path = Player;
 			sourceTree = "<group>";
@@ -437,6 +443,8 @@
 				1048 /* SeriesPosterCardView.swift in Sources */,
 				1049 /* CustomArtwork.swift in Sources */,
 				1050 /* ChangeArtworkView.swift in Sources */,
+				1051 /* ExternalPlayerService.swift in Sources */,
+				1052 /* PlaybackStatsOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
