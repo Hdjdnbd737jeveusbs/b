@@ -39,13 +39,57 @@ jobs:
             -scheme AuraTV \
             -destination 'generic/platform=tvOS'
 
-      - name: Build AuraTV for tvOS
+      - name: Build AuraTV for tvOS (Release, unsigned)
         run: |
+          SYMROOT_DIR="$PWD/build/ReleaseSym"
+          BUILD_OUT_DIR="$SYMROOT_DIR/Release-appletvos"
           xcodebuild build \
             -project AuraTV.xcodeproj \
             -scheme AuraTV \
+            -configuration Release \
             -destination 'generic/platform=tvOS' \
-            CODE_SIGNING_ALLOWED=NO
+            SYMROOT="$SYMROOT_DIR" \
+            CONFIGURATION_BUILD_DIR="$BUILD_OUT_DIR" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+          echo "SYMROOT_DIR=$SYMROOT_DIR" >> $GITHUB_ENV
+          echo "BUILD_OUT_DIR=$BUILD_OUT_DIR" >> $GITHUB_ENV
+
+      - name: Package unsigned AuraTV.ipa
+        run: |
+          APP_PATH="$BUILD_OUT_DIR/AuraTV.app"
+          if [ ! -d "$APP_PATH" ]; then
+            APP_PATH=$(find "$SYMROOT_DIR" -name 'AuraTV.app' -type d | head -n 1 || true)
+          fi
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "::error::Built AuraTV.app not found under $SYMROOT_DIR"
+            exit 1
+          fi
+
+          echo "Packaging app bundle: $APP_PATH"
+          ls -la "$APP_PATH"
+          ls -la "$APP_PATH/Frameworks" || true
+
+          rm -rf ipa_staging AuraTV.ipa
+          mkdir -p ipa_staging/Payload
+          ditto "$APP_PATH" ipa_staging/Payload/AuraTV.app
+          (cd ipa_staging && zip -r -y ../AuraTV.ipa Payload)
+
+          if [ ! -s AuraTV.ipa ]; then
+            echo "::error::AuraTV.ipa is missing or empty"
+            exit 1
+          fi
+
+          ls -lh AuraTV.ipa
+          unzip -l AuraTV.ipa | head -n 40
+
+      - name: Upload AuraTV.ipa as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AuraTV-tvOS-IPA
+          path: AuraTV.ipa
+          if-no-files-found: error
+          retention-days: 30
 
   screenshots:
     name: Simulator Screenshots (tvOS)
