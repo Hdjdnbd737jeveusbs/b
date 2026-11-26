@@ -715,7 +715,7 @@ final class PlayerViewModel {
     }
 
     func onPlaybackReady(duration: Double) {
-        if duration > 0 {
+        if duration.isFinite && duration < Double(Int.max) && duration > 0 {
             totalDuration = duration
         }
         isBuffering = false
@@ -732,8 +732,9 @@ final class PlayerViewModel {
 
     @MainActor
     func onTimeUpdate(current: Double, total: Double) {
+        guard current.isFinite, current >= 0, current < Double(Int.max) else { return }
         currentTime = current
-        if total > 0 { totalDuration = total }
+        if total.isFinite && total < Double(Int.max) && total > 0 { totalDuration = total }
 
         // Update active subtitle cue based on current time & manual offset
         if !activeCues.isEmpty {

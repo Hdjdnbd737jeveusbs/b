@@ -42,11 +42,13 @@ final class SearchViewModel {
 
         do {
             let response = try await service.searchMulti(query: trimmed, page: 1)
+            guard !Task.isCancelled, trimmed == query.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             // Filter out "person" results — keep only movie and tv
             searchResults = response.results.filter { result in
                 result.mediaType == "movie" || result.mediaType == "tv"
             }
         } catch {
+            guard !Task.isCancelled, trimmed == query.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             self.error = error.localizedDescription
         }
 

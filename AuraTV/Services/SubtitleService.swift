@@ -318,9 +318,8 @@ final class SubtitleService {
 
             // Check if downloaded data is a ZIP archive (SubDL zip packages)
             if downloadData.count > 4 && downloadData.prefix(4) == Data([0x50, 0x4B, 0x03, 0x04]) {
-                if let extractedData = extractSrtFromZip(downloadData) {
-                    downloadData = extractedData
-                }
+                guard let extractedData = extractSrtFromZip(downloadData) else { throw URLError(.cannotDecodeContentData) }
+                downloadData = extractedData
             }
 
             // Attempt UTF-8, Windows-1256 (Arabic), or Latin-1
@@ -362,11 +361,11 @@ final class SubtitleService {
                 break
             }
 
-            let compressionMethod = data.subdata(in: offset+8..<offset+10).withUnsafeBytes { $0.load(as: UInt16.self) }
-            let compressedSize = Int(data.subdata(in: offset+18..<offset+22).withUnsafeBytes { $0.load(as: UInt32.self) })
-            let uncompressedSize = Int(data.subdata(in: offset+22..<offset+26).withUnsafeBytes { $0.load(as: UInt32.self) })
-            let fileNameLen = Int(data.subdata(in: offset+26..<offset+28).withUnsafeBytes { $0.load(as: UInt16.self) })
-            let extraFieldLen = Int(data.subdata(in: offset+28..<offset+30).withUnsafeBytes { $0.load(as: UInt16.self) })
+            let compressionMethod = data.subdata(in: offset+8..<offset+10).withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) }
+            let compressedSize = Int(data.subdata(in: offset+18..<offset+22).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) })
+            let uncompressedSize = Int(data.subdata(in: offset+22..<offset+26).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) })
+            let fileNameLen = Int(data.subdata(in: offset+26..<offset+28).withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) })
+            let extraFieldLen = Int(data.subdata(in: offset+28..<offset+30).withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) })
 
             let fileDataStart = offset + 30 + fileNameLen + extraFieldLen
             guard fileDataStart + compressedSize <= data.count else { break }
@@ -385,7 +384,7 @@ final class SubtitleService {
                         return decompressed
                     }
                     #endif
-                    return fileCompressedData
+                    return nil
                 }
             }
 
@@ -396,6 +395,7 @@ final class SubtitleService {
 
     #if canImport(zlib)
     private func decompressRawDeflate(_ data: Data, expectedSize: Int) -> Data? {
+        guard expectedSize > 0, expectedSize <= 16 * 1024 * 1024 else { return nil }
         var stream = z_stream()
         var status = inflateInit2_(&stream, -15, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
         guard status == Z_OK else { return nil }
@@ -411,7 +411,7 @@ final class SubtitleService {
             var outputData = Data()
             var buffer = [UInt8](repeating: 0, count: chunkSize)
 
-            while stream.avail_in > 0 {
+            repeat {
                 buffer.withUnsafeMutableBytes { rawOut in
                     guard let outPtr = rawOut.baseAddress?.assumingMemoryBound(to: Bytef.self) else { return }
                     stream.next_out = outPtr
@@ -425,10 +425,10 @@ final class SubtitleService {
                 }
 
                 if status == Z_STREAM_END { break }
-                if status != Z_OK && status != Z_BUF_ERROR { break }
-            }
+                guard status == Z_OK, outputData.count <= expectedSize else { return nil }
+            } while status != Z_STREAM_END
 
-            return outputData.isEmpty ? nil : outputData
+            return status == Z_STREAM_END && outputData.count == expectedSize ? outputData : nil
         }
     }
     #endif
