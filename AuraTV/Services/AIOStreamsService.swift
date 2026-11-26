@@ -213,7 +213,7 @@ final class AIOStreamsService {
 
     /// Returns the best playable stream honoring `preferredQuality` ("4K", "1080p", "720p", "480p").
     func bestStream(matching preferredQuality: String, in candidates: [StremioStream]) -> StremioStream? {
-        sortedStreams(candidates, preferredQuality: preferredQuality)
+        candidates
             .first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) })
     }
 
