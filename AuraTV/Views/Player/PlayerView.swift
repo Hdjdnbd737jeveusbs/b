@@ -168,6 +168,11 @@ struct PlayerView: View {
             #endif
             didResolveEnginePreference = true
         }
+        .task(id: viewModel.streamURL) {
+            if !viewModel.isPreviewMode, let url = viewModel.streamURL {
+                await viewModel.loadIntroMarker(for: url)
+            }
+        }
         .onChange(of: viewModel.subtitleSyncSettings) { _, _ in
             viewModel.saveSubtitlePreferences()
             #if canImport(AetherEngine)

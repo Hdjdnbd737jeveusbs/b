@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import SwiftData
 import Observation
@@ -200,18 +201,39 @@ final class PlayerViewModel {
     private var didAutoSkipIntro: Bool = false
     private var upNextTriggered: Bool = false
 
+    private var introRange: Range<Double>?
+
+    @MainActor
+    func loadIntroMarker(for url: URL) async {
+        introRange = nil
+        guard mediaType == "series", skipIntroMode != "Off" else { return }
+        let asset = AVURLAsset(url: url)
+        guard let chapters = try? await asset.loadChapterMetadataGroups(bestMatchingPreferredLanguages: Locale.preferredLanguages) else { return }
+        let introNames = ["intro", "opening", "opening credits", "opening theme", "مقدمة", "المقدمة"]
+        for chapter in chapters {
+            let titles = AVMetadataItem.metadataItems(from: chapter.items, withKey: AVMetadataKey.commonKeyTitle, keySpace: .common)
+            for item in titles {
+                guard let title = try? await item.load(.stringValue),
+                      introNames.contains(title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) else { continue }
+                let start = chapter.timeRange.start.seconds
+                let end = CMTimeRangeGetEnd(chapter.timeRange).seconds
+                guard !Task.isCancelled, streamURL == url, start.isFinite, end.isFinite, start >= 0, end > start else { return }
+                introRange = start..<end
+                return
+            }
+        }
+    }
+
     var showSkipIntroPill: Bool {
         mediaType == "series"
             && !skipIntroDismissed
             && skipIntroMode != "Off"
-            && totalDuration > 180
-            && currentTime >= 15
-            && currentTime <= 105
+            && introRange?.contains(currentTime) == true
     }
 
     var skipIntroCountdownRemaining: Int? {
-        guard showSkipIntroPill, skipIntroMode == "Skip After Delay" else { return nil }
-        return max(0, skipDelaySeconds - Int(currentTime - 15))
+        guard let introRange, showSkipIntroPill, skipIntroMode == "Skip After Delay" else { return nil }
+        return max(0, skipDelaySeconds - Int(currentTime - introRange.lowerBound))
     }
 
     var showSkipCreditsPill: Bool {
@@ -492,6 +514,7 @@ final class PlayerViewModel {
         isSyncingSubtitles = false
         selectedStream = stream
         resumeFromTime = currentTime
+        introRange = nil
         streamURL = url
         isBuffering = true
         showStreamPicker = false
@@ -500,10 +523,10 @@ final class PlayerViewModel {
     // MARK: - Skip Intro / Up Next
 
     func skipIntro() {
+        guard let introRange, introRange.contains(currentTime) else { return }
         skipIntroDismissed = true
         didAutoSkipIntro = true
-        let target = min(105, max(currentTime, totalDuration - 10))
-        seek(to: target)
+        seek(to: introRange.upperBound)
     }
 
     func dismissSkipIntro() {
