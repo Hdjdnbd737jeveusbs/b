@@ -26,6 +26,24 @@ jobs:
           echo "Selecting Xcode: $XCODE_APP"
           sudo xcode-select -s "$XCODE_APP/Contents/Developer"
 
+      - name: Test Stremio manifest resource decoding
+        run: |
+          cp AuraTV/Models/AIOStreamsModels.swift "$RUNNER_TEMP/manifest-check.swift"
+          cat >> "$RUNNER_TEMP/manifest-check.swift" <<'SWIFT'
+
+          let json = #"{"resources":["stream",{"name":"meta","types":["movie"],"idPrefixes":["tt"]}]}"#
+          let decoder = JSONDecoder()
+          decoder.keyDecodingStrategy = .convertFromSnakeCase
+          let manifest = try decoder.decode(StremioManifest.self, from: Data(json.utf8))
+          guard let resources = manifest.resources, resources.count == 2,
+                resources[0].name == "stream", resources[0].types == nil,
+                resources[1].name == "meta", resources[1].types == ["movie"],
+                resources[1].idPrefixes == ["tt"] else {
+              fatalError("Unexpected manifest resources")
+          }
+          SWIFT
+          xcrun swift "$RUNNER_TEMP/manifest-check.swift"
+
       - name: Check Xcode environment & schemes
         run: |
           xcodebuild -version
