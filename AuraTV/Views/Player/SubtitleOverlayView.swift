@@ -4,7 +4,7 @@ import CoreGraphics
 // MARK: - Subtitle Overlay View (Positioned Cleanly Above Scrubber Bar)
 
 struct SubtitleOverlayView: View {
-    let currentCue: SubtitleCue?
+    let currentCue: AuraSubtitleCue?
     var bitmapCue: CGImage? = nil
     let style: SubtitleStyle
     let fixRTL: Bool

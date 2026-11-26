@@ -75,7 +75,7 @@ struct SubtitleTrackItem: Identifiable, Hashable {
 
 // MARK: - Subtitle Cue
 
-struct SubtitleCue: Identifiable, Hashable {
+struct AuraSubtitleCue: Identifiable, Hashable {
     let id: Int
     let startTime: TimeInterval
     let endTime: TimeInterval

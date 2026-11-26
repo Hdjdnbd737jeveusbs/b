@@ -354,7 +354,7 @@ final class AetherPlayerCoordinator: ObservableObject {
     private weak var boundViewModel: PlayerViewModel?
     private var loadTask: Task<Void, Never>?
     private var currentLoadedURL: URL?
-    private var lastCues: [AetherEngine.SubtitleCue] = []
+    private var lastCues: [SubtitleCue] = []
     private var currentSourceTime: Double = 0
     private var didNotifyReadyForCurrentLoad: Bool = false
 

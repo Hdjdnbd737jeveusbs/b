@@ -68,11 +68,11 @@ final class PlayerViewModel {
 
     var externalSubtitleTracks: [SubtitleTrackItem] = []
     var selectedExternalSubtitle: SubtitleTrackItem?
-    var activeCues: [SubtitleCue] = []
-    var currentSubtitleCue: SubtitleCue?
-    var activeEmbeddedTextCue: SubtitleCue?
+    var activeCues: [AuraSubtitleCue] = []
+    var currentSubtitleCue: AuraSubtitleCue?
+    var activeEmbeddedTextCue: AuraSubtitleCue?
     var currentBitmapSubtitle: CGImage?
-    var referenceEmbeddedCues: [SubtitleCue] = []
+    var referenceEmbeddedCues: [AuraSubtitleCue] = []
     var subtitleSyncSettings: SubtitleSyncSettings = .defaultSettings
     var subtitleStyle: SubtitleStyle = .defaultStyle
     var isFetchingSubtitles: Bool = false
@@ -341,7 +341,7 @@ final class PlayerViewModel {
             fixRTL: false,
             fixReversedPunctuation: false
         )
-        self.currentSubtitleCue = SubtitleCue(
+        self.currentSubtitleCue = AuraSubtitleCue(
             id: 1,
             startTime: 2340,
             endTime: 2358,
@@ -473,7 +473,7 @@ final class PlayerViewModel {
                 (0xFB50...0xFDFF).contains(scalar.value) ||
                 (0xFE70...0xFEFF).contains(scalar.value)
             }
-            let cue = SubtitleCue(
+            let cue = AuraSubtitleCue(
                 id: -selectedSubtitleTrackId - 1,
                 startTime: currentTime,
                 endTime: currentTime + 1.0,

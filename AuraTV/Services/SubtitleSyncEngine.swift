@@ -21,8 +21,8 @@ final class SubtitleSyncEngine {
     /// Aligns external target cues against a reference subtitle track (e.g. embedded English track).
     /// Uses timestamp correlation and median clustering to determine the optimal timing offset in seconds.
     static func calculateAutoSyncOffset(
-        targetCues: [SubtitleCue],
-        referenceCues: [SubtitleCue],
+        targetCues: [AuraSubtitleCue],
+        referenceCues: [AuraSubtitleCue],
         searchWindowSeconds: TimeInterval = 15.0
     ) -> Double? {
         guard !targetCues.isEmpty, !referenceCues.isEmpty else { return nil }

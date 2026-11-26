@@ -254,7 +254,7 @@ final class SubtitleService {
     // MARK: - Download & Parse Subtitles
 
     /// Download external subtitle file and parse into structured cues
-    func loadAndParseCues(for track: SubtitleTrackItem) async throws -> [SubtitleCue] {
+    func loadAndParseCues(for track: SubtitleTrackItem) async throws -> [AuraSubtitleCue] {
         let cacheFile = cacheDirectory.appendingPathComponent("\(track.id).srt")
 
         let rawContent: String
@@ -416,9 +416,9 @@ final class SubtitleService {
 
     // MARK: - SRT / VTT Parser
 
-    /// Parses raw SRT or WebVTT content into [SubtitleCue]
-    func parseSRTorVTT(_ content: String) -> [SubtitleCue] {
-        var cues: [SubtitleCue] = []
+    /// Parses raw SRT or WebVTT content into [AuraSubtitleCue]
+    func parseSRTorVTT(_ content: String) -> [AuraSubtitleCue] {
+        var cues: [AuraSubtitleCue] = []
 
         // Normalize line breaks
         let normalized = content
@@ -473,7 +473,7 @@ final class SubtitleService {
 
             let isArabic = containsArabic(cleanedText)
 
-            let cue = SubtitleCue(
+            let cue = AuraSubtitleCue(
                 id: cueIndex,
                 startTime: startTime,
                 endTime: endTime,
