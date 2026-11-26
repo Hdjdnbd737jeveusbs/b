@@ -26,6 +26,7 @@ final class LocalConfigServer {
     var savedSubmissionsCount: Int = 0
     var lastSavedSummary: String? = nil
 
+    private var sessionPath = ""
     private var listener: NWListener?
     private let networkQueue = DispatchQueue(label: "com.auratv.localconfigserver", qos: .userInitiated)
     private var activeConnections: [UUID: HTTPClientConnection] = [:]
@@ -34,6 +35,7 @@ final class LocalConfigServer {
 
     func start(context: ModelContext, onConfigSaved: @escaping () -> Void) {
         stop()
+        sessionPath = "/" + UUID().uuidString + "/"
         self.modelContext = context
         self.onConfigSaved = onConfigSaved
         self.errorMessage = nil
@@ -75,6 +77,7 @@ final class LocalConfigServer {
         listener?.newConnectionHandler = nil
         listener?.cancel()
         listener = nil
+        sessionPath = ""
 
         isRunning = false
         setupURLString = nil
@@ -88,7 +91,7 @@ final class LocalConfigServer {
         case .ready:
             guard let port = listener?.port?.rawValue else { return }
             let ip = Self.localIPv4Address() ?? "127.0.0.1"
-            let url = "http://\(ip):\(port)"
+            let url = "http://\(ip):\(port)\(sessionPath)"
             setupURLString = url
             isRunning = true
             errorMessage = nil
@@ -129,7 +132,8 @@ final class LocalConfigServer {
     // MARK: - HTTP Request Handling
 
     private func handleHTTPRequest(method: String, path: String, body: Data) async -> (Int, String, Data) {
-        if method == "POST" && (path == "/save" || path.hasPrefix("/save?")) {
+        guard isRunning, !sessionPath.isEmpty else { return (503, "text/plain", Data()) }
+        if method == "POST" && path == sessionPath + "save" {
             let fields = Self.parseFormURLEncoded(body)
             let rawManifests = fields["aio_urls"] ?? ""
             let tmdbKey = (fields["tmdb_key"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -137,18 +141,19 @@ final class LocalConfigServer {
             let aiProvider = (fields["ai_provider"] ?? "OpenAI").trimmingCharacters(in: .whitespacesAndNewlines)
             let aiKey = (fields["ai_key"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-            applySubmittedConfig(
+            guard applySubmittedConfig(
                 rawManifests: rawManifests,
                 tmdbKey: tmdbKey,
                 mdblistKey: mdblistKey,
                 aiProvider: aiProvider,
                 aiKey: aiKey
-            )
+            ) else { return (500, "text/plain", Data("Could not save settings.".utf8)) }
 
             let html = Self.savedConfirmationHTML(snapshot: currentSnapshot())
             return (200, "text/html; charset=utf-8", Data(html.utf8))
         }
 
+        guard method == "GET", path == sessionPath else { return (404, "text/plain", Data()) }
         let html = Self.onboardingFormHTML(snapshot: currentSnapshot())
         return (200, "text/html; charset=utf-8", Data(html.utf8))
     }
@@ -189,8 +194,10 @@ final class LocalConfigServer {
         mdblistKey: String,
         aiProvider: String,
         aiKey: String
-    ) {
-        guard let context = modelContext else { return }
+    ) -> Bool {
+        guard let container = modelContext?.container else { return false }
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
 
         let descriptor = FetchDescriptor<AppSettings>(
             predicate: #Predicate<AppSettings> { $0.id == "default" }
@@ -223,7 +230,7 @@ final class LocalConfigServer {
             settings.aiTranslationEnabled = true
         }
 
-        try? context.save()
+        do { try context.save() } catch { return false }
 
         TMDBService.shared.apiKey = settings.tmdbApiKey.isEmpty ? "d767cb12181edaa01840442c704329be" : settings.tmdbApiKey
         AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
@@ -239,6 +246,7 @@ final class LocalConfigServer {
         lastSavedSummary = updatedParts.isEmpty ? "Saved settings from phone" : "Saved: \(updatedParts.joined(separator: ", "))"
 
         onConfigSaved?()
+        return true
     }
 
     // MARK: - Form Parsing & LAN IP Helpers
@@ -337,7 +345,7 @@ final class LocalConfigServer {
           <div class="card">
             <h1>AuraTV Phone Setup</h1>
             <p class="sub">Paste your streaming manifest URLs and API keys below, then tap Save to send them straight to your Apple TV.</p>
-            <form method="POST" action="/save">
+            <form method="POST" action="save">
               <label for="aio_urls">Stremio / AIOStreams Manifest URL(s)</label>
               <textarea id="aio_urls" name="aio_urls" placeholder="https://aiostreams.example.com/manifest.json&#10;(One manifest URL per line)">\(escapeHTML(snapshot.aioManifestURLs))</textarea>
               <div class="hint">Enter one URL, or paste multiple manifest URLs separated by new lines.</div>
@@ -386,7 +394,7 @@ final class LocalConfigServer {
             <div class="badge">✓ Sent to Apple TV</div>
             <h1>Configuration Saved</h1>
             <p>Your AuraTV settings have been updated and saved cleanly. You can close this page now or edit fields again.</p>
-            <a href="/">Edit Again</a>
+            <a href="./">Edit Again</a>
           </div>
         </body>
         </html>
@@ -444,7 +452,7 @@ private final class HTTPClientConnection: @unchecked Sendable {
             if let content, !content.isEmpty {
                 self.buffer.append(content)
             }
-            if error != nil {
+            if self.buffer.count > 131072 || error != nil {
                 self.close()
                 return
             }
@@ -488,7 +496,7 @@ private final class HTTPClientConnection: @unchecked Sendable {
 
         let bodyStart = headerEndRange.upperBound
         let availableBody = buffer.count - bodyStart
-        if availableBody < contentLength && !isEOF {
+        if contentLength < 0 || availableBody < contentLength {
             return nil
         }
 
@@ -499,7 +507,7 @@ private final class HTTPClientConnection: @unchecked Sendable {
 
     private func sendResponse(status: Int, contentType: String, body: Data) {
         let statusText = status == 200 ? "OK" : "Error"
-        let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.count)\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
+        let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.count)\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\n"
         var fullData = Data(header.utf8)
         fullData.append(body)
 

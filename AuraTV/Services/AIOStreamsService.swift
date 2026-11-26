@@ -144,7 +144,10 @@ final class AIOStreamsService {
                 }
                 let result = try decoder.decode(StremioStreamResponse.self, from: data)
                 if let items = result.streams {
-                    combined.append(contentsOf: items)
+                    combined.append(contentsOf: items.filter { stream in
+                        guard let raw = stream.url, let url = URL(string: raw), url.host != nil else { return false }
+                        return ["https", "http"].contains(url.scheme?.lowercased() ?? "")
+                    })
                 }
             } catch {
                 if firstError == nil { firstError = (error as? AIOStreamsError) ?? AIOStreamsError.decodingError(error) }
@@ -213,7 +216,7 @@ final class AIOStreamsService {
 
     /// Returns the best playable stream honoring `preferredQuality` ("4K", "1080p", "720p", "480p").
     func bestStream(matching preferredQuality: String, in candidates: [StremioStream]) -> StremioStream? {
-        sortedStreams(candidates, preferredQuality: preferredQuality)
+        candidates
             .first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) })
     }
 

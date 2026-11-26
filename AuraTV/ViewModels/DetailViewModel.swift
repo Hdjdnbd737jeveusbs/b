@@ -153,12 +153,15 @@ final class DetailViewModel {
 
     @MainActor
     func loadSeasonDetail(seriesId: Int, seasonNumber: Int) async {
+        selectedSeasonNumber = seasonNumber
+        seasonDetail = nil
         do {
             let detail = try await service.fetchSeasonDetails(seriesId: seriesId, seasonNumber: seasonNumber)
+            guard selectedSeasonNumber == seasonNumber else { return }
             seasonDetail = detail
-            selectedSeasonNumber = seasonNumber
             prefetchDetailAssets(episodes: detail.episodes ?? [])
         } catch {
+            guard selectedSeasonNumber == seasonNumber else { return }
             self.error = error.localizedDescription
         }
     }
