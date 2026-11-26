@@ -261,18 +261,18 @@ struct PlayerView: View {
 
                 Text("Unable to Play Stream")
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.auraText)
 
                 Text(message)
                     .font(.system(size: 20))
-                    .foregroundStyle(Color.auraTextSecondary)
+                    .foregroundStyle(Color.auraSecondaryText)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
                     .frame(maxWidth: 720)
 
                 HStack(spacing: 18) {
                     if viewModel.playerEngineName != "AVPlayer" {
-                        Button("Try AVPlayer Fallback") {
+                        PlayerErrorActionButton(title: "Try AVPlayer Fallback", isPrimary: true) {
                             #if canImport(AetherEngine)
                             aetherCoordinator.stop()
                             #endif
@@ -280,24 +280,22 @@ struct PlayerView: View {
                             viewModel.isBuffering = true
                             viewModel.playerEngineName = "AVPlayer"
                         }
-                        .buttonStyle(AuraButtonStyle(isProminent: true))
                     }
 
-                    Button("Close") {
+                    PlayerErrorActionButton(title: "Close", isPrimary: false) {
                         viewModel.cleanup()
                         dismiss()
                     }
-                    .buttonStyle(AuraButtonStyle())
                 }
                 .padding(.top, 6)
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 36)
-            .background(Color.auraSurfaceGlass.opacity(0.92))
+            .background(Color.auraSurface.opacity(0.94))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.auraBorderSubtle, lineWidth: 1)
+                    .stroke(Color.auraGlassBorder, lineWidth: 1)
             )
         }
     }
@@ -772,5 +770,35 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
 
     class Coordinator {
         var cancellables = Set<AnyCancellable>()
+    }
+}
+
+private struct PlayerErrorActionButton: View {
+    let title: String
+    let isPrimary: Bool
+    let action: () -> Void
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(isFocused || isPrimary ? Color.black : Color.auraText)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 14)
+                .background(
+                    isFocused || isPrimary
+                        ? Color.white.opacity(isFocused ? 1.0 : 0.88)
+                        : Color.auraGlassFill
+                )
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isFocused ? Color.white : Color.auraGlassBorder, lineWidth: isFocused ? 2 : 1)
+                )
+                .scaleEffect(isFocused ? 1.05 : 1.0)
+                .animation(.easeOut(duration: 0.16), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
     }
 }
