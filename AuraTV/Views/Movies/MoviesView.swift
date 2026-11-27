@@ -147,10 +147,10 @@ struct MoviesView: View {
                     }
                 }) {
                     Text(category.rawValue)
-                        .font(.system(size: 19, weight: isSelected ? .bold : .medium))
+                        .font(.system(size: 24, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
-                        .padding(.horizontal, 26)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 14)
                         .background(
                             (isSelected || isFocused)
                             ? Color.white
@@ -185,7 +185,7 @@ private struct MovieListRowView: View {
             HStack(spacing: 24) {
                 if let path = overridePosterPath ?? movie.posterPath ?? movie.backdropPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w342") {
-                    AuraCachedImage(url: url) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 96, height: 144)) { image in
                         image
                             .resizable()
                             .aspectRatio(2 / 3, contentMode: .fill)

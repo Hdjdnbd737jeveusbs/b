@@ -24,7 +24,7 @@ struct SearchView: View {
                         .foregroundStyle(Color.auraSecondaryText)
 
                     TextField("Search movies, series...", text: $viewModel.query)
-                        .font(.system(size: 24, weight: .medium))
+                        .font(.system(size: 26, weight: .medium))
                         .foregroundStyle(.white)
                         .focused($isFieldFocused)
 
@@ -86,11 +86,11 @@ struct SearchView: View {
                 .foregroundStyle(Color.auraSecondaryText.opacity(0.6))
 
             Text(viewModel.query.isEmpty ? "Discover Movies & Series" : "No results for \"\(viewModel.query)\"")
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(.white)
 
             Text(viewModel.query.isEmpty ? "Type a title, genre, or actor to search TMDB." : "Try searching with a different spelling or keyword.")
-                .font(.system(size: 16))
+                .font(.system(size: 21))
                 .foregroundStyle(Color.auraSecondaryText)
             Spacer()
         }
@@ -112,7 +112,7 @@ private struct SearchResultCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = result.posterPath ?? result.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AuraCachedImage(url: url) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: 220, height: 330)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(2/3, contentMode: .fill)
@@ -140,27 +140,22 @@ private struct SearchResultCard: View {
                 )
 
                 // Title & Date
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(result.displayTitle)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
                     if result.displayDate.count >= 4 {
                         Text(String(result.displayDate.prefix(4)))
-                            .font(.system(size: 14))
+                            .font(.system(size: 20))
                             .foregroundStyle(Color.auraSecondaryText)
                     }
                 }
                 .frame(width: 220, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.07 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.22) : Color.black.opacity(0.35),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
-            )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

@@ -50,7 +50,7 @@ struct EpisodeCardView: View {
                     Group {
                         if let path = episode.stillPath,
                            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                            AuraCachedImage(url: url) { image in
+                            AuraCachedImage(url: url, targetSize: CGSize(width: 360, height: 202)) { image in
                                 image
                                     .resizable()
                                     .aspectRatio(16/9, contentMode: .fill)
@@ -113,27 +113,27 @@ struct EpisodeCardView: View {
                 }
 
                 // Episode Metadata
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
                         Text("E\(episode.episodeNumber)")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(Color.auraAccent)
 
                         Text(episode.name)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 23, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                     }
 
                     if shouldHideDescription {
                         Text("Synopsis hidden · Focus or mark watched to reveal")
-                            .font(.system(size: 13))
+                            .font(.system(size: 18))
                             .foregroundStyle(.white.opacity(0.45))
                             .italic()
                             .lineLimit(2)
                     } else if let overview = episode.overview, !overview.isEmpty {
                         Text(overview)
-                            .font(.system(size: 13))
+                            .font(.system(size: 18))
                             .foregroundStyle(Color.auraSecondaryText)
                             .lineLimit(2)
                             .lineSpacing(2)
@@ -147,13 +147,8 @@ struct EpisodeCardView: View {
                     .frame(width: 360, height: 202),
                 alignment: .top
             )
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.35),
-                radius: isFocused ? 18 : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

@@ -10,14 +10,14 @@ struct MediaRowView<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Section Title + Muted Count (e.g. "Series 25")
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(title)
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(.white)
 
                 if let count, count > 0 {
                     Text("\(count)")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.42))
                 }
             }

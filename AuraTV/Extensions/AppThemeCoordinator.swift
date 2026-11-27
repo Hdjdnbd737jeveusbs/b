@@ -188,15 +188,13 @@ struct AuraDynamicBackgroundView: View {
                     .ignoresSafeArea()
 
                 if let url = coordinator.focusedBackdropURL ?? coordinator.focusedPosterURL ?? fallbackBackdropURL {
-                    AuraCachedImage(url: url) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 480, height: 270)) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .ignoresSafeArea()
-                            .blur(radius: 44)
-                            .opacity(0.32)
-                            .overlay(Color.auraBackground.opacity(0.64))
-                            .transition(.opacity.animation(.easeInOut(duration: 0.4)))
+                            .opacity(0.24)
+                            .overlay(Color.auraBackground.opacity(0.72))
                     } placeholder: {
                         Color.auraBackground.ignoresSafeArea()
                     }

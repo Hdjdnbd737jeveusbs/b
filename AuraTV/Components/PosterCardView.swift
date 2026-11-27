@@ -22,7 +22,7 @@ struct PosterCardView: View {
             ZStack(alignment: .topTrailing) {
                 if let path = overridePosterPath ?? movie.posterPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                    AuraCachedImage(url: url) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 215, height: 322)) { image in
                         image
                             .resizable()
                             .aspectRatio(2 / 3, contentMode: .fill)
@@ -73,12 +73,7 @@ struct PosterCardView: View {
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
             .scaleEffect(isTrailerExpanded ? 1.11 : (isFocused ? 1.07 : 1.0))
-            .shadow(
-                color: isFocused ? Color.white.opacity(isTrailerExpanded ? 0.28 : 0.18) : Color.black.opacity(0.45),
-                radius: isFocused ? (isTrailerExpanded ? 24 : 18) : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.22), value: isFocused)
+            .animation(.easeOut(duration: 0.18), value: isFocused)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isTrailerExpanded)
         }
         .buttonStyle(AuraButtonStyle())

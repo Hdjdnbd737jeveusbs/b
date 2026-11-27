@@ -422,7 +422,12 @@ struct ChangeArtworkView: View {
             ZStack {
                 Group {
                     if let url = TMDBService.shared.imageURL(path: asset.filePath, size: sizeParam) {
-                        AuraCachedImage(url: url) { image in
+                        AuraCachedImage(
+                            url: url,
+                            targetSize: selectedTab == .posters || selectedTab == .seasonPosters
+                                ? CGSize(width: 240, height: 360)
+                                : CGSize(width: 420, height: 236)
+                        ) { image in
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: selectedTab == .logos ? .fit : .fill)
@@ -482,7 +487,6 @@ struct ChangeArtworkView: View {
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 0.8)
             )
             .scaleEffect(isFocused ? 1.04 : 1.0)
-            .shadow(color: isFocused ? Color.white.opacity(0.14) : .black.opacity(0.35), radius: isFocused ? 14 : 6)
             .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())

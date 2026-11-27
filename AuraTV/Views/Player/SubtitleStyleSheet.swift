@@ -13,6 +13,7 @@ struct SubtitleStyleSheet: View {
         case fontSize
         case fontWeight
         case textColor
+        case textOpacity
         case backgroundOpacity
         case verticalPosition
         case done
@@ -20,7 +21,8 @@ struct SubtitleStyleSheet: View {
 
     private let sizeOptions: [Double] = [34, 44, 54, 64]
     private let weightOptions = ["Regular", "Medium", "Semibold", "Bold"]
-    private let colorOptions = ["White", "Yellow", "Green", "Cyan"]
+    private let colorOptions = SubtitleStyle.allColorNames
+    private let textOpacityOptions: [Double] = [0.60, 0.70, 0.75, 0.80, 0.85, 0.90, 1.0]
     private let opacityOptions: [Double] = [0.0, 0.25, 0.5, 0.75]
     private let bottomOffsetOptions: [Double] = [40, 60, 100, 140]
 
@@ -38,8 +40,8 @@ struct SubtitleStyleSheet: View {
 
             // Live Arabic & English Preview
             VStack(spacing: 8) {
-                Text("Live Preview / معاينة مباشرة")
-                    .font(.system(size: 13, weight: .medium))
+                Text("Live Mini LED Preview / معاينة مباشرة")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.auraSecondaryText)
 
                 VStack(spacing: 6) {
@@ -49,10 +51,12 @@ struct SubtitleStyleSheet: View {
                     ))
                     .font(style.font)
                     .foregroundStyle(style.colorValue)
+                    .shadow(color: .black.opacity(0.92), radius: 3, x: 0, y: 2)
 
                     Text("The dark knight rises in 4K HDR.")
                         .font(style.font)
                         .foregroundStyle(style.colorValue)
+                        .shadow(color: .black.opacity(0.92), radius: 3, x: 0, y: 2)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
@@ -76,8 +80,13 @@ struct SubtitleStyleSheet: View {
                     style.fontWeight = nextValue(after: style.fontWeight, in: weightOptions)
                 }
 
-                cycleRow(title: "Text Color", value: style.textColor, field: .textColor) {
+                cycleRow(title: "Mini LED Color", value: style.textColor, swatchColor: style.baseColor, field: .textColor) {
                     style.textColor = nextValue(after: style.textColor, in: colorOptions)
+                }
+
+                cycleRow(title: "Subtitle Opacity", value: "\(Int((style.textOpacity * 100).rounded()))%", field: .textOpacity) {
+                    let currentIdx = textOpacityOptions.enumerated().min(by: { abs($0.element - style.textOpacity) < abs($1.element - style.textOpacity) })?.offset ?? 3
+                    style.textOpacity = textOpacityOptions[(currentIdx + 1) % textOpacityOptions.count]
                 }
 
                 cycleRow(title: "Background Box Opacity", value: "\(Int(style.backgroundOpacity * 100))%", field: .backgroundOpacity) {
@@ -104,32 +113,37 @@ struct SubtitleStyleSheet: View {
             .focused($focusedField, equals: .done)
         }
         .padding(36)
-        .frame(width: 760)
-        .background(Color.auraSurface.opacity(0.95), in: RoundedRectangle(cornerRadius: 24))
+        .frame(width: 780)
+        .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.75), radius: 28, y: 12)
         .padding(.trailing, 70)
         .padding(.bottom, 64)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .defaultFocus($focusedField, .fontSize)
+        .defaultFocus($focusedField, .textColor)
     }
 
     @ViewBuilder
-    private func cycleRow(title: String, value: String, field: StyleField, action: @escaping () -> Void) -> some View {
+    private func cycleRow(title: String, value: String, swatchColor: Color? = nil, field: StyleField, action: @escaping () -> Void) -> some View {
         let isFocused = focusedField == field
 
         Button(action: action) {
             HStack {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(isFocused ? Color.black : Color.white)
                 Spacer()
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    if let swatchColor {
+                        Circle()
+                            .fill(swatchColor)
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(isFocused ? Color.black.opacity(0.25) : Color.white.opacity(0.35), lineWidth: 1))
+                    }
                     Text(value)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(isFocused ? Color.black.opacity(0.78) : Color.white.opacity(0.72))
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 12, weight: .bold))

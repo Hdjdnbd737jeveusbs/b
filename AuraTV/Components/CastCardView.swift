@@ -13,7 +13,7 @@ struct CastCardView: View {
                 // Circular profile image
                 if let path = member.profilePath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w185") {
-                    AuraCachedImage(url: url) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 112, height: 112)) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -28,18 +28,18 @@ struct CastCardView: View {
 
                 // Actor Name
                 Text(member.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .frame(width: 120)
+                    .frame(width: 136)
 
                 // Character Name
                 if let character = member.character, !character.isEmpty {
                     Text(character)
-                        .font(.system(size: 12))
+                        .font(.system(size: 17))
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
-                        .frame(width: 120)
+                        .frame(width: 136)
                 }
             }
             .padding(6)

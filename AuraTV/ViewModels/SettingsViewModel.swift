@@ -41,6 +41,10 @@ final class SettingsViewModel {
     var subtitleFontSize: Double = 44.0
     var subtitleFontWeight: String = "Bold"
     var subtitleFontName: String = "System"
+    var subtitleTextColor: String = "Light Gray"
+    var subtitleTextOpacity: Double = 0.80
+    var subtitleBackgroundOpacity: Double = 0.0
+    var subtitleBottomOffset: Double = 56.0
     var fixArabicRTL: Bool = true
     var fixReversedPunctuation: Bool = true
     var autoSyncSubtitles: Bool = false
@@ -120,6 +124,9 @@ final class SettingsViewModel {
     static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
     static let fontWeightOptions = ["Regular", "Medium", "Semibold", "Bold"]
     static let fontNameOptions = SubtitleProcessor.availableFonts
+    static let subtitleColorOptions = SubtitleStyle.allColorNames
+    static let subtitleBackgroundOpacityOptions: [Double] = [0.0, 0.25, 0.5, 0.75]
+    static let subtitleBottomOffsetOptions: [Double] = [40, 56, 80, 110, 140]
     static let aiTranslationProviderOptions = [
         "OpenAI",
         "Gemini",
@@ -199,6 +206,12 @@ final class SettingsViewModel {
                 subtitleFontSize = settings.subtitleFontSize
                 subtitleFontWeight = settings.subtitleFontWeight
                 subtitleFontName = settings.subtitleFontName
+                subtitleTextColor = Self.subtitleColorOptions.contains(settings.subtitleTextColor)
+                    ? settings.subtitleTextColor
+                    : "Light Gray"
+                subtitleTextOpacity = settings.subtitleTextOpacity > 0.1 ? settings.subtitleTextOpacity : 0.80
+                subtitleBackgroundOpacity = settings.subtitleBackgroundOpacity
+                subtitleBottomOffset = settings.subtitleBottomOffset
                 fixArabicRTL = settings.fixArabicRTL
                 fixReversedPunctuation = settings.fixReversedPunctuation
                 autoSyncSubtitles = settings.autoSyncSubtitles
@@ -303,6 +316,10 @@ final class SettingsViewModel {
             settings.subtitleFontSize = subtitleFontSize
             settings.subtitleFontWeight = subtitleFontWeight
             settings.subtitleFontName = subtitleFontName
+            settings.subtitleTextColor = subtitleTextColor
+            settings.subtitleTextOpacity = min(max(subtitleTextOpacity, 0.40), 1.0)
+            settings.subtitleBackgroundOpacity = subtitleBackgroundOpacity
+            settings.subtitleBottomOffset = subtitleBottomOffset
             settings.fixArabicRTL = fixArabicRTL
             settings.fixReversedPunctuation = fixReversedPunctuation
             settings.autoSyncSubtitles = autoSyncSubtitles

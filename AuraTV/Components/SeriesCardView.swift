@@ -15,7 +15,7 @@ struct SeriesCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     if let path = overrideBackdropPath ?? series.backdropPath ?? series.posterPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                        AuraCachedImage(url: url) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: 380, height: 214)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(16/9, contentMode: .fill)
@@ -38,32 +38,32 @@ struct SeriesCardView: View {
                     .frame(width: 380, height: 214)
 
                     // Title overlay at bottom
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(series.name)
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 24, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             if let date = series.firstAirDate, date.count >= 4 {
                                 Text(String(date.prefix(4)))
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.white.opacity(0.7))
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(.white.opacity(0.75))
                             }
 
                             if let vote = series.voteAverage, vote > 0 {
-                                HStack(spacing: 2) {
+                                HStack(spacing: 3) {
                                     Image(systemName: "star.fill")
-                                        .font(.system(size: 10))
+                                        .font(.system(size: 13))
                                         .foregroundStyle(.yellow)
                                     Text(String(format: "%.1f", vote))
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.9))
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.92))
                                 }
                             }
                         }
                     }
-                    .padding(12)
+                    .padding(14)
                 }
             }
             .overlay(
@@ -71,12 +71,7 @@ struct SeriesCardView: View {
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
             .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.4),
-                radius: isFocused ? 18 : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

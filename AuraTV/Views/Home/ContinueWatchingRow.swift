@@ -11,7 +11,7 @@ struct ContinueWatchingRow: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Continue Watching")
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
@@ -69,26 +69,21 @@ private struct ContinueWatchingCard: View {
                 )
 
                 // Title & remaining time underneath
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
                     Text(subtitleText)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 19, weight: .regular))
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
                 }
                 .frame(width: 340, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.4),
-                radius: isFocused ? 18 : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -140,7 +135,7 @@ private struct ContinueWatchingCard: View {
         let imagePath = item.episodeStillPath ?? overrideBackdropPath ?? item.backdropPath ?? item.posterPath
         if let path = imagePath,
            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-            AuraCachedImage(url: url) { image in
+            AuraCachedImage(url: url, targetSize: CGSize(width: 340, height: 191)) { image in
                 image
                     .resizable()
                     .aspectRatio(16 / 9, contentMode: .fill)

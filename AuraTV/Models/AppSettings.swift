@@ -18,7 +18,8 @@ class AppSettings {
     var subtitleFontSize: Double = 44.0
     var subtitleFontWeight: String = "Bold"
     var subtitleFontName: String = "System"
-    var subtitleTextColor: String = "White"
+    var subtitleTextColor: String = "Light Gray"
+    var subtitleTextOpacity: Double = 0.80
     var subtitleBackgroundOpacity: Double = 0.0
     var subtitleBottomOffset: Double = 56.0
     var fixArabicRTL: Bool = true
@@ -91,7 +92,8 @@ class AppSettings {
         subtitleFontSize: Double = 44.0,
         subtitleFontWeight: String = "Bold",
         subtitleFontName: String = "System",
-        subtitleTextColor: String = "White",
+        subtitleTextColor: String = "Light Gray",
+        subtitleTextOpacity: Double = 0.80,
         subtitleBackgroundOpacity: Double = 0.0,
         subtitleBottomOffset: Double = 56.0,
         fixArabicRTL: Bool = true,
@@ -152,6 +154,7 @@ class AppSettings {
         self.subtitleFontWeight = subtitleFontWeight
         self.subtitleFontName = subtitleFontName
         self.subtitleTextColor = subtitleTextColor
+        self.subtitleTextOpacity = subtitleTextOpacity
         self.subtitleBackgroundOpacity = subtitleBackgroundOpacity
         self.subtitleBottomOffset = subtitleBottomOffset
         self.fixArabicRTL = fixArabicRTL

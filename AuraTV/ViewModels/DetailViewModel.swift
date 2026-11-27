@@ -170,24 +170,14 @@ final class DetailViewModel {
         cast: [TMDBCastMember] = [],
         episodes: [TMDBEpisode] = []
     ) {
-        var urls: [URL] = []
-        if let backdrop = service.imageURL(path: backdropPath, size: "original") {
-            urls.append(backdrop)
+        if let backdrop = service.imageURL(path: backdropPath, size: "w1280") {
+            AuraImageCache.shared.prefetch(urls: [backdrop], targetSize: CGSize(width: 1440, height: 840))
         }
-        if let poster = service.imageURL(path: posterPath, size: "w500") {
-            urls.append(poster)
-        }
-        for member in cast.prefix(15) {
-            if let profile = service.imageURL(path: member.profilePath, size: "w185") {
-                urls.append(profile)
-            }
-        }
-        for ep in episodes.prefix(16) {
-            if let still = service.imageURL(path: ep.stillPath, size: "w500") {
-                urls.append(still)
-            }
-        }
-        AuraImageCache.shared.prefetch(urls: urls)
+        let castURLs = cast.prefix(15).compactMap { service.imageURL(path: $0.profilePath, size: "w185") }
+        AuraImageCache.shared.prefetch(urls: castURLs, targetSize: CGSize(width: 112, height: 112))
+
+        let epURLs = episodes.prefix(16).compactMap { service.imageURL(path: $0.stillPath, size: "w780") }
+        AuraImageCache.shared.prefetch(urls: epURLs, targetSize: CGSize(width: 360, height: 202))
     }
 
     // MARK: - Watchlist Management

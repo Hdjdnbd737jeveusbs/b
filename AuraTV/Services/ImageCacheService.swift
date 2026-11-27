@@ -34,35 +34,52 @@ final class AuraImageCache {
         self.prefetcher = ImagePrefetcher(pipeline: pipe)
     }
 
-    func cachedUIImage(for url: URL) -> UIImage? {
-        pipeline.cache[ImageRequest(url: url)]?.image
+    private func makeRequest(url: URL, targetSize: CGSize?) -> ImageRequest {
+        if let targetSize, targetSize.width > 0, targetSize.height > 0 {
+            let resize = ImageProcessors.Resize(
+                size: targetSize,
+                unit: .points,
+                contentMode: .aspectFill,
+                crop: true,
+                upscale: false
+            )
+            return ImageRequest(url: url, processors: [resize])
+        }
+        return ImageRequest(url: url)
     }
 
-    func loadUIImage(for url: URL) async -> UIImage? {
-        if let hit = cachedUIImage(for: url) {
+    func cachedUIImage(for url: URL, targetSize: CGSize? = nil) -> UIImage? {
+        pipeline.cache[makeRequest(url: url, targetSize: targetSize)]?.image
+    }
+
+    func loadUIImage(for url: URL, targetSize: CGSize? = nil) async -> UIImage? {
+        let req = makeRequest(url: url, targetSize: targetSize)
+        if let hit = pipeline.cache[req]?.image {
             return hit
         }
-        return try? await pipeline.image(for: url)
+        return try? await pipeline.image(for: req)
     }
 
-    func prefetch(urls: [URL]) {
+    func prefetch(urls: [URL], targetSize: CGSize? = nil) {
         guard !urls.isEmpty else { return }
-        prefetcher.startPrefetching(with: urls)
+        let requests = urls.map { makeRequest(url: $0, targetSize: targetSize) }
+        prefetcher.startPrefetching(with: requests)
     }
 
-    func stopPrefetching(urls: [URL]) {
+    func stopPrefetching(urls: [URL], targetSize: CGSize? = nil) {
         guard !urls.isEmpty else { return }
-        prefetcher.stopPrefetching(with: urls)
+        let requests = urls.map { makeRequest(url: $0, targetSize: targetSize) }
+        prefetcher.stopPrefetching(with: requests)
     }
 
-    /// Extracts an ambient highlight color from a cached poster or backdrop image for Soft Glow theme mode.
+    /// Extracts an ambient highlight color from a downsampled poster/backdrop image for Soft Glow theme mode.
     func extractGlowColor(for url: URL) async -> Color? {
         let key = url.absoluteString
         if let cached = glowColorCache[key] {
             return cached
         }
 
-        guard let uiImage = await loadUIImage(for: url),
+        guard let uiImage = await loadUIImage(for: url, targetSize: CGSize(width: 96, height: 144)),
               let ciInput = CIImage(image: uiImage) else {
             return nil
         }
@@ -117,18 +134,27 @@ final class AuraImageCache {
 
 struct AuraCachedImage<Content: View, Placeholder: View>: View {
     let url: URL?
+    var targetSize: CGSize? = nil
     var onImageLoaded: ((UIImage) -> Void)? = nil
     @ViewBuilder let content: (Image) -> Content
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var loadedImage: UIImage?
-    @State private var loadedURL: URL?
+    @State private var loadedKey: String?
+
+    private var requestKey: String? {
+        guard let url else { return nil }
+        if let targetSize {
+            return "\(url.absoluteString)|\(Int(targetSize.width))x\(Int(targetSize.height))"
+        }
+        return url.absoluteString
+    }
 
     private var activeImage: UIImage? {
-        if let loadedImage, loadedURL == url {
+        if let loadedImage, loadedKey == requestKey {
             return loadedImage
         }
-        if let url, let cached = AuraImageCache.shared.cachedUIImage(for: url) {
+        if let url, let cached = AuraImageCache.shared.cachedUIImage(for: url, targetSize: targetSize) {
             return cached
         }
         return nil
@@ -142,21 +168,21 @@ struct AuraCachedImage<Content: View, Placeholder: View>: View {
                 placeholder()
             }
         }
-        .task(id: url) {
-            guard let targetURL = url else {
+        .task(id: requestKey) {
+            guard let targetURL = url, let currentKey = requestKey else {
                 loadedImage = nil
-                loadedURL = nil
+                loadedKey = nil
                 return
             }
-            if let hit = AuraImageCache.shared.cachedUIImage(for: targetURL) {
+            if let hit = AuraImageCache.shared.cachedUIImage(for: targetURL, targetSize: targetSize) {
                 loadedImage = hit
-                loadedURL = targetURL
+                loadedKey = currentKey
                 onImageLoaded?(hit)
                 return
             }
-            if let fetched = await AuraImageCache.shared.loadUIImage(for: targetURL), !Task.isCancelled {
+            if let fetched = await AuraImageCache.shared.loadUIImage(for: targetURL, targetSize: targetSize), !Task.isCancelled {
                 loadedImage = fetched
-                loadedURL = targetURL
+                loadedKey = currentKey
                 onImageLoaded?(fetched)
             }
         }

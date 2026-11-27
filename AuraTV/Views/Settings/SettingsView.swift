@@ -37,28 +37,70 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .playback:
             return "How titles start, what plays next, and which player and audio Aura uses."
         case .subtitles:
-            return "Languages, the look of the text, Arabic RTL shaping, and online subtitles."
+            return "Languages, Mini LED-safe look of the text, custom fonts, and online subtitles."
         case .skipIntroCredits:
-            return "What happens at intros, recaps, and end credits."
+            return "What happens at intros, recaps and end credits."
         case .appearance:
-            return "Interface language, Home hero layout, Movies layout, and spoiler protection."
+            return "Interface language, Home layout, Movies layout, and spoiler protection."
         case .library:
             return "Preferred quality, local watch history backup, and watchlist cleanup."
         case .serversAccounts:
-            return "TMDB, AIOStreams, MDBList ratings, and subtitle integrations."
+            return "TMDB, AIOStreams, Stremio, Nuvio addons, MDBList ratings, and subtitle keys."
         case .trakt:
             return "Scrobbling and watched history sync settings."
         case .artworkMetadata:
             return "Transparent title logos, artwork language preferences, and subtitle auto-sync."
         case .quickSetup:
-            return "Scan a QR code from your phone to enter manifest URLs and API keys effortlessly."
+            return "Paste any Stremio, AIOStreams, or Nuvio manifest URL directly or scan QR from phone."
         case .about:
             return "AuraTV build details, video engine, and design specifications."
         }
     }
 }
 
-// MARK: - Settings View (2-Column Split Layout with Focus Sections)
+private enum SettingsRightRoute: Hashable {
+    case summary
+    case categoryDetail
+    case subtitlesStylePreview
+    case subtitlesSizePosition
+    case subtitlesCustomFonts
+    case subtitlesFirstLanguage
+    case subtitlesSecondLanguage
+}
+
+private enum RightFocusTarget: Hashable {
+    case backButton
+    case saveButton
+    case summaryCard(Int)
+    case openAllButton
+    case detailFirstControl
+}
+
+private struct SummaryCardDescriptor: Identifiable {
+    let index: Int
+    let label: String
+    let value: String
+    let targetRoute: SettingsRightRoute?
+    let opensPhoneQR: Bool
+
+    var id: Int { index }
+
+    init(
+        index: Int,
+        label: String,
+        value: String,
+        targetRoute: SettingsRightRoute? = .categoryDetail,
+        opensPhoneQR: Bool = false
+    ) {
+        self.index = index
+        self.label = label
+        self.value = value
+        self.targetRoute = targetRoute
+        self.opensPhoneQR = opensPhoneQR
+    }
+}
+
+// MARK: - Settings View (Reference 2-Column Split Layout + Sub-Screens)
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -66,11 +108,14 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
 
     @State private var selectedCategory: SettingsCategory = .playback
+    @State private var rightRoute: SettingsRightRoute = .summary
     @State private var showSavedAlert: Bool = false
     @State private var showPhoneQRSetup: Bool = false
 
     @FocusState private var focusedCategory: SettingsCategory?
-    @FocusState private var isRightPrimaryFocused: Bool
+    @FocusState private var focusedRightTarget: RightFocusTarget?
+
+    private let summarySurfaceColor = Color(red: 22 / 255, green: 24 / 255, blue: 31 / 255)
 
     var body: some View {
         ZStack {
@@ -81,25 +126,25 @@ struct SettingsView: View {
                 }
             )
 
-            HStack(alignment: .top, spacing: 48) {
-                // LEFT COLUMN: Settings Title + Vertical Sidebar
+            HStack(alignment: .top, spacing: 52) {
+                // LEFT COLUMN: 50pt Bold Settings Title + 26-28pt Pill Sidebar
                 leftSidebarColumn
-                    .frame(width: 430, alignment: .leading)
+                    .frame(width: 470, alignment: .leading)
                     .focusSection()
 
-                // RIGHT COLUMN: Live Detail Controls Card
+                // RIGHT COLUMN: Reference Summary Container -> Clean Sub-Screens
                 rightDetailCard
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .focusSection()
             }
             .padding(.horizontal, 75)
-            .padding(.top, 96)
+            .padding(.top, 92)
             .padding(.bottom, 50)
         }
         .defaultFocus($focusedCategory, .playback)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                if focusedCategory == nil && !isRightPrimaryFocused {
+                if focusedCategory == nil && focusedRightTarget == nil {
                     focusedCategory = selectedCategory
                 }
             }
@@ -111,12 +156,15 @@ struct SettingsView: View {
         .onChange(of: focusedCategory) { _, newCat in
             if let newCat {
                 selectedCategory = newCat
+                if rightRoute != .summary {
+                    rightRoute = .summary
+                }
             }
         }
         .alert("Settings Saved", isPresented: $showSavedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("All preferences and API settings have been saved.")
+            Text("All preferences and manifest settings have been saved.")
         }
         .sheet(isPresented: $showPhoneQRSetup) {
             PhoneQRSetupView(settingsViewModel: viewModel) {
@@ -128,14 +176,14 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Left Sidebar Column
+    // MARK: - Left Sidebar Column (tvOS Reference Scale: 50pt Title, 26pt Rows)
 
     private var leftSidebarColumn: some View {
         VStack(alignment: .leading, spacing: 26) {
             Text("Settings")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 50, weight: .bold))
                 .foregroundStyle(.white)
-                .padding(.leading, 12)
+                .padding(.leading, 14)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 6) {
@@ -144,21 +192,28 @@ struct SettingsView: View {
 
                         Button {
                             selectedCategory = category
-                            isRightPrimaryFocused = true
+                            withAnimation(.easeOut(duration: 0.16)) {
+                                rightRoute = .categoryDetail
+                            }
+                            DispatchQueue.main.async {
+                                focusedRightTarget = .detailFirstControl
+                            }
                         } label: {
-                            HStack(spacing: 16) {
+                            HStack(spacing: 18) {
                                 Image(systemName: category.iconName)
-                                    .font(.system(size: 19, weight: .medium))
-                                    .frame(width: 26)
+                                    .font(.system(size: 25, weight: .medium))
+                                    .frame(width: 34)
 
                                 Text(category.rawValue)
-                                    .font(.system(size: 19, weight: isHighlighted ? .semibold : .medium))
+                                    .font(.system(size: 26, weight: isHighlighted ? .semibold : .medium))
+                                    .lineLimit(1)
 
-                                Spacer()
+                                Spacer(minLength: 0)
                             }
                             .foregroundStyle(isHighlighted ? Color.black : Color.white.opacity(0.92))
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 17)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 isHighlighted
                                 ? Color.white
@@ -169,8 +224,8 @@ struct SettingsView: View {
                         .buttonStyle(AuraButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCategory, equals: category)
-                        .scaleEffect(focusedCategory == category ? 1.03 : 1.0)
-                        .animation(.easeOut(duration: 0.16), value: focusedCategory)
+                        .scaleEffect(focusedCategory == category ? 1.02 : 1.0)
+                        .animation(.easeOut(duration: 0.14), value: focusedCategory)
                     }
                 }
                 .padding(.vertical, 4)
@@ -178,33 +233,60 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Right Detail Frosted Glass Card
+    // MARK: - Right Detail Container (#16181F at 92% Opacity, Zero Blur Lag)
 
     private var rightDetailCard: some View {
         ZStack(alignment: .top) {
-            // Card base container
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.auraSurface.opacity(0.82))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(.ultraThinMaterial.opacity(0.35))
-                )
+            RoundedRectangle(cornerRadius: 28)
+                .fill(Color.auraCardSurface)
 
-            // Blurred ambient artwork banner along the top
             ambientBannerHeader
 
-            // Always-focusable interactive category controls panel
-            categoryControlsPanel
+            switch rightRoute {
+            case .summary:
+                categorySummaryPanel
+            case .categoryDetail:
+                categoryDetailPanel
+            case .subtitlesStylePreview:
+                subtitlesStylePreviewScreen
+            case .subtitlesSizePosition:
+                subtitlesSizePositionScreen
+            case .subtitlesCustomFonts:
+                subtitlesCustomFontsScreen
+            case .subtitlesFirstLanguage:
+                subtitlesLanguagePickerScreen(title: "First language", selection: $viewModel.subtitleLanguage)
+            case .subtitlesSecondLanguage:
+                subtitlesLanguagePickerScreen(title: "Second language", selection: $viewModel.secondarySubtitleLanguage)
+            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .clipShape(RoundedRectangle(cornerRadius: 28))
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
         .onExitCommand {
-            if focusedCategory == nil {
-                focusedCategory = selectedCategory
+            handleRightPaneExit()
+        }
+    }
+
+    private func handleRightPaneExit() {
+        switch rightRoute {
+        case .subtitlesStylePreview, .subtitlesSizePosition, .subtitlesCustomFonts, .subtitlesFirstLanguage, .subtitlesSecondLanguage:
+            withAnimation(.easeOut(duration: 0.16)) {
+                rightRoute = .categoryDetail
             }
+            DispatchQueue.main.async {
+                focusedRightTarget = .detailFirstControl
+            }
+        case .categoryDetail:
+            withAnimation(.easeOut(duration: 0.16)) {
+                rightRoute = .summary
+            }
+            DispatchQueue.main.async {
+                focusedRightTarget = .summaryCard(0)
+            }
+        case .summary:
+            focusedCategory = selectedCategory
         }
     }
 
@@ -214,67 +296,306 @@ struct SettingsView: View {
             ZStack {
                 if let path = viewModel.ambientBannerBackdropPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                    AuraCachedImage(url: url) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 960, height: 260)) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: 240)
+                            .frame(width: geo.size.width, height: 260)
                             .clipped()
-                            .blur(radius: 16)
-                            .opacity(0.45)
+                            .opacity(0.36)
                     } placeholder: {
-                        Color.clear.frame(width: geo.size.width, height: 240)
+                        Color.clear.frame(width: geo.size.width, height: 260)
                     }
                 } else {
                     LinearGradient(
-                        colors: [Color.auraAccent.opacity(0.28), Color.clear],
+                        colors: [Color.auraAccent.opacity(0.24), Color.clear],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(width: geo.size.width, height: 240)
+                    .frame(width: geo.size.width, height: 260)
                 }
 
-                // Bottom fade into the frosted glass body
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0.0),
-                        .init(color: Color.auraSurface.opacity(0.85), location: 0.72),
-                        .init(color: Color.auraSurface, location: 1.0)
+                        .init(color: summarySurfaceColor.opacity(0.82), location: 0.68),
+                        .init(color: summarySurfaceColor, location: 1.0)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             }
-            .frame(width: geo.size.width, height: 240)
+            .frame(width: geo.size.width, height: 260)
         }
-        .frame(height: 240)
+        .frame(height: 260)
     }
 
-    // MARK: - Interactive Controls Panel
+    // MARK: - Reference Summary View (Top Banner + Title + 2x2 Interactive Summary Cards)
 
-    private var categoryControlsPanel: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Header row with Icon, Category Title & Save CTA Button
-            HStack(alignment: .center, spacing: 18) {
+    private var categorySummaryPanel: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            Spacer().frame(height: 112)
+
+            VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: selectedCategory.iconName)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
+                    .frame(width: 68, height: 68)
+                    .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 16))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(Color.white.opacity(0.08), lineWidth: 1)
                     )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(selectedCategory.rawValue)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text(selectedCategory.summarySubtitle)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .lineLimit(2)
+                Text(selectedCategory.rawValue)
+                    .font(.system(size: 46, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text(selectedCategory.summarySubtitle)
+                    .font(.system(size: 21, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .lineLimit(2)
+            }
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ],
+                spacing: 16
+            ) {
+                ForEach(summaryCards(for: selectedCategory)) { card in
+                    let isFocused = focusedRightTarget == .summaryCard(card.index)
+
+                    Button {
+                        if card.opensPhoneQR {
+                            showPhoneQRSetup = true
+                        } else if let target = card.targetRoute {
+                            withAnimation(.easeOut(duration: 0.16)) {
+                                rightRoute = target
+                            }
+                            DispatchQueue.main.async {
+                                focusedRightTarget = .detailFirstControl
+                            }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(card.label)
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundStyle(isFocused ? Color.black.opacity(0.65) : Color.white.opacity(0.55))
+
+                            Text(card.value)
+                                .font(.system(size: 25, weight: .semibold))
+                                .foregroundStyle(isFocused ? Color.black : Color.white)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 118, alignment: .leading)
+                        .padding(.horizontal, 26)
+                        .padding(.vertical, 22)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(isFocused ? Color.white : Color.white.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+                        )
+                        .scaleEffect(isFocused ? 1.02 : 1.0)
+                        .animation(.easeOut(duration: 0.14), value: focusedRightTarget)
+                    }
+                    .buttonStyle(AuraButtonStyle())
+                    .focusEffectDisabled()
+                    .focused($focusedRightTarget, equals: .summaryCard(card.index))
                 }
+            }
+
+            if selectedCategory != .about {
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        rightRoute = .categoryDetail
+                    }
+                    DispatchQueue.main.async {
+                        focusedRightTarget = .detailFirstControl
+                    }
+                } label: {
+                    let isFocused = focusedRightTarget == .openAllButton
+                    HStack {
+                        Text(openDetailButtonTitle(for: selectedCategory))
+                            .font(.system(size: 24, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    .foregroundStyle(isFocused ? Color.black : Color.white)
+                    .padding(.horizontal, 26)
+                    .padding(.vertical, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(isFocused ? Color.white : Color.white.opacity(0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+                    )
+                    .scaleEffect(isFocused ? 1.02 : 1.0)
+                    .animation(.easeOut(duration: 0.14), value: focusedRightTarget)
+                }
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+                .focused($focusedRightTarget, equals: .openAllButton)
+            }
+
+            Spacer()
+        }
+        .padding(44)
+    }
+
+    private func openDetailButtonTitle(for category: SettingsCategory) -> String {
+        switch category {
+        case .subtitles:
+            return "Style & Preview, Custom Fonts & Languages"
+        case .quickSetup:
+            return "Paste Manifest URL Directly / QR Setup"
+        default:
+            return "Configure \(category.rawValue)"
+        }
+    }
+
+    private func summaryCards(for category: SettingsCategory) -> [SummaryCardDescriptor] {
+        switch category {
+        case .playback:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Resume", value: viewModel.resumePlaybackBehavior),
+                SummaryCardDescriptor(index: 1, label: "Next episode", value: viewModel.nextEpisodeBehavior),
+                SummaryCardDescriptor(index: 2, label: "Player engine", value: viewModel.playerEngineName),
+                SummaryCardDescriptor(index: 3, label: "Audio", value: viewModel.audioOutputMode)
+            ]
+        case .subtitles:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Turn on", value: viewModel.subtitleAutoMode, targetRoute: .categoryDetail),
+                SummaryCardDescriptor(
+                    index: 1,
+                    label: "Languages",
+                    value: "\(viewModel.displayLanguageName(for: viewModel.subtitleLanguage)), \(viewModel.displayLanguageName(for: viewModel.secondarySubtitleLanguage))",
+                    targetRoute: .subtitlesFirstLanguage
+                ),
+                SummaryCardDescriptor(index: 2, label: "Font", value: viewModel.subtitleFontName, targetRoute: .subtitlesCustomFonts),
+                SummaryCardDescriptor(index: 3, label: "Size", value: "\(Int(viewModel.subtitleFontSize)) pt", targetRoute: .subtitlesSizePosition)
+            ]
+        case .skipIntroCredits:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Intro", value: viewModel.skipIntroMode),
+                SummaryCardDescriptor(index: 1, label: "Recap", value: viewModel.skipRecapMode),
+                SummaryCardDescriptor(index: 2, label: "Overlay", value: viewModel.skipCreditsMode),
+                SummaryCardDescriptor(index: 3, label: "Delay", value: "\(viewModel.skipDelaySeconds) s")
+            ]
+        case .appearance:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Language", value: viewModel.displayLanguageName(for: viewModel.preferredLanguage)),
+                SummaryCardDescriptor(index: 1, label: "Home", value: viewModel.homeHeroStyle),
+                SummaryCardDescriptor(index: 2, label: "Movies", value: viewModel.moviesLayoutStyle),
+                SummaryCardDescriptor(index: 3, label: "Watched indicator", value: viewModel.showWatchedIndicators ? "On" : "Off")
+            ]
+        case .library:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Preferred quality", value: viewModel.preferredQuality),
+                SummaryCardDescriptor(index: 1, label: "Watch history", value: "Local SwiftData"),
+                SummaryCardDescriptor(index: 2, label: "Backup format", value: "JSON Export"),
+                SummaryCardDescriptor(index: 3, label: "Metadata source", value: "TMDB v3")
+            ]
+        case .serversAccounts:
+            return [
+                SummaryCardDescriptor(index: 0, label: "TMDB API key", value: viewModel.tmdbApiKey.isEmpty ? "Not Set" : "Configured"),
+                SummaryCardDescriptor(index: 1, label: "AIOStreams / Stremio", value: viewModel.aioStreamsUrl.isEmpty ? "Not Set" : "Connected"),
+                SummaryCardDescriptor(index: 2, label: "Nuvio / Addons", value: viewModel.configuredManifestURLs.count > 1 ? "\(viewModel.configuredManifestURLs.count) Addons" : "Add Optional"),
+                SummaryCardDescriptor(index: 3, label: "MDBList & Subtitles", value: viewModel.mdblistApiKey.isEmpty ? "Optional" : "Configured")
+            ]
+        case .trakt:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Account", value: viewModel.traktUsername.isEmpty ? "Not Connected" : viewModel.traktUsername),
+                SummaryCardDescriptor(index: 1, label: "Scrobble", value: viewModel.traktScrobbleEnabled ? "On" : "Off"),
+                SummaryCardDescriptor(index: 2, label: "Auto-sync", value: "80% Threshold"),
+                SummaryCardDescriptor(index: 3, label: "History merge", value: "Enabled")
+            ]
+        case .artworkMetadata:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Home logos", value: viewModel.includeLogosInHome ? "On" : "Off"),
+                SummaryCardDescriptor(index: 1, label: "Logo language", value: viewModel.preferredArtworkLanguage),
+                SummaryCardDescriptor(index: 2, label: "Custom artwork", value: artworkOverrides.isEmpty ? "Default" : "\(artworkOverrides.count) titles"),
+                SummaryCardDescriptor(index: 3, label: "Auto sync subtitles", value: viewModel.autoSyncSubtitles ? "On" : "Off")
+            ]
+        case .quickSetup:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Phone QR Setup", value: "Scan QR Code", targetRoute: nil, opensPhoneQR: true),
+                SummaryCardDescriptor(index: 1, label: "AIOStreams / Stremio URLs", value: viewModel.aioStreamsUrl.isEmpty ? "Paste Manifest..." : "Configured"),
+                SummaryCardDescriptor(index: 2, label: "Nuvio / Addon URLs", value: viewModel.aioStreamsAdditionalUrls.isEmpty ? "Add Addon..." : "Configured"),
+                SummaryCardDescriptor(index: 3, label: "MDBList & AI Key", value: viewModel.mdblistApiKey.isEmpty && viewModel.aiTranslationApiKey.isEmpty ? "Optional" : "Configured")
+            ]
+        case .about:
+            return [
+                SummaryCardDescriptor(index: 0, label: "Application", value: "AuraTV 1.0.0"),
+                SummaryCardDescriptor(index: 1, label: "Platform", value: "tvOS 18+"),
+                SummaryCardDescriptor(index: 2, label: "Engine", value: "AetherEngine"),
+                SummaryCardDescriptor(index: 3, label: "Design", value: "Dark Cinema")
+            ]
+        }
+    }
+
+    // MARK: - Full-Width Category Detail Panel
+
+    private var categoryDetailPanel: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            detailHeaderBar(
+                title: selectedCategory.rawValue,
+                subtitle: selectedCategory.summarySubtitle,
+                backTitle: "Summary",
+                backAction: {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        rightRoute = .summary
+                    }
+                    DispatchQueue.main.async {
+                        focusedRightTarget = .summaryCard(0)
+                    }
+                }
+            )
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 14) {
+                    controlsContent(for: selectedCategory)
+
+                    if let status = viewModel.statusMessage {
+                        Text(status)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.green)
+                            .padding(.top, 6)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .padding(44)
+    }
+
+    private func detailHeaderBar(
+        title: String,
+        subtitle: String,
+        backTitle: String,
+        backAction: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Button(action: backAction) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .bold))
+                        Text(backTitle)
+                            .font(.system(size: 21, weight: .semibold))
+                    }
+                    .modifier(SettingsFocusablePillModifier())
+                }
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+                .focused($focusedRightTarget, equals: .backButton)
 
                 Spacer()
 
@@ -283,31 +604,383 @@ struct SettingsView: View {
                     showSavedAlert = true
                 } label: {
                     Text("Save Changes")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 21, weight: .bold))
                         .modifier(SettingsPrimaryPillModifier())
                 }
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
-                .focused($isRightPrimaryFocused)
+                .focused($focusedRightTarget, equals: .saveButton)
             }
 
-            // Full-Width Grouped Native Interactive Controls
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 12) {
-                    controlsContent(for: selectedCategory)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 42, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.68))
+            }
+        }
+    }
 
-                    if let status = viewModel.statusMessage {
-                        Text(status)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.green)
-                            .padding(.top, 6)
+    // MARK: - Subtitles Dedicated Sub-Screens
+
+    private var subtitlesStylePreviewScreen: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            detailHeaderBar(
+                title: "Style & Preview",
+                subtitle: "Low-bloom Mini LED colors, opacity, and subtle dark drop shadow.",
+                backTitle: "Subtitles",
+                backAction: {
+                    viewModel.saveSettings(context: modelContext)
+                    withAnimation(.easeOut(duration: 0.16)) { rightRoute = .categoryDetail }
+                    DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+                }
+            )
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 14) {
+                    // Live Mini LED Preview Card
+                    let previewStyle = SubtitleStyle(
+                        fontSize: viewModel.subtitleFontSize,
+                        fontWeight: viewModel.subtitleFontWeight,
+                        fontName: viewModel.subtitleFontName,
+                        textColor: viewModel.subtitleTextColor,
+                        textOpacity: viewModel.subtitleTextOpacity,
+                        backgroundOpacity: viewModel.subtitleBackgroundOpacity,
+                        bottomOffset: viewModel.subtitleBottomOffset
+                    )
+
+                    VStack(spacing: 12) {
+                        Text("Mini LED Live Preview")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.6))
+
+                        VStack(spacing: 8) {
+                            Text(SubtitleProcessor.process(
+                                text: "هذه ترجمة عربية مصممة لشاشات Mini LED بدون توهج.",
+                                isArabic: true,
+                                fixRTL: viewModel.fixArabicRTL,
+                                fixReversedPunctuation: viewModel.fixReversedPunctuation
+                            ))
+                            .font(previewStyle.font)
+                            .foregroundStyle(previewStyle.colorValue)
+                            .shadow(color: .black.opacity(0.92), radius: 3, x: 0, y: 2)
+
+                            Text("Sharp cinema subtitles with zero Mini LED blooming.")
+                                .font(previewStyle.font)
+                                .foregroundStyle(previewStyle.colorValue)
+                                .shadow(color: .black.opacity(0.92), radius: 3, x: 0, y: 2)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 16)
+                        .background(
+                            Color.black.opacity(max(viewModel.subtitleBackgroundOpacity, 0.0)),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
+                    .background(Color.black.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+
+                    // Mini LED Low-Bloom Presets
+                    ForEach(Array(SubtitleStyle.miniLEDPresets.enumerated()), id: \.element.id) { idx, preset in
+                        let isSelected = viewModel.subtitleTextColor.lowercased() == preset.name.lowercased()
+                        let row = Button {
+                            viewModel.subtitleTextColor = preset.name
+                            viewModel.saveSettings(context: modelContext)
+                        } label: {
+                            HStack(spacing: 18) {
+                                Circle()
+                                    .fill(preset.color)
+                                    .frame(width: 28, height: 28)
+                                    .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.5))
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(preset.name)
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                    Text(preset.subtitle)
+                                        .font(.system(size: 19))
+                                        .foregroundStyle(.white.opacity(0.64))
+                                }
+
+                                Spacer()
+
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 18)
+                            .modifier(SettingsFocusableRowModifier())
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+
+                        if idx == 0 {
+                            row.focused($focusedRightTarget, equals: .detailFirstControl)
+                        } else {
+                            row
+                        }
+                    }
+
+                    // Subtitle Opacity Slider Row (D-pad Left/Right or - / + buttons)
+                    subtitleOpacitySliderRow
+
+                    cycleSettingRow(
+                        title: "Background Box Opacity",
+                        value: "\(Int(viewModel.subtitleBackgroundOpacity * 100))%"
+                    ) {
+                        viewModel.subtitleBackgroundOpacity = viewModel.nextValue(
+                            after: viewModel.subtitleBackgroundOpacity,
+                            in: SettingsViewModel.subtitleBackgroundOpacityOptions
+                        )
+                        viewModel.saveSettings(context: modelContext)
                     }
                 }
                 .padding(.vertical, 6)
             }
         }
-        .padding(42)
+        .padding(44)
     }
+
+    private var subtitleOpacitySliderRow: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Subtitle Opacity")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("75%–80% keeps subtitles crisp without blooming on Mini LED displays.")
+                        .font(.system(size: 19))
+                        .foregroundStyle(.white.opacity(0.64))
+                }
+                Spacer()
+                Text("\(Int((viewModel.subtitleTextOpacity * 100).rounded()))%")
+                    .font(.system(size: 25, weight: .bold).monospacedDigit())
+                    .foregroundStyle(.white)
+            }
+
+            HStack(spacing: 16) {
+                Button("-5%") {
+                    viewModel.subtitleTextOpacity = max(0.40, viewModel.subtitleTextOpacity - 0.05)
+                    viewModel.saveSettings(context: modelContext)
+                }
+                .font(.system(size: 20, weight: .semibold))
+                .modifier(SettingsFocusablePillModifier())
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+
+                GeometryReader { geo in
+                    let fraction = CGFloat(min(max((viewModel.subtitleTextOpacity - 0.40) / 0.60, 0), 1))
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.16))
+                            .frame(height: 10)
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(width: max(18, geo.size.width * fraction), height: 10)
+                    }
+                    .frame(maxHeight: .infinity)
+                }
+                .frame(height: 28)
+
+                Button("+5%") {
+                    viewModel.subtitleTextOpacity = min(1.00, viewModel.subtitleTextOpacity + 0.05)
+                    viewModel.saveSettings(context: modelContext)
+                }
+                .font(.system(size: 20, weight: .semibold))
+                .modifier(SettingsFocusablePillModifier())
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+            }
+        }
+        .padding(.horizontal, 26)
+        .padding(.vertical, 20)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var subtitlesSizePositionScreen: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            detailHeaderBar(
+                title: "Size & Position",
+                subtitle: "Adjust text size, weight, and bottom safe-area offset.",
+                backTitle: "Subtitles",
+                backAction: {
+                    viewModel.saveSettings(context: modelContext)
+                    withAnimation(.easeOut(duration: 0.16)) { rightRoute = .categoryDetail }
+                    DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+                }
+            )
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 14) {
+                    cycleSettingRow(title: "Font Size", value: "\(Int(viewModel.subtitleFontSize)) pt") {
+                        viewModel.subtitleFontSize = viewModel.nextValue(
+                            after: viewModel.subtitleFontSize,
+                            in: SettingsViewModel.subtitleSizeOptions
+                        )
+                        viewModel.saveSettings(context: modelContext)
+                    }
+                    .focused($focusedRightTarget, equals: .detailFirstControl)
+
+                    cycleSettingRow(title: "Font Weight", value: viewModel.subtitleFontWeight) {
+                        viewModel.subtitleFontWeight = viewModel.nextValue(
+                            after: viewModel.subtitleFontWeight,
+                            in: SettingsViewModel.fontWeightOptions
+                        )
+                        viewModel.saveSettings(context: modelContext)
+                    }
+
+                    cycleSettingRow(title: "Bottom Offset", value: "\(Int(viewModel.subtitleBottomOffset)) pt") {
+                        viewModel.subtitleBottomOffset = viewModel.nextValue(
+                            after: viewModel.subtitleBottomOffset,
+                            in: SettingsViewModel.subtitleBottomOffsetOptions
+                        )
+                        viewModel.saveSettings(context: modelContext)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .padding(44)
+    }
+
+    private var subtitlesCustomFontsScreen: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            detailHeaderBar(
+                title: "Custom Fonts",
+                subtitle: "Bundled OFL Arabic & Latin typefaces rendered cleanly on tvOS.",
+                backTitle: "Subtitles",
+                backAction: {
+                    viewModel.saveSettings(context: modelContext)
+                    withAnimation(.easeOut(duration: 0.16)) { rightRoute = .categoryDetail }
+                    DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+                }
+            )
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 14) {
+                    ForEach(Array(SettingsViewModel.fontNameOptions.enumerated()), id: \.element) { idx, fontName in
+                        let isSelected = viewModel.subtitleFontName == fontName
+                        let sampleStyle = SubtitleStyle(
+                            fontSize: 28,
+                            fontWeight: viewModel.subtitleFontWeight,
+                            fontName: fontName,
+                            textColor: viewModel.subtitleTextColor,
+                            textOpacity: viewModel.subtitleTextOpacity
+                        )
+
+                        let btn = Button {
+                            viewModel.subtitleFontName = fontName
+                            viewModel.saveSettings(context: modelContext)
+                        } label: {
+                            HStack(spacing: 18) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(fontName)
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                    Text("تجربة الخط العربي · Sample Subtitle Text")
+                                        .font(sampleStyle.font)
+                                        .foregroundStyle(sampleStyle.colorValue)
+                                }
+
+                                Spacer()
+
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 18)
+                            .modifier(SettingsFocusableRowModifier())
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+
+                        if idx == 0 {
+                            btn.focused($focusedRightTarget, equals: .detailFirstControl)
+                        } else {
+                            btn
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .padding(44)
+    }
+
+    private func subtitlesLanguagePickerScreen(title: String, selection: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            detailHeaderBar(
+                title: title,
+                subtitle: "Choose preferred subtitle download & selection priority.",
+                backTitle: "Subtitles",
+                backAction: {
+                    viewModel.saveSettings(context: modelContext)
+                    withAnimation(.easeOut(duration: 0.16)) { rightRoute = .categoryDetail }
+                    DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+                }
+            )
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 12) {
+                    ForEach(Array(SettingsViewModel.languageOptions.enumerated()), id: \.element.code) { idx, lang in
+                        let isSelected = selection.wrappedValue == lang.code
+                        let btn = Button {
+                            selection.wrappedValue = lang.code
+                            viewModel.saveSettings(context: modelContext)
+                        } label: {
+                            HStack {
+                                Text(lang.name)
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Text(lang.code.uppercased())
+                                    .font(.system(size: 19, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(.white)
+                                        .padding(.leading, 10)
+                                }
+                            }
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 18)
+                            .modifier(SettingsFocusableRowModifier())
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+
+                        if idx == 0 {
+                            btn.focused($focusedRightTarget, equals: .detailFirstControl)
+                        } else {
+                            btn
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .padding(44)
+    }
+
+    // MARK: - Controls Content per Category
 
     @ViewBuilder
     private func controlsContent(for category: SettingsCategory) -> some View {
@@ -317,6 +990,7 @@ struct SettingsView: View {
                 viewModel.resumePlaybackBehavior = viewModel.nextValue(after: viewModel.resumePlaybackBehavior, in: SettingsViewModel.resumeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             cycleSettingRow(title: "Rewind on Resume", value: viewModel.displayRewindOnResume(viewModel.rewindOnResumeSeconds)) {
                 viewModel.rewindOnResumeSeconds = viewModel.nextValue(after: viewModel.rewindOnResumeSeconds, in: SettingsViewModel.rewindOnResumeOptions)
                 viewModel.saveSettings(context: modelContext)
@@ -388,30 +1062,54 @@ struct SettingsView: View {
             )
 
         case .subtitles:
+            actionSettingRow(
+                title: "Style & Preview",
+                value: "\(viewModel.subtitleTextColor) · \(Int((viewModel.subtitleTextOpacity * 100).rounded()))%",
+                icon: "paintpalette"
+            ) {
+                withAnimation(.easeOut(duration: 0.16)) { rightRoute = .subtitlesStylePreview }
+                DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+            }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
+
+            actionSettingRow(
+                title: "Size & Position",
+                value: "\(Int(viewModel.subtitleFontSize)) pt · \(viewModel.subtitleFontWeight)",
+                icon: "textformat.size"
+            ) {
+                withAnimation(.easeOut(duration: 0.16)) { rightRoute = .subtitlesSizePosition }
+                DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+            }
+
+            actionSettingRow(
+                title: "Custom Fonts",
+                value: viewModel.subtitleFontName,
+                icon: "character.textbox"
+            ) {
+                withAnimation(.easeOut(duration: 0.16)) { rightRoute = .subtitlesCustomFonts }
+                DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+            }
+
+            actionSettingRow(
+                title: "First language",
+                value: viewModel.displayLanguageName(for: viewModel.subtitleLanguage),
+                icon: "globe"
+            ) {
+                withAnimation(.easeOut(duration: 0.16)) { rightRoute = .subtitlesFirstLanguage }
+                DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+            }
+
+            actionSettingRow(
+                title: "Second language",
+                value: viewModel.displayLanguageName(for: viewModel.secondarySubtitleLanguage),
+                icon: "globe.badge.chevron.backward"
+            ) {
+                withAnimation(.easeOut(duration: 0.16)) { rightRoute = .subtitlesSecondLanguage }
+                DispatchQueue.main.async { focusedRightTarget = .detailFirstControl }
+            }
+
             cycleSettingRow(title: "Turn On Subtitles", value: viewModel.subtitleAutoMode) {
                 viewModel.subtitleAutoMode = viewModel.nextValue(after: viewModel.subtitleAutoMode, in: SettingsViewModel.subtitleAutoOptions)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "First Language", value: viewModel.displayLanguageName(for: viewModel.subtitleLanguage)) {
-                let codes = SettingsViewModel.languageOptions.map(\.code)
-                viewModel.subtitleLanguage = viewModel.nextValue(after: viewModel.subtitleLanguage, in: codes)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Second Language", value: viewModel.displayLanguageName(for: viewModel.secondarySubtitleLanguage)) {
-                let codes = SettingsViewModel.languageOptions.map(\.code)
-                viewModel.secondarySubtitleLanguage = viewModel.nextValue(after: viewModel.secondarySubtitleLanguage, in: codes)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Font Family", value: viewModel.subtitleFontName) {
-                viewModel.subtitleFontName = viewModel.nextValue(after: viewModel.subtitleFontName, in: SettingsViewModel.fontNameOptions)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Font Size", value: "\(Int(viewModel.subtitleFontSize)) pt") {
-                viewModel.subtitleFontSize = viewModel.nextValue(after: viewModel.subtitleFontSize, in: SettingsViewModel.subtitleSizeOptions)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Font Weight", value: viewModel.subtitleFontWeight) {
-                viewModel.subtitleFontWeight = viewModel.nextValue(after: viewModel.subtitleFontWeight, in: SettingsViewModel.fontWeightOptions)
                 viewModel.saveSettings(context: modelContext)
             }
             toggleSettingRow(
@@ -424,7 +1122,6 @@ struct SettingsView: View {
                 subtitle: "Anchors commas, periods, dashes, and question marks on Arabic lines.",
                 isOn: $viewModel.fixReversedPunctuation
             )
-
             toggleSettingRow(
                 title: "AI Live Subtitle Translation",
                 subtitle: "Translates upcoming SRT/VTT lines in batches ahead of playback (leaves ASS & PGS untouched).",
@@ -468,11 +1165,12 @@ struct SettingsView: View {
                 viewModel.skipIntroMode = viewModel.nextValue(after: viewModel.skipIntroMode, in: SettingsViewModel.skipModeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             cycleSettingRow(title: "Skip Recap", value: viewModel.skipRecapMode) {
                 viewModel.skipRecapMode = viewModel.nextValue(after: viewModel.skipRecapMode, in: SettingsViewModel.skipModeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
-            cycleSettingRow(title: "Skip Credits", value: viewModel.skipCreditsMode) {
+            cycleSettingRow(title: "End Credits Overlay", value: viewModel.skipCreditsMode) {
                 viewModel.skipCreditsMode = viewModel.nextValue(after: viewModel.skipCreditsMode, in: SettingsViewModel.skipModeOptions)
                 viewModel.saveSettings(context: modelContext)
             }
@@ -491,6 +1189,7 @@ struct SettingsView: View {
                 viewModel.backgroundStyle = viewModel.nextValue(after: viewModel.backgroundStyle, in: SettingsViewModel.backgroundStyleOptions)
                 viewModel.saveSettings(context: modelContext)
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             toggleSettingRow(
                 title: "Auto-Play Muted Trailers on Focus",
                 subtitle: "Expands focused Home cards and plays muted TMDB trailer previews after 2 seconds.",
@@ -529,6 +1228,7 @@ struct SettingsView: View {
             actionSettingRow(title: "Export Watch History (JSON)", icon: "square.and.arrow.up") {
                 _ = viewModel.exportWatchHistory(context: modelContext)
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             actionSettingRow(title: "Import Watch History (JSON)", icon: "square.and.arrow.down") {
                 if let data = viewModel.exportData {
                     viewModel.importWatchHistory(data: data, context: modelContext)
@@ -545,6 +1245,7 @@ struct SettingsView: View {
             actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode") {
                 showPhoneQRSetup = true
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             addonManifestManagerSection
             textFieldSettingRow(
                 title: "TMDB API Key (v3)",
@@ -578,6 +1279,7 @@ struct SettingsView: View {
                 text: $viewModel.traktUsername,
                 isSecure: false
             )
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             toggleSettingRow(
                 title: "Scrobble to Trakt",
                 subtitle: "Automatically updates Trakt progress and watched status at 80%.",
@@ -608,11 +1310,13 @@ struct SettingsView: View {
             ) {
                 viewModel.clearCustomArtwork(context: modelContext)
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
 
         case .quickSetup:
             actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode.viewfinder") {
                 showPhoneQRSetup = true
             }
+            .focused($focusedRightTarget, equals: .detailFirstControl)
             addonManifestManagerSection
             actionSettingRow(
                 title: "MDBList Ratings",
@@ -620,8 +1324,9 @@ struct SettingsView: View {
                 icon: "star.bubble"
             ) {
                 selectedCategory = .serversAccounts
+                rightRoute = .categoryDetail
                 DispatchQueue.main.async {
-                    isRightPrimaryFocused = true
+                    focusedRightTarget = .detailFirstControl
                 }
             }
             actionSettingRow(
@@ -630,16 +1335,17 @@ struct SettingsView: View {
                 icon: "sparkles"
             ) {
                 selectedCategory = .subtitles
+                rightRoute = .categoryDetail
                 DispatchQueue.main.async {
-                    isRightPrimaryFocused = true
+                    focusedRightTarget = .detailFirstControl
                 }
             }
             Text("Phone QR Web Server starts only while the Setup via Phone screen is open and stops immediately on close.")
-                .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.55))
+                .font(.system(size: 20))
+                .foregroundStyle(.white.opacity(0.6))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
-                .padding(.top, 2)
+                .padding(.top, 4)
 
         case .about:
             infoRow(title: "Application", value: "AuraTV 1.0.0")
@@ -649,26 +1355,26 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Full-Width Row Builders
+    // MARK: - Reusable Native Row Builders (24-26pt Titles, 20-22pt Subtitles)
 
     private func cycleSettingRow(title: String, value: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Text(value)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.72))
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.74))
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white.opacity(0.5))
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 20)
             .modifier(SettingsFocusableRowModifier())
         }
         .buttonStyle(AuraButtonStyle())
@@ -677,23 +1383,23 @@ struct SettingsView: View {
 
     private func toggleSettingRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(subtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white.opacity(0.62))
             }
         }
         .onChange(of: isOn.wrappedValue) { _, _ in
             viewModel.saveSettings(context: modelContext)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
     }
@@ -704,46 +1410,46 @@ struct SettingsView: View {
         text: Binding<String>,
         isSecure: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
 
             if isSecure {
                 SecureField(placeholder, text: text)
-                    .font(.system(size: 18))
+                    .font(.system(size: 21))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .padding(14)
-                    .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(16)
+                    .background(Color.black.opacity(0.32), in: RoundedRectangle(cornerRadius: 12))
             } else {
                 TextField(placeholder, text: text)
-                    .font(.system(size: 18))
+                    .font(.system(size: 21))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .padding(14)
-                    .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(16)
+                    .background(Color.black.opacity(0.32), in: RoundedRectangle(cornerRadius: 12))
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
     }
 
     @ViewBuilder
     private var addonManifestManagerSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Add Stremio / AIOStreams / Nuvio Manifest URL")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 23, weight: .semibold))
                 .foregroundStyle(.white)
 
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 TextField("https://.../manifest.json (use iPhone Remote keyboard)", text: $viewModel.quickManifestInput)
-                    .font(.system(size: 18))
+                    .font(.system(size: 21))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.done)
@@ -752,8 +1458,8 @@ struct SettingsView: View {
                             await viewModel.addAndValidateManifestURL(viewModel.quickManifestInput, context: modelContext)
                         }
                     }
-                    .padding(14)
-                    .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(16)
+                    .background(Color.black.opacity(0.32), in: RoundedRectangle(cornerRadius: 12))
 
                 Button {
                     Task {
@@ -761,7 +1467,7 @@ struct SettingsView: View {
                     }
                 } label: {
                     Text(viewModel.isTestingConnection ? "Validating..." : "Add / Save")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 20, weight: .bold))
                         .modifier(SettingsPrimaryPillModifier())
                 }
                 .buttonStyle(AuraButtonStyle())
@@ -769,11 +1475,11 @@ struct SettingsView: View {
                 .disabled(viewModel.isTestingConnection)
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
 
@@ -793,13 +1499,13 @@ struct SettingsView: View {
 
         if !viewModel.configuredManifestURLs.isEmpty {
             ForEach(Array(viewModel.configuredManifestURLs.enumerated()), id: \.element) { idx, manifestURL in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(idx == 0 ? "Primary Addon" : "Addon \(idx + 1)")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(idx == 0 ? Color.green : Color.white.opacity(0.6))
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(idx == 0 ? Color.green : Color.white.opacity(0.62))
                         Text(manifestURL)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: 19, weight: .medium))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                     }
@@ -810,7 +1516,7 @@ struct SettingsView: View {
                         Button("Set Primary") {
                             viewModel.makePrimaryManifestURL(manifestURL, context: modelContext)
                         }
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .modifier(SettingsFocusablePillModifier())
                         .buttonStyle(AuraButtonStyle())
                         .focusEffectDisabled()
@@ -819,16 +1525,16 @@ struct SettingsView: View {
                     Button("Remove") {
                         viewModel.removeManifestURL(manifestURL, context: modelContext)
                     }
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .modifier(SettingsFocusablePillModifier())
                     .buttonStyle(AuraButtonStyle())
                     .focusEffectDisabled()
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 14)
-                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 26)
+                .padding(.vertical, 16)
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
             }
@@ -846,7 +1552,7 @@ struct SettingsView: View {
 
         if let connectionStatus = viewModel.connectionTestStatus {
             Text(connectionStatus)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(connectionStatus.hasPrefix("Connected") ? Color.green : Color.orange)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
@@ -860,26 +1566,26 @@ struct SettingsView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
+            HStack(spacing: 16) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.84))
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
                 if let value, !value.isEmpty {
                     Text(value)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.68))
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.70))
                         .lineLimit(1)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white.opacity(0.45))
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 20)
             .modifier(SettingsFocusableRowModifier())
         }
         .buttonStyle(AuraButtonStyle())
@@ -888,23 +1594,23 @@ struct SettingsView: View {
 
     private var audioSyncOffsetRow: some View {
         HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text("Audio Sync Offset")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("Current delay: \(viewModel.formatAudioSyncOffset(viewModel.audioSyncOffsetMs))")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white.opacity(0.64))
             }
 
             Spacer()
 
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Button("-25 ms") {
                     viewModel.adjustAudioSyncOffset(by: -25)
                     viewModel.saveSettings(context: modelContext)
                 }
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
                 .modifier(SettingsFocusablePillModifier())
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
@@ -913,7 +1619,7 @@ struct SettingsView: View {
                     viewModel.audioSyncOffsetMs = 0
                     viewModel.saveSettings(context: modelContext)
                 }
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
                 .modifier(SettingsFocusablePillModifier())
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
@@ -922,17 +1628,17 @@ struct SettingsView: View {
                     viewModel.adjustAudioSyncOffset(by: 25)
                     viewModel.saveSettings(context: modelContext)
                 }
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
                 .modifier(SettingsFocusablePillModifier())
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
     }
@@ -940,16 +1646,16 @@ struct SettingsView: View {
     private func infoRow(title: String, value: String) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.white.opacity(0.65))
             Spacer()
             Text(value)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 26)
+        .padding(.vertical, 20)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -962,14 +1668,14 @@ private struct SettingsFocusableRowModifier: ViewModifier {
         content
             .background(
                 Color.white.opacity(isFocused ? 0.16 : 0.06),
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: 16)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
             )
-            .scaleEffect(isFocused ? 1.02 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .scaleEffect(isFocused ? 1.015 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
     }
 }
 
@@ -979,11 +1685,11 @@ private struct SettingsFocusablePillModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .foregroundStyle(isFocused ? Color.black : Color.white)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
             .background(isFocused ? Color.white : Color.white.opacity(0.14), in: Capsule())
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
     }
 }
 
@@ -993,15 +1699,15 @@ private struct SettingsPrimaryPillModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .foregroundStyle(.black)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 12)
             .background(Color.white, in: Capsule())
             .overlay(
                 Capsule()
                     .stroke(isFocused ? Color.white : .clear, lineWidth: 2.5)
                     .padding(-4)
             )
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
     }
 }

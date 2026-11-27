@@ -92,8 +92,8 @@ final class AIOStreamsService {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 20
         self.session = URLSession(configuration: config)
         self.decoder = JSONDecoder()
         self.decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -130,50 +130,91 @@ final class AIOStreamsService {
         try await validateManifest(at: manifestURL).manifest
     }
 
-    // MARK: - Fetch Streams (Raw Order Preserved)
+    // MARK: - Fetch Streams (Parallel + Off-MainActor Progressive Streaming)
 
-    func fetchStreams(type: String, stremioId: String) async throws -> [StremioStream] {
+    func fetchStreamsProgressive(
+        type: String,
+        stremioId: String,
+        onPartialResults: (@MainActor ([StremioStream], Bool) -> Void)? = nil
+    ) async throws -> [StremioStream] {
         let urls = allManifestURLs
         guard !urls.isEmpty else {
             throw AIOStreamsError.missingManifestURL
         }
 
-        var combined: [StremioStream] = []
-        var firstError: Error?
+        let urlSession = self.session
 
-        for manifest in urls {
-            let root = Self.normalizedBaseURL(from: manifest)
-            let endpoint = "\(root)/stream/\(type)/\(stremioId).json"
-            guard let url = URL(string: endpoint) else {
-                if firstError == nil { firstError = AIOStreamsError.invalidURL }
-                continue
+        // Decode & fetch concurrently off the MainActor so the tvOS UI stays locked at 60fps.
+        let (finalStreams, firstError): ([StremioStream], Error?) = await Task.detached(priority: .userInitiated) {
+            var resultsByIndex: [Int: [StremioStream]] = [:]
+            var earliestError: Error?
+            var completedCount = 0
+            let totalCount = urls.count
+
+            await withTaskGroup(of: (Int, [StremioStream]?, Error?).self) { group in
+                for (index, manifest) in urls.enumerated() {
+                    group.addTask {
+                        let root = Self.normalizedBaseURL(from: manifest)
+                        let endpoint = "\(root)/stream/\(type)/\(stremioId).json"
+                        guard let url = URL(string: endpoint) else {
+                            return (index, nil, AIOStreamsError.invalidURL)
+                        }
+
+                        do {
+                            let (data, response) = try await urlSession.data(from: url)
+                            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                                return (index, nil, AIOStreamsError.httpError(statusCode: http.statusCode))
+                            }
+                            let bgDecoder = JSONDecoder()
+                            bgDecoder.keyDecodingStrategy = .convertFromSnakeCase
+                            let decoded = try bgDecoder.decode(StremioStreamResponse.self, from: data)
+                            return (index, decoded.streams ?? [], nil)
+                        } catch let err as AIOStreamsError {
+                            return (index, nil, err)
+                        } catch {
+                            return (index, nil, AIOStreamsError.decodingError(error))
+                        }
+                    }
+                }
+
+                for await (index, items, err) in group {
+                    completedCount += 1
+                    if let items {
+                        resultsByIndex[index] = items
+                    } else if let err, earliestError == nil {
+                        earliestError = err
+                    }
+
+                    let orderedSoFar = (0..<totalCount).compactMap { resultsByIndex[$0] }.flatMap { $0 }
+                    let isStillLoading = completedCount < totalCount
+                    if let onPartialResults, !orderedSoFar.isEmpty {
+                        await onPartialResults(orderedSoFar, isStillLoading)
+                    }
+                }
             }
 
-            do {
-                let (data, response) = try await fetchData(from: url)
-                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                    if firstError == nil { firstError = AIOStreamsError.httpError(statusCode: http.statusCode) }
-                    continue
-                }
-                let result = try decoder.decode(StremioStreamResponse.self, from: data)
-                if let items = result.streams {
-                    combined.append(contentsOf: items)
-                }
-            } catch {
-                if firstError == nil { firstError = (error as? AIOStreamsError) ?? AIOStreamsError.decodingError(error) }
-            }
-        }
+            let orderedFinal = (0..<totalCount).compactMap { resultsByIndex[$0] }.flatMap { $0 }
+            return (orderedFinal, earliestError)
+        }.value
 
-        if combined.isEmpty, let firstError {
+        if finalStreams.isEmpty, let firstError {
             throw firstError
         }
-        return combined
+        return finalStreams
+    }
+
+    func fetchStreams(type: String, stremioId: String) async throws -> [StremioStream] {
+        try await fetchStreamsProgressive(type: type, stremioId: stremioId)
     }
 
     // MARK: - High-Level: Movie & Series
 
     @MainActor
-    func fetchStreamsForMovie(tmdbId: Int, preferredQuality: String = "4K") async throws -> [StremioStream] {
+    func fetchStreamsProgressiveForMovie(
+        tmdbId: Int,
+        preferredQuality: String = "4K",
+        onUpdate: @escaping @MainActor ([StremioStream], Bool) -> Void
+    ) async throws -> [StremioStream] {
         isLoading = true
         error = nil
         streams = []
@@ -184,22 +225,25 @@ final class AIOStreamsService {
             throw AIOStreamsError.missingIMDbId
         }
 
-        let result = try await fetchStreams(type: "movie", stremioId: imdbId)
+        let result = try await fetchStreamsProgressive(type: "movie", stremioId: imdbId) { partial, stillLoading in
+            self.streams = partial
+            onUpdate(partial, stillLoading)
+        }
         guard !result.isEmpty else {
             throw AIOStreamsError.noStreamsFound
         }
 
-        // Preserve exact stream order returned by AIOStreams without re-sorting or hiding streams.
         streams = result
-        return streams
+        return result
     }
 
     @MainActor
-    func fetchStreamsForEpisode(
+    func fetchStreamsProgressiveForEpisode(
         tmdbId: Int,
         season: Int,
         episode: Int,
-        preferredQuality: String = "4K"
+        preferredQuality: String = "4K",
+        onUpdate: @escaping @MainActor ([StremioStream], Bool) -> Void
     ) async throws -> [StremioStream] {
         isLoading = true
         error = nil
@@ -212,14 +256,36 @@ final class AIOStreamsService {
         }
 
         let stremioId = "\(imdbId):\(season):\(episode)"
-        let result = try await fetchStreams(type: "series", stremioId: stremioId)
+        let result = try await fetchStreamsProgressive(type: "series", stremioId: stremioId) { partial, stillLoading in
+            self.streams = partial
+            onUpdate(partial, stillLoading)
+        }
         guard !result.isEmpty else {
             throw AIOStreamsError.noStreamsFound
         }
 
-        // Preserve exact stream order returned by AIOStreams without re-sorting or hiding streams.
         streams = result
-        return streams
+        return result
+    }
+
+    @MainActor
+    func fetchStreamsForMovie(tmdbId: Int, preferredQuality: String = "4K") async throws -> [StremioStream] {
+        try await fetchStreamsProgressiveForMovie(tmdbId: tmdbId, preferredQuality: preferredQuality) { _, _ in }
+    }
+
+    @MainActor
+    func fetchStreamsForEpisode(
+        tmdbId: Int,
+        season: Int,
+        episode: Int,
+        preferredQuality: String = "4K"
+    ) async throws -> [StremioStream] {
+        try await fetchStreamsProgressiveForEpisode(
+            tmdbId: tmdbId,
+            season: season,
+            episode: episode,
+            preferredQuality: preferredQuality
+        ) { _, _ in }
     }
 
     // MARK: - Auto-Selection & Sorting

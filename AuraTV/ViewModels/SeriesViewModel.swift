@@ -171,19 +171,10 @@ final class SeriesViewModel {
 
     @MainActor
     func prefetchSeries(_ items: [TMDBSeries]) {
-        var urls: [URL] = []
-        urls.reserveCapacity(items.count + 8)
-        for item in items {
-            if let poster = service.imageURL(path: item.posterPath, size: "w500") {
-                urls.append(poster)
-            }
+        let backdropURLs = items.compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w780")
         }
-        for item in items.prefix(8) {
-            if let backdrop = service.imageURL(path: item.backdropPath, size: "w1280") {
-                urls.append(backdrop)
-            }
-        }
-        AuraImageCache.shared.prefetch(urls: urls)
+        AuraImageCache.shared.prefetch(urls: backdropURLs, targetSize: CGSize(width: 380, height: 214))
     }
 
     // MARK: - Helpers

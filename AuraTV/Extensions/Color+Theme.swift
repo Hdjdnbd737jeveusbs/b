@@ -7,6 +7,9 @@ extension Color {
     /// Elevated translucent surface for dark cards, settings tiles, and sheets.
     static let auraSurface = Color(red: 19 / 255, green: 22 / 255, blue: 30 / 255)
 
+    /// High-performance 60fps dark card/modal surface (#16181F at 92% opacity, zero blur overhead).
+    static let auraCardSurface = Color(red: 22 / 255, green: 24 / 255, blue: 31 / 255).opacity(0.92)
+
     /// Subtle frosted glass card fill.
     static let auraGlassFill = Color.white.opacity(0.06)
 

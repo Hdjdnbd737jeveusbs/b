@@ -163,31 +163,29 @@ final class HomeViewModel {
             let path = item.episodeStillPath ?? item.backdropPath ?? item.posterPath
             return service.imageURL(path: path, size: "w780")
         }
-        AuraImageCache.shared.prefetch(urls: urls)
+        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 340, height: 191))
     }
 
     @MainActor
     private func prefetchHomeImages() {
-        var urls: [URL] = []
-        urls.reserveCapacity(48)
-
-        for movie in spotlightItems {
-            if let url = service.imageURL(path: movie.backdropPath ?? movie.posterPath, size: "w1280") {
-                urls.append(url)
-            }
+        let heroURLs = spotlightItems.compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w1280")
         }
+        AuraImageCache.shared.prefetch(urls: heroURLs, targetSize: CGSize(width: 1440, height: 640))
+
+        var posterURLs: [URL] = []
+        posterURLs.reserveCapacity(40)
         for movie in trendingMovies.prefix(20) {
             if let url = service.imageURL(path: movie.posterPath, size: "w500") {
-                urls.append(url)
+                posterURLs.append(url)
             }
         }
         for show in trendingSeries.prefix(20) {
             if let url = service.imageURL(path: show.posterPath, size: "w500") {
-                urls.append(url)
+                posterURLs.append(url)
             }
         }
-
-        AuraImageCache.shared.prefetch(urls: urls)
+        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 215, height: 322))
     }
 
     @MainActor

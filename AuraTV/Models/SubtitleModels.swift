@@ -92,23 +92,111 @@ struct AuraSubtitleCue: Identifiable, Hashable {
 
 // MARK: - Subtitle Style Configuration
 
+struct SubtitleColorPreset: Identifiable, Hashable {
+    let name: String
+    let subtitle: String
+    let color: Color
+    var id: String { name }
+}
+
 struct SubtitleStyle: Codable, Hashable {
     var fontSize: Double = 44.0
     var fontWeight: String = "Bold"
     var fontName: String = "System"
-    var textColor: String = "White"
+    var textColor: String = "Light Gray"
+    var textOpacity: Double = 0.80
     var backgroundOpacity: Double = 0.0
     var bottomOffset: Double = 56.0
 
     static let defaultStyle = SubtitleStyle()
 
-    var colorValue: Color {
+    static let miniLEDPresets: [SubtitleColorPreset] = [
+        SubtitleColorPreset(
+            name: "Light Gray",
+            subtitle: "#BFBFBF · Recommended",
+            color: Color(red: 191 / 255, green: 191 / 255, blue: 191 / 255)
+        ),
+        SubtitleColorPreset(
+            name: "Soft Gray",
+            subtitle: "#CCCCCC · Low Bloom",
+            color: Color(red: 204 / 255, green: 204 / 255, blue: 204 / 255)
+        ),
+        SubtitleColorPreset(
+            name: "Warm Off-White",
+            subtitle: "#D6D1C4 · Paper Warm",
+            color: Color(red: 214 / 255, green: 209 / 255, blue: 196 / 255)
+        ),
+        SubtitleColorPreset(
+            name: "Soft Cinema Yellow",
+            subtitle: "#E5C76B · Classic Cinema",
+            color: Color(red: 229 / 255, green: 199 / 255, blue: 107 / 255)
+        )
+    ]
+
+    static let allColorNames: [String] = miniLEDPresets.map(\.name) + ["White"]
+
+    enum CodingKeys: String, CodingKey {
+        case fontSize
+        case fontWeight
+        case fontName
+        case textColor
+        case textOpacity
+        case backgroundOpacity
+        case bottomOffset
+    }
+
+    init(
+        fontSize: Double = 44.0,
+        fontWeight: String = "Bold",
+        fontName: String = "System",
+        textColor: String = "Light Gray",
+        textOpacity: Double = 0.80,
+        backgroundOpacity: Double = 0.0,
+        bottomOffset: Double = 56.0
+    ) {
+        self.fontSize = fontSize
+        self.fontWeight = fontWeight
+        self.fontName = fontName
+        self.textColor = textColor
+        self.textOpacity = textOpacity
+        self.backgroundOpacity = backgroundOpacity
+        self.bottomOffset = bottomOffset
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 44.0
+        self.fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight) ?? "Bold"
+        self.fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? "System"
+        self.textColor = try c.decodeIfPresent(String.self, forKey: .textColor) ?? "Light Gray"
+        self.textOpacity = try c.decodeIfPresent(Double.self, forKey: .textOpacity) ?? 0.80
+        self.backgroundOpacity = try c.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? 0.0
+        self.bottomOffset = try c.decodeIfPresent(Double.self, forKey: .bottomOffset) ?? 56.0
+    }
+
+    var baseColor: Color {
         switch textColor.lowercased() {
-        case "yellow": return .yellow
-        case "green": return .green
-        case "cyan": return Color(red: 0.2, green: 0.85, blue: 1.0)
-        default: return .white
+        case "light gray", "light gray (#bfbfbf)":
+            return Color(red: 191 / 255, green: 191 / 255, blue: 191 / 255)
+        case "soft gray", "soft gray (#cccccc)":
+            return Color(red: 204 / 255, green: 204 / 255, blue: 204 / 255)
+        case "warm off-white", "warm off-white (#d6d1c4)":
+            return Color(red: 214 / 255, green: 209 / 255, blue: 196 / 255)
+        case "soft cinema yellow", "soft cinema yellow (#e5c76b)", "yellow":
+            return Color(red: 229 / 255, green: 199 / 255, blue: 107 / 255)
+        case "green":
+            return .green
+        case "cyan":
+            return Color(red: 0.2, green: 0.85, blue: 1.0)
+        case "white":
+            return .white
+        default:
+            return Color(red: 191 / 255, green: 191 / 255, blue: 191 / 255)
         }
+    }
+
+    var colorValue: Color {
+        baseColor.opacity(min(max(textOpacity, 0.35), 1.0))
     }
 
     var font: Font {

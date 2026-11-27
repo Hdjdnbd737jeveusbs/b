@@ -13,15 +13,17 @@ struct LoadingOverlayView: View {
 
     var body: some View {
         ZStack {
-            // Full-bleed crisp backdrop
+            Color.black.ignoresSafeArea()
+
+            // Full-bleed crisp backdrop (downsampled to 1920x1080 max)
             backdropLayer
 
             // Left & overall dark cinema gradient vignette so centered logo pops cleanly
             LinearGradient(
                 stops: [
-                    .init(color: Color.auraBackground.opacity(0.75), location: 0.0),
-                    .init(color: Color.auraBackground.opacity(0.45), location: 0.45),
-                    .init(color: Color.auraBackground.opacity(0.25), location: 1.0)
+                    .init(color: Color.black.opacity(0.78), location: 0.0),
+                    .init(color: Color.black.opacity(0.48), location: 0.45),
+                    .init(color: Color.black.opacity(0.28), location: 1.0)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -69,8 +71,8 @@ struct LoadingOverlayView: View {
     @ViewBuilder
     private var backdropLayer: some View {
         if let path = backdropPath,
-           let url = TMDBService.shared.imageURL(path: path, size: "original") {
-            AuraCachedImage(url: url) { image in
+           let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
+            AuraCachedImage(url: url, targetSize: CGSize(width: 1920, height: 1080)) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)

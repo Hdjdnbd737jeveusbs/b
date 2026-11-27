@@ -31,11 +31,11 @@ struct CollectionsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Collections")
-                            .font(.system(size: 38, weight: .bold))
+                            .font(.system(size: 48, weight: .bold))
                             .foregroundStyle(.white)
 
                         Text("Watchlist (\(watchlist.count) items)")
-                            .font(.system(size: 20))
+                            .font(.system(size: 22))
                             .foregroundStyle(Color.auraSecondaryText)
                     }
                     Spacer()
@@ -98,7 +98,7 @@ private struct WatchlistCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = overridePosterPath ?? item.posterPath ?? item.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AuraCachedImage(url: url) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: 220, height: 330)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(2/3, contentMode: .fill)
@@ -127,18 +127,13 @@ private struct WatchlistCard: View {
 
                 // Title
                 Text(item.title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .frame(width: 220, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.07 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.22) : Color.black.opacity(0.35),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
-            )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

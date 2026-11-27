@@ -20,6 +20,8 @@ struct SeriesDetailView: View {
     @State private var availableStreams: [StremioStream] = []
     @State private var selectedStream: StremioStream?
     @State private var isLoadingStreams = false
+    @State private var isLoadingMoreStreams = false
+    @State private var activeStreamFetchTask: Task<Void, Never>?
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
     @State private var pendingEpisodeSeason: Int?
@@ -146,7 +148,10 @@ struct SeriesDetailView: View {
                 streams: availableStreams,
                 selectedStream: selectedStream,
                 preferredQuality: preferredQuality,
+                isLoadingMore: isLoadingMoreStreams,
                 onSelect: { stream in
+                    activeStreamFetchTask?.cancel()
+                    isLoadingMoreStreams = false
                     selectedStream = stream
                     if let urlString = stream.url, let url = URL(string: urlString) {
                         let s = pendingEpisodeSeason ?? 1
@@ -162,7 +167,12 @@ struct SeriesDetailView: View {
                         )
                     }
                 },
-                onDismiss: { showStreamPicker = false }
+                onDismiss: {
+                    activeStreamFetchTask?.cancel()
+                    isLoadingStreams = false
+                    isLoadingMoreStreams = false
+                    showStreamPicker = false
+                }
             )
         }
         .sheet(isPresented: $showChangeArtwork) {
@@ -242,8 +252,8 @@ struct SeriesDetailView: View {
         let height = geometry.size.height * 0.78
         ZStack(alignment: .topTrailing) {
             if let path = effectiveBackdropPath,
-               let url = TMDBService.shared.imageURL(path: path, size: "original") {
-                AuraCachedImage(url: url) { image in
+               let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
+                AuraCachedImage(url: url, targetSize: CGSize(width: 1440, height: 840)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -339,7 +349,7 @@ struct SeriesDetailView: View {
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 19, weight: .medium))
+            .font(.system(size: 21, weight: .medium))
             .foregroundStyle(.white.opacity(0.76))
         }
     }
@@ -376,7 +386,7 @@ struct SeriesDetailView: View {
     private var overviewSection: some View {
         if let overview = viewModel.seriesDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 21, weight: .regular))
                 .foregroundStyle(.white.opacity(0.78))
                 .lineLimit(3)
                 .lineSpacing(4)
@@ -668,7 +678,7 @@ struct SeriesDetailView: View {
         if !viewModel.cast.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Cast")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
@@ -751,44 +761,88 @@ struct SeriesDetailView: View {
         pendingEpisodeTitle = title
         pendingEpisodeStillPath = stillPath
 
-        Task {
+        activeStreamFetchTask?.cancel()
+        activeStreamFetchTask = Task {
             isLoadingStreams = true
+            isLoadingMoreStreams = true
             streamError = nil
+            availableStreams = []
+
+            var didOpenOrLaunch = false
             do {
                 if seriesImdbId == nil {
                     let ext = try? await TMDBService.shared.fetchSeriesExternalIds(id: tmdbId)
                     seriesImdbId = ext?.imdbId
                 }
-                let streams = try await AIOStreamsService.shared.fetchStreamsForEpisode(
+                let streams = try await AIOStreamsService.shared.fetchStreamsProgressiveForEpisode(
                     tmdbId: tmdbId,
                     season: season,
                     episode: episode,
                     preferredQuality: preferredQuality
-                )
-                availableStreams = streams
-                let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
-                selectedStream = firstPlayable
-                isLoadingStreams = false
-
-                if (!forcePicker && (playAtOnceEnabled || streams.count == 1)) || autoPlayBest,
-                   let chosen = firstPlayable,
-                   let urlString = chosen.url,
-                   let url = URL(string: urlString) {
-                    startPlayback(
-                        url: url,
-                        stream: chosen,
-                        season: season,
-                        episode: episode,
-                        episodeTitle: title,
-                        stillPath: stillPath,
-                        resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
-                    )
-                } else {
-                    showStreamPicker = true
+                ) { partialStreams, stillLoading in
+                    guard !Task.isCancelled else { return }
+                    availableStreams = partialStreams
+                    isLoadingMoreStreams = stillLoading
+                    guard !didOpenOrLaunch,
+                          let firstPlayable = partialStreams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? partialStreams.first else {
+                        return
+                    }
+                    selectedStream = firstPlayable
+                    isLoadingStreams = false
+                    if ((!forcePicker && (playAtOnceEnabled || (!stillLoading && partialStreams.count == 1))) || autoPlayBest),
+                       let urlString = firstPlayable.url,
+                       let url = URL(string: urlString) {
+                        didOpenOrLaunch = true
+                        activeStreamFetchTask?.cancel()
+                        startPlayback(
+                            url: url,
+                            stream: firstPlayable,
+                            season: season,
+                            episode: episode,
+                            episodeTitle: title,
+                            stillPath: stillPath,
+                            resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
+                        )
+                    } else if (!forcePicker && playAtOnceEnabled) || autoPlayBest {
+                        return
+                    } else {
+                        didOpenOrLaunch = true
+                        showStreamPicker = true
+                    }
                 }
+                guard !Task.isCancelled else { return }
+                isLoadingStreams = false
+                isLoadingMoreStreams = false
+                availableStreams = streams
+                if !didOpenOrLaunch {
+                    let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
+                    selectedStream = firstPlayable
+                    if ((!forcePicker && (playAtOnceEnabled || streams.count == 1)) || autoPlayBest),
+                       let chosen = firstPlayable,
+                       let urlString = chosen.url,
+                       let url = URL(string: urlString) {
+                        startPlayback(
+                            url: url,
+                            stream: chosen,
+                            season: season,
+                            episode: episode,
+                            episodeTitle: title,
+                            stillPath: stillPath,
+                            resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
+                        )
+                    } else {
+                        showStreamPicker = true
+                    }
+                }
+            } catch is CancellationError {
+                isLoadingStreams = false
+                isLoadingMoreStreams = false
             } catch {
                 isLoadingStreams = false
-                streamError = error.localizedDescription
+                isLoadingMoreStreams = false
+                if !didOpenOrLaunch {
+                    streamError = error.localizedDescription
+                }
             }
         }
     }

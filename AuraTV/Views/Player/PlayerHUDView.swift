@@ -402,8 +402,7 @@ struct PlayerHUDView: View {
             .foregroundStyle(isFocused ? Color.black : Color.white)
             .padding(.horizontal, 26)
             .padding(.vertical, 14)
-            .background(.ultraThinMaterial, in: Capsule())
-            .background(isFocused ? Color.white : Color.white.opacity(0.12), in: Capsule())
+            .background(isFocused ? Color.white : Color.auraCardSurface, in: Capsule())
             .overlay(
                 Capsule()
                     .stroke(Color.white.opacity(isFocused ? 1.0 : 0.35), lineWidth: isFocused ? 2.5 : 1)

@@ -104,10 +104,10 @@ struct SeriesView: View {
                     }
                 }) {
                     Text(category.rawValue)
-                        .font(.system(size: 19, weight: isSelected ? .bold : .medium))
+                        .font(.system(size: 24, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
-                        .padding(.horizontal, 26)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 14)
                         .background(
                             (isSelected || isFocused)
                             ? Color.white

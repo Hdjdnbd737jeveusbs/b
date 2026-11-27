@@ -988,6 +988,7 @@ final class PlayerViewModel {
             subtitleStyle.fontWeight = settings.subtitleFontWeight
             subtitleStyle.fontName = settings.subtitleFontName
             subtitleStyle.textColor = settings.subtitleTextColor
+            subtitleStyle.textOpacity = settings.subtitleTextOpacity
             subtitleStyle.backgroundOpacity = settings.subtitleBackgroundOpacity
             subtitleStyle.bottomOffset = settings.subtitleBottomOffset
 
@@ -1050,6 +1051,7 @@ final class PlayerViewModel {
         settings.subtitleFontWeight = subtitleStyle.fontWeight
         settings.subtitleFontName = subtitleStyle.fontName
         settings.subtitleTextColor = subtitleStyle.textColor
+        settings.subtitleTextOpacity = subtitleStyle.textOpacity
         settings.subtitleBackgroundOpacity = subtitleStyle.backgroundOpacity
         settings.subtitleBottomOffset = subtitleStyle.bottomOffset
 

@@ -28,7 +28,6 @@ struct PhoneQRSetupView: View {
                         RoundedRectangle(cornerRadius: 24)
                             .fill(Color.white)
                             .frame(width: 340, height: 340)
-                            .shadow(color: .black.opacity(0.45), radius: 28, y: 12)
 
                         if let urlStr = server.setupURLString, let qrImage = generateQRCode(from: urlStr) {
                             Image(decorative: qrImage, scale: 1.0)
@@ -67,14 +66,14 @@ struct PhoneQRSetupView: View {
 
                 // RIGHT: Instructions + Live Status + Done Button
                 VStack(alignment: .leading, spacing: 26) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Label("Setup via Phone (QR Code)", systemImage: "qrcode.viewfinder")
-                            .font(.system(size: 36, weight: .bold))
+                            .font(.system(size: 46, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text("Scan with your phone camera to paste AIOStreams manifest URLs and API keys using your phone's keyboard. The local server stops automatically when you close this screen.")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.white.opacity(0.72))
+                        Text("Scan with your phone camera to paste Stremio, AIOStreams, or Nuvio manifest URLs and API keys using your phone's keyboard. The local server stops automatically when you close this screen.")
+                            .font(.system(size: 21))
+                            .foregroundStyle(.white.opacity(0.75))
                             .lineSpacing(4)
                     }
 

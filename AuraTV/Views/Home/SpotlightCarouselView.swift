@@ -190,11 +190,6 @@ struct SpotlightCarouselView: View {
                                 .stroke(isHeroFocused ? Color.white : Color.white.opacity(0.12), lineWidth: isHeroFocused ? 3 : 1)
                         )
                         .scaleEffect(isHeroFocused ? 1.015 : 1.0)
-                        .shadow(
-                            color: isHeroFocused ? Color.white.opacity(0.15) : Color.black.opacity(0.5),
-                            radius: 22,
-                            y: 10
-                        )
                         .animation(.easeOut(duration: 0.2), value: isHeroFocused)
                     }
                     .buttonStyle(AuraButtonStyle())
@@ -412,7 +407,7 @@ struct SpotlightCarouselView: View {
     private func backdropPathImage(path: String?, width: CGFloat?, height: CGFloat) -> some View {
         if let path,
            let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-            AuraCachedImage(url: url) { image in
+            AuraCachedImage(url: url, targetSize: CGSize(width: width ?? 1440, height: height)) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
