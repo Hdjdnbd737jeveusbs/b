@@ -63,6 +63,7 @@ struct PlayerHUDView: View {
             VStack {
                 Spacer()
                 bottomBar
+                    .disabled(viewModel.hasActiveModalOverlay)
             }
 
             // Right-anchored Subtitles popover
@@ -94,7 +95,7 @@ struct PlayerHUDView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 if viewModel.showSubtitlePicker {
-                    focusedTrackId = "encoding_action"
+                    focusedTrackId = "off"
                 } else if focusedControl == nil {
                     focusedControl = .subtitles
                 }
@@ -103,7 +104,8 @@ struct PlayerHUDView: View {
         .onChange(of: viewModel.showSubtitlePicker) { _, isOpen in
             if isOpen {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    focusedTrackId = viewModel.selectedExternalSubtitle?.id ?? "off"
+                    guard viewModel.showSubtitlePicker else { return }
+                    focusedTrackId = "off"
                 }
             } else {
                 isSearchFieldActive = false
@@ -128,8 +130,8 @@ struct PlayerHUDView: View {
                 focusedControl = .info
             }
         }
-        .onTapGesture {
-            viewModel.toggleHUD()
+        .onChange(of: focusedControl) { _, control in
+            if control != nil { viewModel.showHUD() }
         }
     }
 

@@ -63,7 +63,7 @@ struct PlayerView: View {
             )
 
             // Loading Overlay (shown while buffering & no playback yet)
-            if viewModel.isBuffering && !viewModel.hasStartedPlayback {
+            if viewModel.isBuffering && !viewModel.hasStartedPlayback && viewModel.playbackError == nil {
                 LoadingOverlayView(
                     title: viewModel.title,
                     backdropPath: viewModel.backdropPath,
@@ -74,10 +74,16 @@ struct PlayerView: View {
             }
 
             // Player HUD (Title top-left, 5 icons + scrubber bottom; hidden while Sync/Style popovers are open)
-            if viewModel.hasStartedPlayback && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet && !viewModel.showSyncToLineSheet {
+            if viewModel.hasStartedPlayback && viewModel.isHUDVisible && viewModel.playbackError == nil && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet && !viewModel.showSyncToLineSheet {
                 PlayerHUDView(viewModel: viewModel)
-                    .opacity(viewModel.isHUDVisible ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.25), value: viewModel.isHUDVisible)
+            } else if viewModel.hasStartedPlayback && !viewModel.isHUDVisible && !viewModel.hasActiveModalOverlay && viewModel.playbackError == nil {
+                Button { viewModel.showHUD() } label: {
+                    Color.clear.contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .accessibilityLabel("Show playback controls")
+                .onMoveCommand { _ in viewModel.showHUD() }
             }
 
             // Live Subtitle Sync Popover (Right-Anchored, no full-screen dark dimmer)
@@ -235,9 +241,6 @@ struct PlayerView: View {
         }
         .onPlayPauseCommand {
             viewModel.togglePlayPause()
-        }
-        .onMoveCommand { direction in
-            handleRemoteDirection(direction)
         }
         .onExitCommand {
             handleExit()
@@ -407,22 +410,6 @@ struct PlayerView: View {
     }
 
     // MARK: - Remote Handling
-
-    private func handleRemoteDirection(_ direction: MoveCommandDirection) {
-        viewModel.showHUD()
-        guard !viewModel.hasActiveModalOverlay else { return }
-
-        switch direction {
-        case .left:
-            viewModel.seekBackward(seconds: 10)
-        case .right:
-            viewModel.seekForward(seconds: 10)
-        case .up, .down:
-            break
-        @unknown default:
-            break
-        }
-    }
 
     private func handleExit() {
         if viewModel.showSubtitleSyncSheet {
@@ -764,7 +751,7 @@ final class AetherPlayerCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] duration in
                 MainActor.assumeIsolated {
-                    guard let vm = self?.boundViewModel, duration > 0 else { return }
+                    guard let vm = self?.boundViewModel, duration.isFinite, duration > 0 else { return }
                     vm.totalDuration = duration
                 }
             }
