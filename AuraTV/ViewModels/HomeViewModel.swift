@@ -163,7 +163,7 @@ final class HomeViewModel {
             let path = item.episodeStillPath ?? item.backdropPath ?? item.posterPath
             return service.imageURL(path: path, size: "w780")
         }
-        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 340, height: 191))
+        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 415, height: 234))
     }
 
     @MainActor
@@ -171,7 +171,7 @@ final class HomeViewModel {
         let heroURLs = spotlightItems.compactMap {
             service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w1280")
         }
-        AuraImageCache.shared.prefetch(urls: heroURLs, targetSize: CGSize(width: 1440, height: 640))
+        AuraImageCache.shared.prefetch(urls: heroURLs, targetSize: CGSize(width: 1440, height: 550))
 
         var posterURLs: [URL] = []
         posterURLs.reserveCapacity(40)
@@ -185,7 +185,7 @@ final class HomeViewModel {
                 posterURLs.append(url)
             }
         }
-        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 215, height: 322))
+        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 268, height: 402))
     }
 
     @MainActor

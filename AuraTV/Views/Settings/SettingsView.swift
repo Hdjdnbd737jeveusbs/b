@@ -126,10 +126,10 @@ struct SettingsView: View {
                 }
             )
 
-            HStack(alignment: .top, spacing: 52) {
-                // LEFT COLUMN: 50pt Bold Settings Title + 26-28pt Pill Sidebar
+            HStack(alignment: .top, spacing: 48) {
+                // LEFT COLUMN: 52pt Bold Settings Title + 28-29pt Pill Sidebar
                 leftSidebarColumn
-                    .frame(width: 470, alignment: .leading)
+                    .frame(width: 500, alignment: .leading)
                     .focusSection()
 
                 // RIGHT COLUMN: Reference Summary Container -> Clean Sub-Screens
@@ -137,8 +137,8 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .focusSection()
             }
-            .padding(.horizontal, 75)
-            .padding(.top, 92)
+            .padding(.horizontal, 68)
+            .padding(.top, 58)
             .padding(.bottom, 50)
         }
         .defaultFocus($focusedCategory, .playback)
@@ -176,17 +176,17 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Left Sidebar Column (tvOS Reference Scale: 50pt Title, 26pt Rows)
+    // MARK: - Left Sidebar Column (tvOS Reference Scale: 52pt Title, 28pt Rows)
 
     private var leftSidebarColumn: some View {
         VStack(alignment: .leading, spacing: 26) {
             Text("Settings")
-                .font(.system(size: 50, weight: .bold))
+                .font(.system(size: 52, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.leading, 14)
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     ForEach(SettingsCategory.allCases) { category in
                         let isHighlighted = focusedCategory == category || (focusedCategory == nil && selectedCategory == category)
 
@@ -199,27 +199,27 @@ struct SettingsView: View {
                                 focusedRightTarget = .detailFirstControl
                             }
                         } label: {
-                            HStack(spacing: 18) {
+                            HStack(spacing: 20) {
                                 Image(systemName: category.iconName)
-                                    .font(.system(size: 25, weight: .medium))
-                                    .frame(width: 34)
+                                    .font(.system(size: 27, weight: .medium))
+                                    .frame(width: 36)
 
                                 Text(category.rawValue)
-                                    .font(.system(size: 26, weight: isHighlighted ? .semibold : .medium))
+                                    .font(.system(size: 28, weight: isHighlighted ? .semibold : .medium))
                                     .lineLimit(1)
 
                                 Spacer(minLength: 0)
                             }
                             .foregroundStyle(isHighlighted ? Color.black : Color.white.opacity(0.92))
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 17)
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 19)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 isHighlighted
                                 ? Color.white
                                 : Color.clear
                             )
-                            .clipShape(Capsule())
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         }
                         .buttonStyle(AuraButtonStyle())
                         .focusEffectDisabled()
@@ -381,17 +381,17 @@ struct SettingsView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(card.label)
-                                .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(isFocused ? Color.black.opacity(0.65) : Color.white.opacity(0.55))
+                                .font(.system(size: 21, weight: .regular))
+                                .foregroundStyle(isFocused ? Color.black.opacity(0.65) : Color.white.opacity(0.58))
 
                             Text(card.value)
-                                .font(.system(size: 25, weight: .semibold))
+                                .font(.system(size: 27, weight: .semibold))
                                 .foregroundStyle(isFocused ? Color.black : Color.white)
                                 .lineLimit(1)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 118, alignment: .leading)
-                        .padding(.horizontal, 26)
-                        .padding(.vertical, 22)
+                        .frame(maxWidth: .infinity, minHeight: 128, alignment: .leading)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 24)
                         .background(
                             RoundedRectangle(cornerRadius: 18)
                                 .fill(isFocused ? Color.white : Color.white.opacity(0.06))
@@ -690,39 +690,15 @@ struct SettingsView: View {
                     // Mini LED Low-Bloom Presets
                     ForEach(Array(SubtitleStyle.miniLEDPresets.enumerated()), id: \.element.id) { idx, preset in
                         let isSelected = viewModel.subtitleTextColor.lowercased() == preset.name.lowercased()
-                        let row = Button {
+                        let row = SettingsPresetRowButton(
+                            title: preset.name,
+                            subtitle: preset.subtitle,
+                            swatchColor: preset.color,
+                            isSelected: isSelected
+                        ) {
                             viewModel.subtitleTextColor = preset.name
                             viewModel.saveSettings(context: modelContext)
-                        } label: {
-                            HStack(spacing: 18) {
-                                Circle()
-                                    .fill(preset.color)
-                                    .frame(width: 28, height: 28)
-                                    .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.5))
-
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(preset.name)
-                                        .font(.system(size: 24, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                    Text(preset.subtitle)
-                                        .font(.system(size: 19))
-                                        .foregroundStyle(.white.opacity(0.64))
-                                }
-
-                                Spacer()
-
-                                if isSelected {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 26))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                            .padding(.horizontal, 26)
-                            .padding(.vertical, 18)
-                            .modifier(SettingsFocusableRowModifier())
                         }
-                        .buttonStyle(AuraButtonStyle())
-                        .focusEffectDisabled()
 
                         if idx == 0 {
                             row.focused($focusedRightTarget, equals: .detailFirstControl)
@@ -882,34 +858,15 @@ struct SettingsView: View {
                             textOpacity: viewModel.subtitleTextOpacity
                         )
 
-                        let btn = Button {
+                        let btn = SettingsFontRowButton(
+                            fontName: fontName,
+                            sampleFont: sampleStyle.font,
+                            sampleColor: sampleStyle.colorValue,
+                            isSelected: isSelected
+                        ) {
                             viewModel.subtitleFontName = fontName
                             viewModel.saveSettings(context: modelContext)
-                        } label: {
-                            HStack(spacing: 18) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(fontName)
-                                        .font(.system(size: 24, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                    Text("تجربة الخط العربي · Sample Subtitle Text")
-                                        .font(sampleStyle.font)
-                                        .foregroundStyle(sampleStyle.colorValue)
-                                }
-
-                                Spacer()
-
-                                if isSelected {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 26))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                            .padding(.horizontal, 26)
-                            .padding(.vertical, 18)
-                            .modifier(SettingsFocusableRowModifier())
                         }
-                        .buttonStyle(AuraButtonStyle())
-                        .focusEffectDisabled()
 
                         if idx == 0 {
                             btn.focused($focusedRightTarget, equals: .detailFirstControl)
@@ -941,31 +898,14 @@ struct SettingsView: View {
                 VStack(spacing: 12) {
                     ForEach(Array(SettingsViewModel.languageOptions.enumerated()), id: \.element.code) { idx, lang in
                         let isSelected = selection.wrappedValue == lang.code
-                        let btn = Button {
+                        let btn = SettingsLanguageRowButton(
+                            name: lang.name,
+                            code: lang.code.uppercased(),
+                            isSelected: isSelected
+                        ) {
                             selection.wrappedValue = lang.code
                             viewModel.saveSettings(context: modelContext)
-                        } label: {
-                            HStack {
-                                Text(lang.name)
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                Spacer()
-                                Text(lang.code.uppercased())
-                                    .font(.system(size: 19, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                if isSelected {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundStyle(.white)
-                                        .padding(.leading, 10)
-                                }
-                            }
-                            .padding(.horizontal, 26)
-                            .padding(.vertical, 18)
-                            .modifier(SettingsFocusableRowModifier())
                         }
-                        .buttonStyle(AuraButtonStyle())
-                        .focusEffectDisabled()
 
                         if idx == 0 {
                             btn.focused($focusedRightTarget, equals: .detailFirstControl)
@@ -1355,48 +1295,28 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Reusable Native Row Builders (24-26pt Titles, 20-22pt Subtitles)
+    // MARK: - Reusable Native Row Builders (26pt Titles, 22pt Values, Reference White Focus Fill)
 
     private func cycleSettingRow(title: String, value: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                HStack(spacing: 10) {
-                    Text(value)
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.74))
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 20)
-            .modifier(SettingsFocusableRowModifier())
-        }
-        .buttonStyle(AuraButtonStyle())
-        .focusEffectDisabled()
+        SettingsCycleRowButton(title: title, value: value, action: action)
     }
 
     private func toggleSettingRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(title)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(subtitle)
-                    .font(.system(size: 20))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .font(.system(size: 21))
+                    .foregroundStyle(.white.opacity(0.66))
             }
         }
         .onChange(of: isOn.wrappedValue) { _, _ in
             viewModel.saveSettings(context: modelContext)
         }
-        .padding(.horizontal, 26)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -1565,31 +1485,7 @@ struct SettingsView: View {
         icon: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.84))
-                Text(title)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                if let value, !value.isEmpty {
-                    Text(value)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.70))
-                        .lineLimit(1)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 20)
-            .modifier(SettingsFocusableRowModifier())
-        }
-        .buttonStyle(AuraButtonStyle())
-        .focusEffectDisabled()
+        SettingsActionRowButton(title: title, value: value, icon: icon, action: action)
     }
 
     private var audioSyncOffsetRow: some View {
@@ -1659,7 +1555,231 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Focus Helpers for Settings Right Panel
+// MARK: - Focus Helpers for Settings Right Panel (Reference Solid White Pill + Dark Label)
+
+private struct SettingsCycleRowButton: View {
+    let title: String
+    let value: String
+    let action: () -> Void
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color.black : Color.white)
+                Spacer()
+                HStack(spacing: 10) {
+                    Text(value)
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.74))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.6) : Color.white.opacity(0.5))
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 21)
+            .background(
+                isFocused ? Color.white : Color.white.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+            )
+            .scaleEffect(isFocused ? 1.015 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+    }
+}
+
+private struct SettingsActionRowButton: View {
+    let title: String
+    let value: String?
+    let icon: String
+    let action: () -> Void
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 18) {
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.86))
+                Text(title)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color.black : Color.white)
+                Spacer()
+                if let value, !value.isEmpty {
+                    Text(value)
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.70) : Color.white.opacity(0.70))
+                        .lineLimit(1)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.65) : Color.white.opacity(0.45))
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 21)
+            .background(
+                isFocused ? Color.white : Color.white.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+            )
+            .scaleEffect(isFocused ? 1.015 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+    }
+}
+
+private struct SettingsPresetRowButton: View {
+    let title: String
+    let subtitle: String
+    let swatchColor: Color
+    let isSelected: Bool
+    let action: () -> Void
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 18) {
+                Circle()
+                    .fill(swatchColor)
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().stroke(isFocused ? Color.black.opacity(0.3) : Color.white.opacity(0.35), lineWidth: 1.5))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(isFocused ? Color.black : Color.white)
+                    Text(subtitle)
+                        .font(.system(size: 20))
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.68) : Color.white.opacity(0.66))
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(isFocused ? Color.black : Color.white)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 20)
+            .background(
+                isFocused ? Color.white : Color.white.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+            )
+            .scaleEffect(isFocused ? 1.015 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+    }
+}
+
+private struct SettingsFontRowButton: View {
+    let fontName: String
+    let sampleFont: Font
+    let sampleColor: Color
+    let isSelected: Bool
+    let action: () -> Void
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(fontName)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(isFocused ? Color.black : Color.white)
+                    Text("تجربة الخط العربي · Sample Subtitle Text")
+                        .font(sampleFont)
+                        .foregroundStyle(isFocused ? Color.black.opacity(0.80) : sampleColor)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(isFocused ? Color.black : Color.white)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 20)
+            .background(
+                isFocused ? Color.white : Color.white.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+            )
+            .scaleEffect(isFocused ? 1.015 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+    }
+}
+
+private struct SettingsLanguageRowButton: View {
+    let name: String
+    let code: String
+    let isSelected: Bool
+    let action: () -> Void
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(name)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color.black : Color.white)
+                Spacer()
+                Text(code)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(isFocused ? Color.black.opacity(0.62) : Color.white.opacity(0.6))
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(isFocused ? Color.black : Color.white)
+                        .padding(.leading, 10)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 20)
+            .background(
+                isFocused ? Color.white : Color.white.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+            )
+            .scaleEffect(isFocused ? 1.015 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+    }
+}
 
 private struct SettingsFocusableRowModifier: ViewModifier {
     @Environment(\.isFocused) private var isFocused

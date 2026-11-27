@@ -90,13 +90,19 @@ struct PlayerHUDView: View {
             }
         }
         .ignoresSafeArea()
-        .defaultFocus($focusedControl, .subtitles)
+        .defaultFocus($focusedControl, .timeline)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 if viewModel.showSubtitlePicker {
-                    focusedTrackId = "encoding_action"
+                    focusedTrackId = viewModel.selectedExternalSubtitle?.id ?? "off"
+                } else if viewModel.showAudioPicker {
+                    focusedTrackId = "audio_\(viewModel.selectedAudioTrackId)"
+                } else if viewModel.showOptionsMenu {
+                    focusedTrackId = "opt_aspect"
+                } else if viewModel.showInfoPanel {
+                    focusedTrackId = "info_toggle_stats"
                 } else if focusedControl == nil {
-                    focusedControl = .subtitles
+                    focusedControl = .timeline
                 }
             }
         }
@@ -128,9 +134,6 @@ struct PlayerHUDView: View {
                 focusedControl = .info
             }
         }
-        .onTapGesture {
-            viewModel.toggleHUD()
-        }
     }
 
     // MARK: - Top Bar (Clean White Title Logo Only)
@@ -145,21 +148,21 @@ struct PlayerHUDView: View {
             )
             .frame(height: 150)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 if viewModel.tmdbId > 0 {
                     TitleLogoView(
                         title: viewModel.title,
                         mediaType: viewModel.mediaType,
                         tmdbId: viewModel.tmdbId,
-                        maxWidth: 340,
-                        maxHeight: 54,
-                        fallbackFontSize: 28,
+                        maxWidth: 420,
+                        maxHeight: 74,
+                        fallbackFontSize: 34,
                         alignment: .leading
                     )
                 } else {
                     Text(viewModel.title.uppercased())
-                        .font(.system(size: 28, weight: .bold))
-                        .tracking(8)
+                        .font(.system(size: 34, weight: .bold))
+                        .tracking(6)
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.75), radius: 8, x: 0, y: 2)
                 }
@@ -169,15 +172,15 @@ struct PlayerHUDView: View {
                    let episode = viewModel.episodeNumber {
                     HStack(spacing: 8) {
                         Text("S\(season) • E\(episode)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.82))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.86))
 
                         if let epTitle = viewModel.episodeTitle, !epTitle.isEmpty {
                             Text("-")
                                 .foregroundStyle(.white.opacity(0.5))
                             Text(epTitle)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.78))
                                 .lineLimit(1)
                         }
                     }
@@ -269,68 +272,93 @@ struct PlayerHUDView: View {
                 }
                 .padding(.bottom, 12)
 
-                // Full-width slim scrubber
+                // Full-width slim scrubber (Select toggles Play/Pause, Left/Right scrubs)
                 timelineBar
 
-                // Elapsed time under thumb + remaining time flush right
-                GeometryReader { geo in
-                    let totalWidth = geo.size.width
-                    let thumbCenterX = totalWidth * viewModel.progress
-                    let elapsedX = min(max(0, thumbCenterX - 24), max(0, totalWidth - 180))
+                // Large crisp tvOS timestamps under scrubber: Elapsed left, Remaining / Total right
+                HStack(alignment: .center) {
+                    Text(viewModel.currentTimeFormatted)
+                        .font(.system(size: 22, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.white)
 
-                    ZStack(alignment: .leading) {
-                        HStack {
-                            Spacer()
-                            Text(viewModel.remainingTimeFormatted)
-                                .font(.system(size: 16, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.92))
-                        }
+                    Spacer()
 
-                        Text(viewModel.currentTimeFormatted)
-                            .font(.system(size: 16, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.92))
-                            .offset(x: elapsedX)
+                    if !viewModel.isPlaying {
+                        Text("PAUSED")
+                            .font(.system(size: 15, weight: .bold))
+                            .tracking(1.6)
+                            .foregroundStyle(.white.opacity(0.72))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.14), in: Capsule())
+
+                        Spacer()
                     }
+
+                    HStack(spacing: 10) {
+                        Text(viewModel.remainingTimeFormatted)
+                            .foregroundStyle(.white.opacity(0.88))
+                        Text("/")
+                            .foregroundStyle(.white.opacity(0.45))
+                        Text(viewModel.totalTimeFormatted)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                    .font(.system(size: 22, weight: .semibold).monospacedDigit())
                 }
-                .frame(height: 24)
-                .padding(.top, 8)
+                .padding(.top, 10)
             }
             .padding(.horizontal, 70)
-            .padding(.bottom, 40)
+            .padding(.bottom, 42)
         }
     }
 
-    // MARK: - Timeline Scrubber
+    // MARK: - Timeline Scrubber (Interactive Select = Play/Pause, Left/Right = Smooth Seek)
 
     @ViewBuilder
     private var timelineBar: some View {
         let isFocused = focusedControl == .timeline
 
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let thumbX = max(0, (width * viewModel.progress) - (isFocused ? 3 : 1.5))
+        Button {
+            viewModel.togglePlayPause()
+        } label: {
+            GeometryReader { geometry in
+                let width = max(geometry.size.width, 1)
+                let fillWidth = width * viewModel.progress
+                let thumbX = max(0, fillWidth - (isFocused ? 4 : 2))
+                let pillX = min(max(0, fillWidth - 54), max(0, width - 108))
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.white.opacity(0.26))
-                    .frame(height: isFocused ? 8 : 4)
+                ZStack(alignment: .leading) {
+                    if viewModel.isSeekingActive {
+                        Text(viewModel.currentTimeFormatted)
+                            .font(.system(size: 20, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 5)
+                            .background(Color.white, in: Capsule())
+                            .offset(x: pillX, y: -32)
+                    }
 
-                Capsule()
-                    .fill(Color.white)
-                    .frame(width: width * viewModel.progress, height: isFocused ? 8 : 4)
+                    Capsule()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(height: isFocused ? 10 : 5)
 
-                // Slim vertical playhead tick matching reference scrubber
-                Capsule()
-                    .fill(Color.white)
-                    .frame(width: isFocused ? 6 : 3, height: isFocused ? 20 : 12)
-                    .shadow(color: .black.opacity(0.6), radius: 4)
-                    .offset(x: thumbX)
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: fillWidth, height: isFocused ? 10 : 5)
+
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: isFocused ? 8 : 4, height: isFocused ? 24 : 14)
+                        .offset(x: thumbX)
+                }
+                .frame(maxHeight: .infinity, alignment: .center)
+                .animation(.easeOut(duration: 0.14), value: isFocused)
             }
-            .frame(maxHeight: .infinity, alignment: .center)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .frame(height: 28)
+            .contentShape(Rectangle())
         }
-        .frame(height: 20)
-        .focusable()
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
         .focused($focusedControl, equals: .timeline)
         .onMoveCommand { direction in
             guard isFocused else { return }
@@ -355,16 +383,16 @@ struct PlayerHUDView: View {
         action: @escaping () -> Void
     ) -> some View {
         let isFocused = focusedControl == control
-        let size: CGFloat = 44
+        let size: CGFloat = 52
 
         Button(action: action) {
             Group {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 19, weight: .medium))
+                        .font(.system(size: 22, weight: .medium))
                 } else if let textLabel {
                     Text(textLabel)
-                        .font(.system(size: 19, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                 }
             }
             .foregroundStyle(isFocused ? Color.black : Color.white)

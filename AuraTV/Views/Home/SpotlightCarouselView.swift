@@ -67,8 +67,8 @@ struct SpotlightCarouselView: View {
         NavigationLink(destination: activeHeroDestination) {
             ZStack(alignment: .bottomLeading) {
                 // Full-bleed background artwork or muted trailer preview, soft-masked at bottom into page background
-                heroBackdropLayer(width: nil, height: 640)
-                    .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
+                heroBackdropLayer(width: nil, height: 550)
+                    .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
                     .clipped()
                     .mask(
                         LinearGradient(
@@ -100,17 +100,17 @@ struct SpotlightCarouselView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         activeEyebrowView
 
-                        activeTitleView(maxWidth: 560, maxHeight: 130, fallbackSize: 54)
+                        activeTitleView(maxWidth: 600, maxHeight: 135, fallbackSize: 54)
 
                         activeMetadataRow
 
                         if let overview = activeOverview, !overview.isEmpty {
                             Text(overview)
-                                .font(.system(size: 18, weight: .regular))
-                                .foregroundStyle(.white.opacity(0.78))
+                                .font(.system(size: 21, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.80))
                                 .lineLimit(3)
-                                .lineSpacing(3)
-                                .frame(maxWidth: 660, alignment: .leading)
+                                .lineSpacing(4)
+                                .frame(maxWidth: 680, alignment: .leading)
                         }
                     }
 
@@ -122,10 +122,10 @@ struct SpotlightCarouselView: View {
                             .padding(.bottom, 8)
                     }
                 }
-                .padding(.horizontal, 80)
-                .padding(.bottom, 34)
+                .padding(.horizontal, 68)
+                .padding(.bottom, 22)
             }
-            .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
+            .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
             .clipped()
             .scaleEffect(isHeroFocused ? 1.008 : 1.0)
             .animation(.easeOut(duration: 0.2), value: isHeroFocused)
@@ -318,7 +318,7 @@ struct SpotlightCarouselView: View {
                     }
                 }
             }
-            .font(.system(size: 17, weight: .medium))
+            .font(.system(size: 20, weight: .medium))
             .foregroundStyle(.white.opacity(0.88))
         } else {
             metadataRow(for: currentItem)
@@ -394,7 +394,7 @@ struct SpotlightCarouselView: View {
                 }
             }
         }
-        .font(.system(size: 17, weight: .medium))
+        .font(.system(size: 20, weight: .medium))
         .foregroundStyle(.white.opacity(0.88))
     }
 

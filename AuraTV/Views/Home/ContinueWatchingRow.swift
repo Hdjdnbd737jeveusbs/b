@@ -11,12 +11,12 @@ struct ContinueWatchingRow: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Continue Watching")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 80)
+                    .padding(.horizontal, 68)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 24) {
+                    LazyHStack(spacing: 26) {
                         ForEach(items) { item in
                             let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
                             ContinueWatchingCard(
@@ -26,8 +26,8 @@ struct ContinueWatchingRow: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 80)
-                    .padding(.vertical, 18)
+                    .padding(.horizontal, 68)
+                    .padding(.vertical, 16)
                 }
             }
         }
@@ -58,20 +58,20 @@ private struct ContinueWatchingCard: View {
 
                         Rectangle()
                             .fill(Color.white)
-                            .frame(width: 340 * max(min(item.progress, 1.0), 0.04), height: 4)
+                            .frame(width: 415 * max(min(item.progress, 1.0), 0.04), height: 4)
                     }
                 }
-                .frame(width: 340, height: 191)
+                .frame(width: 415, height: 234)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
+                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
                 )
 
                 // Title & remaining time underneath
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 23, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
@@ -80,7 +80,7 @@ private struct ContinueWatchingCard: View {
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
                 }
-                .frame(width: 340, alignment: .leading)
+                .frame(width: 415, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.06 : 1.0)
             .animation(.easeOut(duration: 0.16), value: isFocused)

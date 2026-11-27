@@ -19,7 +19,7 @@ struct CollectionsView: View {
     }
 
     private let columns = [
-        GridItem(.adaptive(minimum: 210, maximum: 240), spacing: 28)
+        GridItem(.adaptive(minimum: 255, maximum: 280), spacing: 28)
     ]
 
     var body: some View {
@@ -31,17 +31,17 @@ struct CollectionsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Collections")
-                            .font(.system(size: 48, weight: .bold))
+                            .font(.system(size: 52, weight: .bold))
                             .foregroundStyle(.white)
 
                         Text("Watchlist (\(watchlist.count) items)")
-                            .font(.system(size: 22))
+                            .font(.system(size: 24))
                             .foregroundStyle(Color.auraSecondaryText)
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 75)
-                .padding(.top, 84)
+                .padding(.horizontal, 68)
+                .padding(.top, 92)
 
                 // Content
                 if watchlist.isEmpty {
@@ -98,11 +98,11 @@ private struct WatchlistCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = overridePosterPath ?? item.posterPath ?? item.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AuraCachedImage(url: url, targetSize: CGSize(width: 220, height: 330)) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: 260, height: 390)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(2/3, contentMode: .fill)
-                                .frame(width: 220, height: 330)
+                                .frame(width: 260, height: 390)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                         } placeholder: {
                             placeholder
@@ -113,26 +113,26 @@ private struct WatchlistCard: View {
 
                     // Media badge
                     Text(item.mediaType == "series" ? "SERIES" : item.mediaType.uppercased())
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 7)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(8)
+                        .padding(10)
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3.5 : 1)
+                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
                 )
 
                 // Title
                 Text(item.title)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .frame(width: 220, alignment: .leading)
+                    .frame(width: 260, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.07 : 1.0)
+            .scaleEffect(isFocused ? 1.055 : 1.0)
             .animation(.easeOut(duration: 0.16), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
@@ -152,7 +152,7 @@ private struct WatchlistCard: View {
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 220, height: 330)
+            .frame(width: 260, height: 390)
             .overlay {
                 Image(systemName: item.mediaType == "series" ? "tv" : "film")
                     .font(.system(size: 40))

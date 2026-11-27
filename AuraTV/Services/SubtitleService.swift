@@ -7,7 +7,7 @@ import zlib
 // MARK: - Subtitle Service
 
 @Observable
-final class SubtitleService {
+final class SubtitleService: @unchecked Sendable {
 
     // MARK: Singleton
     static let shared = SubtitleService()
@@ -111,7 +111,9 @@ final class SubtitleService {
                 return []
             }
 
-            let items = try JSONDecoder().decode([WyzieSubtitleItem].self, from: data)
+            let items = try await Task.detached(priority: .userInitiated) {
+                try JSONDecoder().decode([WyzieSubtitleItem].self, from: data)
+            }.value
             return items.compactMap { item -> SubtitleTrackItem? in
                 guard let dlUrlString = item.url, let dlUrl = URL(string: dlUrlString) else { return nil }
                 let langCode = item.language?.lowercased() ?? "en"
@@ -162,7 +164,9 @@ final class SubtitleService {
                 return []
             }
 
-            let responseObj = try JSONDecoder().decode(SubDLResponse.self, from: data)
+            let responseObj = try await Task.detached(priority: .userInitiated) {
+                try JSONDecoder().decode(SubDLResponse.self, from: data)
+            }.value
             let subList = responseObj.subtitles ?? responseObj.results?.first?.subtitles ?? []
 
             return subList.compactMap { item -> SubtitleTrackItem? in
@@ -220,7 +224,9 @@ final class SubtitleService {
                 return []
             }
 
-            let result = try JSONDecoder().decode(OpenSubtitlesResponse.self, from: data)
+            let result = try await Task.detached(priority: .userInitiated) {
+                try JSONDecoder().decode(OpenSubtitlesResponse.self, from: data)
+            }.value
             guard let items = result.data else { return [] }
 
             return items.compactMap { item -> SubtitleTrackItem? in
@@ -267,9 +273,12 @@ final class SubtitleService {
         let safeId = track.id.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
         let cacheFile = cacheDirectory.appendingPathComponent("\(safeId).subcache")
 
+        let isFromDisk = FileManager.default.fileExists(atPath: cacheFile.path)
         let rawContent: String
-        if FileManager.default.fileExists(atPath: cacheFile.path) {
-            rawContent = try String(contentsOf: cacheFile, encoding: .utf8)
+        if isFromDisk {
+            rawContent = try await Task.detached(priority: .userInitiated) {
+                try String(contentsOf: cacheFile, encoding: .utf8)
+            }.value
         } else {
             var downloadData: Data
 
@@ -289,7 +298,9 @@ final class SubtitleService {
                     throw URLError(.badServerResponse)
                 }
 
-                let dlResult = try JSONDecoder().decode(OpenSubtitlesDownloadResponse.self, from: postData)
+                let dlResult = try await Task.detached(priority: .userInitiated) {
+                    try JSONDecoder().decode(OpenSubtitlesDownloadResponse.self, from: postData)
+                }.value
                 guard let link = dlResult.link, let directUrl = URL(string: link) else {
                     throw URLError(.cannotParseResponse)
                 }
@@ -316,40 +327,46 @@ final class SubtitleService {
                 downloadData = data
             }
 
-            // Check if downloaded data is a ZIP archive (SubDL zip packages)
-            if downloadData.count > 4 && downloadData.prefix(4) == Data([0x50, 0x4B, 0x03, 0x04]) {
-                if let extractedData = extractSrtFromZip(downloadData) {
-                    downloadData = extractedData
+            rawContent = await Task.detached(priority: .userInitiated) { [weak self] in
+                var payload = downloadData
+                if payload.count > 4 && payload.prefix(4) == Data([0x50, 0x4B, 0x03, 0x04]),
+                   let extractedData = self?.extractSrtFromZip(payload) {
+                    payload = extractedData
                 }
-            }
 
-            // Attempt UTF-8, Windows-1256 (Arabic), or Latin-1
-            let windows1256Encoding = String.Encoding(
-                rawValue: CFStringConvertEncodingToNSStringEncoding(
-                    CFStringEncoding(CFStringEncodings.windowsArabic.rawValue)
+                let windows1256Encoding = String.Encoding(
+                    rawValue: CFStringConvertEncodingToNSStringEncoding(
+                        CFStringEncoding(CFStringEncodings.windowsArabic.rawValue)
+                    )
                 )
-            )
-            if let str = String(data: downloadData, encoding: .utf8) {
-                rawContent = str
-            } else if let str = String(data: downloadData, encoding: windows1256Encoding) {
-                rawContent = str
-            } else if let str = String(data: downloadData, encoding: .isoLatin1) {
-                rawContent = str
-            } else {
-                rawContent = String(decoding: downloadData, as: UTF8.self)
+                let decoded: String
+                if let str = String(data: payload, encoding: .utf8) {
+                    decoded = str
+                } else if let str = String(data: payload, encoding: windows1256Encoding) {
+                    decoded = str
+                } else if let str = String(data: payload, encoding: .isoLatin1) {
+                    decoded = str
+                } else {
+                    decoded = String(decoding: payload, as: UTF8.self)
+                }
+
+                try? decoded.write(to: cacheFile, atomically: true, encoding: .utf8)
+                return decoded
+            }.value
+        }
+
+        return await Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else {
+                return LoadedSubtitleTrack(cues: [], rawASSContent: nil)
             }
-
-            // Save to cache
-            try? rawContent.write(to: cacheFile, atomically: true, encoding: .utf8)
-        }
-
-        if isASSScript(rawContent) {
-            let cues = parseASS(rawContent)
-            return LoadedSubtitleTrack(cues: cues, rawASSContent: rawContent)
-        } else {
-            let cues = parseSRTorVTT(rawContent)
-            return LoadedSubtitleTrack(cues: cues, rawASSContent: nil)
-        }
+            if self.isASSScript(rawContent) {
+                let cues = self.parseASS(rawContent)
+                return LoadedSubtitleTrack(cues: cues, rawASSContent: rawContent)
+            } else {
+                let cues = self.parseSRTorVTT(rawContent)
+                return LoadedSubtitleTrack(cues: cues, rawASSContent: nil)
+            }
+        }.value
     }
 
     // MARK: - Zip Extraction Helper (SubDL ZIP Support)

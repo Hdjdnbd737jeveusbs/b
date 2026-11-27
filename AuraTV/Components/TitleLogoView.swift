@@ -23,7 +23,7 @@ struct TitleLogoView: View {
         Group {
             if let path = effectivePath,
                let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                AuraCachedImage(url: url, targetSize: CGSize(width: maxWidth, height: maxHeight)) { image in
+                AuraCachedImage(url: url, targetSize: CGSize(width: maxWidth, height: maxHeight), cropToFill: false) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fit)

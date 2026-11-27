@@ -34,10 +34,10 @@ struct SeriesView: View {
             ambientBackdropView
 
             // Content pushed clearly below the floating tvOS sidebar pill (< Series)
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 28) {
                 categoryBar
-                    .padding(.horizontal, 75)
-                    .padding(.top, 84)
+                    .padding(.horizontal, 68)
+                    .padding(.top, 92)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVGrid(columns: columns, spacing: 32) {
@@ -49,7 +49,7 @@ struct SeriesView: View {
                             .focused($focusedSeriesId, equals: series.id)
                         }
                     }
-                    .padding(.horizontal, 75)
+                    .padding(.horizontal, 68)
                     .padding(.top, 8)
                     .padding(.bottom, 60)
                 }
@@ -104,7 +104,7 @@ struct SeriesView: View {
                     }
                 }) {
                     Text(category.rawValue)
-                        .font(.system(size: 24, weight: isSelected ? .semibold : .medium))
+                        .font(.system(size: 26, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 14)

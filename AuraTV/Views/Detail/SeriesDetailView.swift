@@ -400,7 +400,7 @@ struct SeriesDetailView: View {
     private var currentEpisodeSubtitle: some View {
         if let ep = activeEpisode {
             Text("S\(ep.seasonNumber) • E\(ep.episodeNumber) - \(ep.name)")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
         }
@@ -439,13 +439,13 @@ struct SeriesDetailView: View {
                         }
 
                         Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 36)
                 .padding(.vertical, 16)
                 .background(Color.white)
                 .foregroundStyle(.black)

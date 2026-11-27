@@ -22,11 +22,11 @@ struct PosterCardView: View {
             ZStack(alignment: .topTrailing) {
                 if let path = overridePosterPath ?? movie.posterPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                    AuraCachedImage(url: url, targetSize: CGSize(width: 215, height: 322)) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 268, height: 402)) { image in
                         image
                             .resizable()
                             .aspectRatio(2 / 3, contentMode: .fill)
-                            .frame(width: 215, height: 322)
+                            .frame(width: 268, height: 402)
                             .clipped()
                     } placeholder: {
                         posterPlaceholder
@@ -66,13 +66,13 @@ struct PosterCardView: View {
                         .padding(10)
                 }
             }
-            .frame(width: 215, height: 322)
+            .frame(width: 268, height: 402)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
+                    .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
             )
-            .scaleEffect(isTrailerExpanded ? 1.11 : (isFocused ? 1.07 : 1.0))
+            .scaleEffect(isTrailerExpanded ? 1.09 : (isFocused ? 1.055 : 1.0))
             .animation(.easeOut(duration: 0.18), value: isFocused)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isTrailerExpanded)
         }
@@ -109,7 +109,7 @@ struct PosterCardView: View {
     private var posterPlaceholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 215, height: 322)
+            .frame(width: 268, height: 402)
             .overlay {
                 VStack(spacing: 10) {
                     Image(systemName: "film")

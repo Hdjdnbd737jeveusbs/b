@@ -101,8 +101,8 @@ struct MovieDetailView: View {
                             actionButtons
                                 .padding(.top, 6)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.54, alignment: .leading)
-                        .padding(.leading, 80)
+                        .frame(maxWidth: geometry.size.width * 0.56, alignment: .leading)
+                        .padding(.leading, 68)
 
                         // Full-width circular Cast row below the fold
                         castSection
@@ -350,12 +350,12 @@ struct MovieDetailView: View {
     @ViewBuilder
     private var overviewSection: some View {
         if let overview = viewModel.movieDetail?.overview, !overview.isEmpty {
-            Text(overview)
-                .font(.system(size: 21, weight: .regular))
-                .foregroundStyle(.white.opacity(0.78))
-                .lineLimit(3)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(overview)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.80))
+                    .lineLimit(3)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -383,13 +383,13 @@ struct MovieDetailView: View {
                         }
 
                         Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 36)
                 .padding(.vertical, 16)
                 .background(Color.white)
                 .foregroundStyle(.black)

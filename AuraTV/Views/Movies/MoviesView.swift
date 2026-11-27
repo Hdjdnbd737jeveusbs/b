@@ -14,7 +14,7 @@ struct MoviesView: View {
     @FocusState private var focusedMovieId: Int?
 
     private let columns = [
-        GridItem(.adaptive(minimum: 205, maximum: 230), spacing: 26)
+        GridItem(.adaptive(minimum: 255, maximum: 280), spacing: 28)
     ]
 
     private var watchedMovieIds: Set<Int> {
@@ -57,10 +57,10 @@ struct MoviesView: View {
             ambientBackdropView
 
             // Content pushed clearly below the floating tvOS sidebar pill (< Movies)
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 28) {
                 categoryBar
-                    .padding(.horizontal, 75)
-                    .padding(.top, 84)
+                    .padding(.horizontal, 68)
+                    .padding(.top, 92)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     if useListLayout {
@@ -147,7 +147,7 @@ struct MoviesView: View {
                     }
                 }) {
                     Text(category.rawValue)
-                        .font(.system(size: 24, weight: isSelected ? .semibold : .medium))
+                        .font(.system(size: 26, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 14)

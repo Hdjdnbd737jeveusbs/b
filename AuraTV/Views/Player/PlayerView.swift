@@ -74,11 +74,35 @@ struct PlayerView: View {
                 .transition(.opacity)
             }
 
-            // Player HUD (Title top-left, 5 icons + scrubber bottom; hidden while Sync/Style popovers are open)
-            if viewModel.hasStartedPlayback && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet && !viewModel.showSyncToLineSheet {
+            // Player HUD (Title top-left, 5 icons + scrubber bottom; only mounted while visible so hidden buttons never trap remote focus)
+            if viewModel.hasStartedPlayback
+                && viewModel.isHUDVisible
+                && !viewModel.showSubtitleSyncSheet
+                && !viewModel.showSubtitleStyleSheet
+                && !viewModel.showSyncToLineSheet {
                 PlayerHUDView(viewModel: viewModel)
-                    .opacity(viewModel.isHUDVisible ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.25), value: viewModel.isHUDVisible)
+                    .transition(.opacity)
+            } else if !viewModel.hasActiveModalOverlay && viewModel.playbackError == nil {
+                // Dedicated tvOS Siri Remote / D-pad responder when HUD is hidden
+                PlayerRemoteCatcherView(
+                    onSelectOrPlayPause: {
+                        viewModel.togglePlayPause()
+                        viewModel.showHUD()
+                    },
+                    onSeekBackward: {
+                        viewModel.seekBackward(seconds: 15)
+                    },
+                    onSeekForward: {
+                        viewModel.seekForward(seconds: 15)
+                    },
+                    onShowHUD: {
+                        viewModel.showHUD()
+                    },
+                    onMenuPressed: {
+                        handleExit()
+                    }
+                )
+                .ignoresSafeArea()
             }
 
             // Live Subtitle Sync Popover (Right-Anchored, no full-screen dark dimmer)
@@ -223,6 +247,7 @@ struct PlayerView: View {
                 onDismiss: { viewModel.showStreamPicker = false }
             )
         }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.isHUDVisible)
         .onDisappear {
             #if canImport(AetherEngine)
             if !viewModel.isPreviewMode {
@@ -239,6 +264,7 @@ struct PlayerView: View {
         }
         .onPlayPauseCommand {
             viewModel.togglePlayPause()
+            viewModel.showHUD()
         }
         .onMoveCommand { direction in
             handleRemoteDirection(direction)
@@ -358,18 +384,19 @@ struct PlayerView: View {
     // MARK: - Remote Handling
 
     private func handleRemoteDirection(_ direction: MoveCommandDirection) {
-        viewModel.showHUD()
         guard !viewModel.hasActiveModalOverlay else { return }
 
-        switch direction {
-        case .left:
-            viewModel.seekBackward(seconds: 10)
-        case .right:
-            viewModel.seekForward(seconds: 10)
-        case .up, .down:
-            break
-        @unknown default:
-            break
+        if !viewModel.isHUDVisible {
+            switch direction {
+            case .left:
+                viewModel.seekBackward(seconds: 15)
+            case .right:
+                viewModel.seekForward(seconds: 15)
+            case .up, .down:
+                viewModel.showHUD()
+            @unknown default:
+                viewModel.showHUD()
+            }
         }
     }
 
@@ -412,6 +439,7 @@ final class AetherPlayerCoordinator: ObservableObject {
     weak var assCoordinator: ASSRenderCoordinator?
     #endif
     private var loadTask: Task<Void, Never>?
+    private var seekTask: Task<Void, Never>?
     private var currentLoadedURL: URL?
     private var lastCues: [SubtitleCue] = []
     private var currentSourceTime: Double = 0
@@ -506,8 +534,11 @@ final class AetherPlayerCoordinator: ObservableObject {
 
     func seek(to seconds: Double) {
         guard let engine else { return }
-        Task { @MainActor in
+        seekTask?.cancel()
+        seekTask = Task { @MainActor [weak self] in
             await engine.seek(to: seconds)
+            guard !Task.isCancelled else { return }
+            self?.boundViewModel?.onBufferingEnded()
         }
     }
 
@@ -1015,16 +1046,19 @@ private struct PersistentPlayerContainerView: View {
             if useAether {
                 if let engine = aetherCoordinator.engine {
                     AetherPlayerSurface(engine: engine)
+                        .allowsHitTesting(false)
                         .background(Color.black)
                         .ignoresSafeArea()
                 }
             } else {
                 AVPlayerViewWrapper(avCoordinator: avCoordinator)
+                    .allowsHitTesting(false)
                     .background(Color.black)
                     .ignoresSafeArea()
             }
             #else
             AVPlayerViewWrapper(avCoordinator: avCoordinator)
+                .allowsHitTesting(false)
                 .background(Color.black)
                 .ignoresSafeArea()
             #endif
@@ -1113,6 +1147,7 @@ private struct BlackBackdropControllerView: UIViewControllerRepresentable {
         let vc = UIViewController()
         vc.view.backgroundColor = .black
         vc.view.isOpaque = true
+        vc.view.isUserInteractionEnabled = false
         return vc
     }
 
@@ -1120,6 +1155,108 @@ private struct BlackBackdropControllerView: UIViewControllerRepresentable {
         if uiViewController.view.backgroundColor != .black {
             uiViewController.view.backgroundColor = .black
         }
+    }
+}
+
+// MARK: - Native tvOS Remote Responder (Active When Player HUD Is Hidden)
+
+private struct PlayerRemoteCatcherView: UIViewRepresentable {
+    let onSelectOrPlayPause: () -> Void
+    let onSeekBackward: () -> Void
+    let onSeekForward: () -> Void
+    let onShowHUD: () -> Void
+    let onMenuPressed: () -> Void
+
+    func makeUIView(context: Context) -> RemoteCatcherUIView {
+        let view = RemoteCatcherUIView()
+        view.backgroundColor = .clear
+        view.coordinator = context.coordinator
+
+        let selectTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSelect))
+        selectTap.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+        view.addGestureRecognizer(selectTap)
+
+        let swipeLeft = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLeft))
+        swipeLeft.direction = .left
+        view.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleRight))
+        swipeRight.direction = .right
+        view.addGestureRecognizer(swipeRight)
+
+        let swipeUp = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleUpDown))
+        swipeUp.direction = .up
+        view.addGestureRecognizer(swipeUp)
+
+        let swipeDown = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleUpDown))
+        swipeDown.direction = .down
+        view.addGestureRecognizer(swipeDown)
+
+        return view
+    }
+
+    func updateUIView(_ uiView: RemoteCatcherUIView, context: Context) {
+        context.coordinator.onSelectOrPlayPause = onSelectOrPlayPause
+        context.coordinator.onSeekBackward = onSeekBackward
+        context.coordinator.onSeekForward = onSeekForward
+        context.coordinator.onShowHUD = onShowHUD
+        context.coordinator.onMenuPressed = onMenuPressed
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onSelectOrPlayPause: onSelectOrPlayPause,
+            onSeekBackward: onSeekBackward,
+            onSeekForward: onSeekForward,
+            onShowHUD: onShowHUD,
+            onMenuPressed: onMenuPressed
+        )
+    }
+
+    final class RemoteCatcherUIView: UIView {
+        weak var coordinator: Coordinator?
+        private var didClaimFocus = false
+
+        override var canBecomeFocused: Bool { true }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil, !didClaimFocus else { return }
+            didClaimFocus = true
+            DispatchQueue.main.async { [weak self] in
+                self?.setNeedsFocusUpdate()
+                self?.updateFocusIfNeeded()
+            }
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var onSelectOrPlayPause: () -> Void
+        var onSeekBackward: () -> Void
+        var onSeekForward: () -> Void
+        var onShowHUD: () -> Void
+        var onMenuPressed: () -> Void
+
+        init(
+            onSelectOrPlayPause: @escaping () -> Void,
+            onSeekBackward: @escaping () -> Void,
+            onSeekForward: @escaping () -> Void,
+            onShowHUD: @escaping () -> Void,
+            onMenuPressed: @escaping () -> Void
+        ) {
+            self.onSelectOrPlayPause = onSelectOrPlayPause
+            self.onSeekBackward = onSeekBackward
+            self.onSeekForward = onSeekForward
+            self.onShowHUD = onShowHUD
+            self.onMenuPressed = onMenuPressed
+        }
+
+        @objc func handleSelect() { onSelectOrPlayPause() }
+        @objc func handleLeft() { onSeekBackward() }
+        @objc func handleRight() { onSeekForward() }
+        @objc func handleUpDown() { onShowHUD() }
+        @objc func handleMenu() { onMenuPressed() }
     }
 }
 
@@ -1245,7 +1382,12 @@ final class AVPlayerCoordinator: ObservableObject {
     }
 
     func seek(to seconds: Double) {
-        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 1))
+        let target = CMTime(seconds: seconds, preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor in
+                self?.boundViewModel?.onBufferingEnded()
+            }
+        }
     }
 
     func setPlaybackRate(_ rate: Float, isPlaying: Bool) {
@@ -1286,13 +1428,22 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
     @ObservedObject var avCoordinator: AVPlayerCoordinator
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
+        avCoordinator.controller.showsPlaybackControls = false
         avCoordinator.controller.view.backgroundColor = .black
+        avCoordinator.controller.view.isOpaque = true
+        avCoordinator.controller.view.isUserInteractionEnabled = false
         return avCoordinator.controller
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        if controller.showsPlaybackControls {
+            controller.showsPlaybackControls = false
+        }
         if controller.view.backgroundColor != .black {
             controller.view.backgroundColor = .black
+        }
+        if controller.view.isUserInteractionEnabled {
+            controller.view.isUserInteractionEnabled = false
         }
     }
 }

@@ -174,6 +174,13 @@ struct ContentView: View {
                     isSidebarExpanded = false
                 }
                 focusedSidebarTab = nil
+            } else if selectedTab == .settings {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    isSidebarExpanded = true
+                }
+                DispatchQueue.main.async {
+                    focusedSidebarTab = selectedTab
+                }
             }
         }
         .onOpenURL { url in
@@ -212,54 +219,59 @@ struct ContentView: View {
     @ViewBuilder
     private var floatingSidebarOverlay: some View {
         if isSidebarExpanded {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(AppTab.allCases, id: \.self) { tab in
-                    let isFocused = focusedSidebarTab == tab
-                    let isSelected = selectedTab == tab
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.42)
+                    .ignoresSafeArea()
 
-                    Button {
-                        selectedTab = tab
-                        withAnimation(.easeOut(duration: 0.16)) {
-                            isSidebarExpanded = false
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(AppTab.allCases, id: \.self) { tab in
+                        let isFocused = focusedSidebarTab == tab
+                        let isSelected = selectedTab == tab
+
+                        Button {
+                            selectedTab = tab
+                            withAnimation(.easeOut(duration: 0.16)) {
+                                isSidebarExpanded = false
+                            }
+                            focusedSidebarTab = nil
+                        } label: {
+                            HStack(spacing: 18) {
+                                Image(systemName: tab.iconName)
+                                    .font(.system(size: 26, weight: .semibold))
+                                    .frame(width: 34)
+
+                                Text(tab.rawValue)
+                                    .font(.system(size: 29, weight: isFocused ? .semibold : .medium))
+
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(isFocused ? Color.black : Color.white.opacity(isSelected ? 0.98 : 0.88))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 18)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.10) : Color.clear))
+                            )
                         }
-                        focusedSidebarTab = nil
-                    } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: tab.iconName)
-                                .font(.system(size: 24, weight: .semibold))
-                                .frame(width: 32)
-
-                            Text(tab.rawValue)
-                                .font(.system(size: 26, weight: isFocused ? .semibold : .medium))
-
-                            Spacer(minLength: 0)
-                        }
-                        .foregroundStyle(isFocused ? Color.black : Color.white.opacity(isSelected ? 0.98 : 0.84))
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            Capsule()
-                                .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.10) : Color.clear))
-                        )
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedSidebarTab, equals: tab)
+                        .animation(.easeOut(duration: 0.14), value: focusedSidebarTab)
                     }
-                    .buttonStyle(AuraButtonStyle())
-                    .focusEffectDisabled()
-                    .focused($focusedSidebarTab, equals: tab)
-                    .animation(.easeOut(duration: 0.14), value: focusedSidebarTab)
                 }
+                .padding(20)
+                .frame(width: 372)
+                .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .padding(.top, 42)
+                .padding(.leading, 48)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
             }
-            .padding(18)
-            .frame(width: 312)
-            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 28))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            )
-            .padding(.top, 34)
-            .padding(.leading, 36)
-            .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
-        } else {
+        } else if selectedTab != .settings {
             Button {
                 withAnimation(.easeOut(duration: 0.16)) {
                     isSidebarExpanded = true
@@ -270,18 +282,18 @@ struct ContentView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(isCollapsedPillFocused ? Color.black.opacity(0.7) : Color.white.opacity(0.65))
 
                     Image(systemName: selectedTab.iconName)
                         .font(.system(size: 22, weight: .semibold))
 
                     Text(selectedTab.rawValue)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 25, weight: .semibold))
                 }
                 .foregroundStyle(isCollapsedPillFocused ? Color.black : Color.white)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 13)
                 .background(isCollapsedPillFocused ? Color.white : Color.auraCardSurface, in: Capsule())
                 .overlay(
                     Capsule()
@@ -291,18 +303,8 @@ struct ContentView: View {
             .buttonStyle(AuraButtonStyle())
             .focusEffectDisabled()
             .focused($isCollapsedPillFocused)
-            .onChange(of: isCollapsedPillFocused) { _, focused in
-                if focused {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        isSidebarExpanded = true
-                    }
-                    DispatchQueue.main.async {
-                        focusedSidebarTab = selectedTab
-                    }
-                }
-            }
-            .padding(.top, 34)
-            .padding(.leading, 40)
+            .padding(.top, 38)
+            .padding(.leading, 52)
         }
     }
 
