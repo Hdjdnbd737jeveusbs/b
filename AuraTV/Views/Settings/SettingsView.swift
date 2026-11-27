@@ -58,13 +58,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     }
 }
 
-private struct SummaryTileItem: Identifiable {
-    let id = UUID()
-    let label: String
-    let value: String
-}
-
-// MARK: - Settings View (2-Column Split Layout + Frosted Live Preview Card)
+// MARK: - Settings View (2-Column Split Layout with Focus Sections)
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -72,11 +66,11 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
 
     @State private var selectedCategory: SettingsCategory = .playback
-    @State private var isEditingCategory: Bool = false
     @State private var showSavedAlert: Bool = false
     @State private var showPhoneQRSetup: Bool = false
 
     @FocusState private var focusedCategory: SettingsCategory?
+    @FocusState private var isRightPrimaryFocused: Bool
 
     var body: some View {
         ZStack {
@@ -88,13 +82,15 @@ struct SettingsView: View {
             )
 
             HStack(alignment: .top, spacing: 48) {
-                // LEFT COLUMN: Settings Title + Vertical 9-Item Sidebar
+                // LEFT COLUMN: Settings Title + Vertical Sidebar
                 leftSidebarColumn
                     .frame(width: 430, alignment: .leading)
+                    .focusSection()
 
-                // RIGHT COLUMN: Frosted Glass Live Preview Card / Category Controls
+                // RIGHT COLUMN: Live Detail Controls Card
                 rightDetailCard
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .focusSection()
             }
             .padding(.horizontal, 75)
             .padding(.top, 96)
@@ -103,7 +99,7 @@ struct SettingsView: View {
         .defaultFocus($focusedCategory, .playback)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                if !isEditingCategory && focusedCategory == nil {
+                if focusedCategory == nil && !isRightPrimaryFocused {
                     focusedCategory = selectedCategory
                 }
             }
@@ -113,16 +109,8 @@ struct SettingsView: View {
             await viewModel.loadAmbientBannerIfNeeded()
         }
         .onChange(of: focusedCategory) { _, newCat in
-            if let newCat, !isEditingCategory {
+            if let newCat {
                 selectedCategory = newCat
-            }
-        }
-        .onExitCommand {
-            if isEditingCategory {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    isEditingCategory = false
-                }
-                focusedCategory = selectedCategory
             }
         }
         .alert("Settings Saved", isPresented: $showSavedAlert) {
@@ -156,9 +144,7 @@ struct SettingsView: View {
 
                         Button {
                             selectedCategory = category
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                isEditingCategory = true
-                            }
+                            isRightPrimaryFocused = true
                         } label: {
                             HStack(spacing: 16) {
                                 Image(systemName: category.iconName)
@@ -207,18 +193,19 @@ struct SettingsView: View {
             // Blurred ambient artwork banner along the top
             ambientBannerHeader
 
-            // Foreground preview summary OR category controls
-            if isEditingCategory {
-                categoryControlsPanel
-            } else {
-                categoryPreviewSummaryPanel
-            }
+            // Always-focusable interactive category controls panel
+            categoryControlsPanel
         }
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
+        .onExitCommand {
+            if focusedCategory == nil {
+                focusedCategory = selectedCategory
+            }
+        }
     }
 
     @ViewBuilder
@@ -263,170 +250,31 @@ struct SettingsView: View {
         .frame(height: 240)
     }
 
-    // MARK: - Preview Summary Mode (Matches Video 2x2 Status Tile Card)
-
-    private var categoryPreviewSummaryPanel: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            Spacer().frame(height: 110)
-
-            // Icon + Category Title + 1-line description
-            VStack(alignment: .leading, spacing: 14) {
-                Image(systemName: selectedCategory.iconName)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 58, height: 58)
-                    .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                    )
-
-                Text(selectedCategory.rawValue)
-                    .font(.system(size: 36, weight: .bold))
-                    .foregroundStyle(.white)
-
-                Text(selectedCategory.summarySubtitle)
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(2)
-            }
-
-            // 2x2 Grid of Status Summary Tiles
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 14),
-                    GridItem(.flexible(), spacing: 14)
-                ],
-                spacing: 14
-            ) {
-                ForEach(summaryTiles(for: selectedCategory)) { tile in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(tile.label)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
-
-                        Text(tile.value)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 18)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                    )
-                }
-            }
-
-            Spacer()
-        }
-        .padding(42)
-    }
-
-    private func summaryTiles(for category: SettingsCategory) -> [SummaryTileItem] {
-        switch category {
-        case .playback:
-            return [
-                SummaryTileItem(label: "Resume", value: viewModel.resumePlaybackBehavior),
-                SummaryTileItem(label: "Next episode", value: viewModel.nextEpisodeBehavior),
-                SummaryTileItem(label: "Player engine", value: viewModel.playerEngineName),
-                SummaryTileItem(label: "Audio", value: viewModel.audioOutputMode)
-            ]
-        case .subtitles:
-            return [
-                SummaryTileItem(label: "Turn on", value: viewModel.subtitleAutoMode),
-                SummaryTileItem(
-                    label: "Languages",
-                    value: "\(viewModel.displayLanguageName(for: viewModel.subtitleLanguage)), \(viewModel.displayLanguageName(for: viewModel.secondarySubtitleLanguage))"
-                ),
-                SummaryTileItem(label: "Font", value: viewModel.subtitleFontName),
-                SummaryTileItem(label: "Size", value: "\(Int(viewModel.subtitleFontSize)) pt")
-            ]
-        case .skipIntroCredits:
-            return [
-                SummaryTileItem(label: "Intro", value: viewModel.skipIntroMode),
-                SummaryTileItem(label: "Recap", value: viewModel.skipRecapMode),
-                SummaryTileItem(label: "Credits", value: viewModel.skipCreditsMode),
-                SummaryTileItem(label: "Delay", value: "\(viewModel.skipDelaySeconds) s")
-            ]
-        case .appearance:
-            return [
-                SummaryTileItem(label: "Language", value: viewModel.displayLanguageName(for: viewModel.preferredLanguage)),
-                SummaryTileItem(label: "Home layout", value: viewModel.homeHeroStyle),
-                SummaryTileItem(label: "Movies layout", value: viewModel.moviesLayoutStyle),
-                SummaryTileItem(label: "Watched indicator", value: viewModel.showWatchedIndicators ? "On" : "Off")
-            ]
-        case .library:
-            return [
-                SummaryTileItem(label: "Preferred quality", value: viewModel.preferredQuality),
-                SummaryTileItem(label: "Watch history", value: "Local SwiftData"),
-                SummaryTileItem(label: "Backup format", value: "JSON Export"),
-                SummaryTileItem(label: "Metadata source", value: "TMDB v3")
-            ]
-        case .serversAccounts:
-            return [
-                SummaryTileItem(label: "TMDB API key", value: viewModel.tmdbApiKey.isEmpty ? "Not Set" : "Configured"),
-                SummaryTileItem(label: "AIOStreams", value: viewModel.aioStreamsUrl.isEmpty ? "Not Set" : "Connected"),
-                SummaryTileItem(label: "SubDL", value: viewModel.subdlApiKey.isEmpty ? "Optional" : "Configured"),
-                SummaryTileItem(label: "OpenSubtitles", value: viewModel.openSubtitlesApiKey.isEmpty ? "Optional" : "Configured")
-            ]
-        case .trakt:
-            return [
-                SummaryTileItem(label: "Account", value: viewModel.traktUsername.isEmpty ? "Not Connected" : viewModel.traktUsername),
-                SummaryTileItem(label: "Scrobble", value: viewModel.traktScrobbleEnabled ? "On" : "Off"),
-                SummaryTileItem(label: "Auto-sync", value: "80% Threshold"),
-                SummaryTileItem(label: "History merge", value: "Enabled")
-            ]
-        case .artworkMetadata:
-            return [
-                SummaryTileItem(label: "Home logos", value: viewModel.includeLogosInHome ? "On" : "Off"),
-                SummaryTileItem(label: "Logo language", value: viewModel.preferredArtworkLanguage),
-                SummaryTileItem(label: "Custom artwork", value: artworkOverrides.isEmpty ? "Default" : "\(artworkOverrides.count) titles"),
-                SummaryTileItem(label: "Auto sync subtitles", value: viewModel.autoSyncSubtitles ? "On" : "Off")
-            ]
-        case .quickSetup:
-            return [
-                SummaryTileItem(label: "Phone Server", value: "On-Demand"),
-                SummaryTileItem(label: "AIOStreams", value: viewModel.aioStreamsUrl.isEmpty ? "Not Set" : "Configured"),
-                SummaryTileItem(label: "MDBList", value: viewModel.mdblistApiKey.isEmpty ? "Optional" : "Configured"),
-                SummaryTileItem(label: "AI Translation", value: viewModel.aiTranslationApiKey.isEmpty ? "Optional" : "Configured")
-            ]
-        case .about:
-            return [
-                SummaryTileItem(label: "Version", value: "1.0.0"),
-                SummaryTileItem(label: "Platform", value: "tvOS 18"),
-                SummaryTileItem(label: "Engine", value: "AetherEngine"),
-                SummaryTileItem(label: "Design", value: "Dark Cinema")
-            ]
-        }
-    }
-
-    // MARK: - Interactive Controls Panel (Opened on Category Click)
+    // MARK: - Interactive Controls Panel
 
     private var categoryControlsPanel: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Top bar with Back button & Save CTA
-            HStack {
-                Button {
-                    viewModel.saveSettings(context: modelContext)
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        isEditingCategory = false
-                    }
-                    focusedCategory = selectedCategory
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("All Settings")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .modifier(SettingsFocusablePillModifier())
+            // Header row with Icon, Category Title & Save CTA Button
+            HStack(alignment: .center, spacing: 18) {
+                Image(systemName: selectedCategory.iconName)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 52, height: 52)
+                    .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(selectedCategory.rawValue)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(selectedCategory.summarySubtitle)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .lineLimit(2)
                 }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
 
                 Spacer()
 
@@ -440,19 +288,10 @@ struct SettingsView: View {
                 }
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
+                .focused($isRightPrimaryFocused)
             }
 
-            // Header
-            VStack(alignment: .leading, spacing: 6) {
-                Text(selectedCategory.rawValue)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
-                Text(selectedCategory.summarySubtitle)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white.opacity(0.65))
-            }
-
-            // Full-Width Grouped Controls (No Truncated Segmented Controls)
+            // Full-Width Grouped Native Interactive Controls
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 12) {
                     controlsContent(for: selectedCategory)
@@ -706,17 +545,12 @@ struct SettingsView: View {
             actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode") {
                 showPhoneQRSetup = true
             }
+            addonManifestManagerSection
             textFieldSettingRow(
                 title: "TMDB API Key (v3)",
                 placeholder: "Enter TMDB v3 API Key",
                 text: $viewModel.tmdbApiKey,
                 isSecure: true
-            )
-            textFieldSettingRow(
-                title: "AIOStreams Manifest URL",
-                placeholder: "https://aiostreams.example.com/manifest.json",
-                text: $viewModel.aioStreamsUrl,
-                isSecure: false
             )
             textFieldSettingRow(
                 title: "MDBList API Key (Optional)",
@@ -736,22 +570,6 @@ struct SettingsView: View {
                 text: $viewModel.openSubtitlesApiKey,
                 isSecure: true
             )
-            actionSettingRow(
-                title: viewModel.isTestingConnection ? "Testing AIOStreams..." : "Test AIOStreams Manifest",
-                icon: "network"
-            ) {
-                viewModel.saveSettings(context: modelContext)
-                Task {
-                    await viewModel.testAIOStreamsConnection()
-                }
-            }
-            if let connectionStatus = viewModel.connectionTestStatus {
-                Text(connectionStatus)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(connectionStatus.hasPrefix("Connected") ? Color.green : Color.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-            }
 
         case .trakt:
             textFieldSettingRow(
@@ -795,22 +613,33 @@ struct SettingsView: View {
             actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode.viewfinder") {
                 showPhoneQRSetup = true
             }
-            infoRow(
-                title: "Local Web Server",
-                value: "Starts only while Phone QR Setup is open and stops immediately on close"
-            )
-            infoRow(
-                title: "AIOStreams / Stremio URLs",
-                value: viewModel.aioStreamsUrl.isEmpty ? "Not Configured" : viewModel.aioStreamsUrl
-            )
-            infoRow(
+            addonManifestManagerSection
+            actionSettingRow(
                 title: "MDBList Ratings",
-                value: viewModel.mdblistApiKey.isEmpty ? "Optional (Not Set)" : "Configured"
-            )
-            infoRow(
+                value: viewModel.mdblistApiKey.isEmpty ? "Optional (Not Set)" : "Configured",
+                icon: "star.bubble"
+            ) {
+                selectedCategory = .serversAccounts
+                DispatchQueue.main.async {
+                    isRightPrimaryFocused = true
+                }
+            }
+            actionSettingRow(
                 title: "AI Translation Key",
-                value: viewModel.aiTranslationApiKey.isEmpty ? "Optional (Not Set)" : "Configured (\(viewModel.aiTranslationProvider))"
-            )
+                value: viewModel.aiTranslationApiKey.isEmpty ? "Optional (Not Set)" : "Configured (\(viewModel.aiTranslationProvider))",
+                icon: "sparkles"
+            ) {
+                selectedCategory = .subtitles
+                DispatchQueue.main.async {
+                    isRightPrimaryFocused = true
+                }
+            }
+            Text("Phone QR Web Server starts only while the Setup via Phone screen is open and stops immediately on close.")
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.top, 2)
 
         case .about:
             infoRow(title: "Application", value: "AuraTV 1.0.0")
@@ -883,11 +712,15 @@ struct SettingsView: View {
             if isSecure {
                 SecureField(placeholder, text: text)
                     .font(.system(size: 18))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .padding(14)
                     .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
             } else {
                 TextField(placeholder, text: text)
                     .font(.system(size: 18))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .padding(14)
                     .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
             }
@@ -901,7 +734,131 @@ struct SettingsView: View {
         )
     }
 
-    private func actionSettingRow(title: String, icon: String, action: @escaping () -> Void) -> some View {
+    @ViewBuilder
+    private var addonManifestManagerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Add Stremio / AIOStreams / Nuvio Manifest URL")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+
+            HStack(spacing: 12) {
+                TextField("https://.../manifest.json (use iPhone Remote keyboard)", text: $viewModel.quickManifestInput)
+                    .font(.system(size: 18))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit {
+                        Task {
+                            await viewModel.addAndValidateManifestURL(viewModel.quickManifestInput, context: modelContext)
+                        }
+                    }
+                    .padding(14)
+                    .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+
+                Button {
+                    Task {
+                        await viewModel.addAndValidateManifestURL(viewModel.quickManifestInput, context: modelContext)
+                    }
+                } label: {
+                    Text(viewModel.isTestingConnection ? "Validating..." : "Add / Save")
+                        .font(.system(size: 16, weight: .bold))
+                        .modifier(SettingsPrimaryPillModifier())
+                }
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+                .disabled(viewModel.isTestingConnection)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+
+        textFieldSettingRow(
+            title: "AIOStreams / Stremio URLs",
+            placeholder: "https://aiostreams.example.com/manifest.json",
+            text: $viewModel.aioStreamsUrl,
+            isSecure: false
+        )
+
+        textFieldSettingRow(
+            title: "Nuvio / Addon URLs",
+            placeholder: "Comma or newline separated extra manifest.json URLs",
+            text: $viewModel.aioStreamsAdditionalUrls,
+            isSecure: false
+        )
+
+        if !viewModel.configuredManifestURLs.isEmpty {
+            ForEach(Array(viewModel.configuredManifestURLs.enumerated()), id: \.element) { idx, manifestURL in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(idx == 0 ? "Primary Addon" : "Addon \(idx + 1)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(idx == 0 ? Color.green : Color.white.opacity(0.6))
+                        Text(manifestURL)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    if idx > 0 {
+                        Button("Set Primary") {
+                            viewModel.makePrimaryManifestURL(manifestURL, context: modelContext)
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .modifier(SettingsFocusablePillModifier())
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+                    }
+
+                    Button("Remove") {
+                        viewModel.removeManifestURL(manifestURL, context: modelContext)
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .modifier(SettingsFocusablePillModifier())
+                    .buttonStyle(AuraButtonStyle())
+                    .focusEffectDisabled()
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 14)
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+            }
+        }
+
+        actionSettingRow(
+            title: viewModel.isTestingConnection ? "Validating Manifests..." : "Validate & Save All Addons",
+            icon: "checkmark.seal"
+        ) {
+            viewModel.saveSettings(context: modelContext)
+            Task {
+                await viewModel.testAIOStreamsConnection()
+            }
+        }
+
+        if let connectionStatus = viewModel.connectionTestStatus {
+            Text(connectionStatus)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(connectionStatus.hasPrefix("Connected") ? Color.green : Color.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+        }
+    }
+
+    private func actionSettingRow(
+        title: String,
+        value: String? = nil,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
@@ -911,6 +868,12 @@ struct SettingsView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
+                if let value, !value.isEmpty {
+                    Text(value)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .lineLimit(1)
+                }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white.opacity(0.45))

@@ -206,7 +206,7 @@ final class LocalConfigServer {
         let manifestLines = rawManifests
             .replacingOccurrences(of: "\r\n", with: "\n")
             .components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ",")))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { AIOStreamsService.normalizedManifestURL(from: $0) }
             .filter { !$0.isEmpty }
 
         settings.aioStreamsUrl = manifestLines.first ?? ""
@@ -338,7 +338,7 @@ final class LocalConfigServer {
             <h1>AuraTV Phone Setup</h1>
             <p class="sub">Paste your streaming manifest URLs and API keys below, then tap Save to send them straight to your Apple TV.</p>
             <form method="POST" action="/save">
-              <label for="aio_urls">Stremio / AIOStreams Manifest URL(s)</label>
+              <label for="aio_urls">Stremio / AIOStreams / Nuvio Manifest URL(s)</label>
               <textarea id="aio_urls" name="aio_urls" placeholder="https://aiostreams.example.com/manifest.json&#10;(One manifest URL per line)">\(escapeHTML(snapshot.aioManifestURLs))</textarea>
               <div class="hint">Enter one URL, or paste multiple manifest URLs separated by new lines.</div>
 

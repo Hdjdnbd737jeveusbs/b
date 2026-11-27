@@ -28,6 +28,7 @@ final class SettingsViewModel {
     var tmdbApiKey: String = "d767cb12181edaa01840442c704329be"
     var aioStreamsUrl: String = ""
     var aioStreamsAdditionalUrls: String = ""
+    var quickManifestInput: String = ""
     var mdblistApiKey: String = ""
     var preferredQuality: String = "4K"
     var preferredLanguage: String = "en"
@@ -287,9 +288,9 @@ final class SettingsViewModel {
                 context.insert(settings)
             }
 
-            settings.tmdbApiKey = tmdbApiKey
-            settings.aioStreamsUrl = aioStreamsUrl
-            settings.aioStreamsAdditionalUrls = aioStreamsAdditionalUrls
+            settings.tmdbApiKey = tmdbApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            settings.aioStreamsUrl = aioStreamsUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+            settings.aioStreamsAdditionalUrls = Self.splitManifestEntries(aioStreamsAdditionalUrls).joined(separator: "\n")
             settings.mdblistApiKey = mdblistApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             settings.preferredQuality = preferredQuality
             settings.preferredLanguage = preferredLanguage
@@ -503,17 +504,111 @@ final class SettingsViewModel {
         }
     }
 
+    var configuredManifestURLs: [String] {
+        Self.splitManifestEntries("\(aioStreamsUrl)\n\(aioStreamsAdditionalUrls)")
+    }
+
+    private static func cleanedManifestEntry(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return AIOStreamsService.normalizedManifestURL(from: trimmed)
+    }
+
+    private static func splitManifestEntries(_ raw: String) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        let parts = raw
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ",")))
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+            result.append(trimmed)
+        }
+        return result
+    }
+
+    @MainActor
+    func addAndValidateManifestURL(_ rawInput: String, context: ModelContext) async {
+        let candidates = Self.splitManifestEntries(rawInput)
+        guard !candidates.isEmpty else {
+            connectionTestStatus = "Paste a Stremio, AIOStreams, or Nuvio manifest.json URL first."
+            return
+        }
+
+        isTestingConnection = true
+        connectionTestStatus = nil
+        defer { isTestingConnection = false }
+
+        var validatedNames: [String] = []
+        var merged = configuredManifestURLs
+
+        for rawCandidate in candidates {
+            do {
+                let (normalized, manifest) = try await AIOStreamsService.shared.validateManifest(at: rawCandidate)
+                if !merged.contains(normalized) {
+                    merged.append(normalized)
+                }
+                let addonTitle = manifest.name ?? URL(string: normalized)?.host ?? "Addon"
+                let addonVer = manifest.version.map { " v\($0)" } ?? ""
+                validatedNames.append("\(addonTitle)\(addonVer)")
+            } catch {
+                connectionTestStatus = "Validation failed: \(error.localizedDescription)"
+                return
+            }
+        }
+
+        aioStreamsUrl = merged.first ?? ""
+        aioStreamsAdditionalUrls = merged.dropFirst().joined(separator: "\n")
+        quickManifestInput = ""
+        saveSettings(context: context)
+
+        let summary = validatedNames.joined(separator: ", ")
+        connectionTestStatus = "Connected & Saved: \(summary) (\(merged.count) active)"
+        statusMessage = "Saved \(summary)."
+    }
+
+    @MainActor
+    func removeManifestURL(_ targetURL: String, context: ModelContext) {
+        let remaining = configuredManifestURLs.filter { $0 != targetURL }
+        aioStreamsUrl = remaining.first ?? ""
+        aioStreamsAdditionalUrls = remaining.dropFirst().joined(separator: "\n")
+        saveSettings(context: context)
+        connectionTestStatus = remaining.isEmpty
+            ? "Removed manifest URL."
+            : "Removed manifest. \(remaining.count) addon(s) remaining."
+    }
+
+    @MainActor
+    func makePrimaryManifestURL(_ targetURL: String, context: ModelContext) {
+        let others = configuredManifestURLs.filter { $0 != targetURL }
+        aioStreamsUrl = targetURL
+        aioStreamsAdditionalUrls = others.joined(separator: "\n")
+        saveSettings(context: context)
+        connectionTestStatus = "Set primary manifest: \(targetURL)"
+    }
+
     @MainActor
     func testAIOStreamsConnection() async {
         isTestingConnection = true
         connectionTestStatus = nil
         AIOStreamsService.shared.manifestURL = aioStreamsUrl
+        AIOStreamsService.shared.additionalManifestURLs = aioStreamsAdditionalUrls
+
+        let urls = AIOStreamsService.shared.allManifestURLs
+        guard let primary = urls.first else {
+            connectionTestStatus = AIOStreamsError.missingManifestURL.localizedDescription
+            isTestingConnection = false
+            return
+        }
 
         do {
-            let manifest = try await AIOStreamsService.shared.fetchManifest()
+            let (_, manifest) = try await AIOStreamsService.shared.validateManifest(at: primary)
             let addonName = manifest.name ?? "AIOStreams"
             let addonVersion = manifest.version ?? "1.0"
-            connectionTestStatus = "Connected to \(addonName) (v\(addonVersion))"
+            let extraCount = max(urls.count - 1, 0)
+            let extraSuffix = extraCount > 0 ? " + \(extraCount) extra addon(s)" : ""
+            connectionTestStatus = "Connected to \(addonName) (v\(addonVersion))\(extraSuffix)"
         } catch {
             connectionTestStatus = error.localizedDescription
         }

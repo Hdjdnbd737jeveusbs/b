@@ -67,11 +67,20 @@ final class AIOStreamsService {
 
     private static func normalizedBaseURL(from rawURL: String) -> String {
         var url = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if url.lowercased().hasPrefix("stremio://") {
+            url = "https://" + String(url.dropFirst("stremio://".count))
+        }
         while url.hasSuffix("/") { url = String(url.dropLast()) }
         if url.hasSuffix("/manifest.json") {
             url = String(url.dropLast("/manifest.json".count))
         }
         return url
+    }
+
+    static func normalizedManifestURL(from rawURL: String) -> String {
+        let base = normalizedBaseURL(from: rawURL)
+        guard !base.isEmpty else { return "" }
+        return "\(base)/manifest.json"
     }
 
     var isLoading: Bool = false
@@ -92,16 +101,15 @@ final class AIOStreamsService {
 
     // MARK: - Manifest Validation
 
-    func fetchManifest() async throws -> StremioManifest {
-        guard !manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+    func validateManifest(at rawURL: String) async throws -> (normalizedURL: String, manifest: StremioManifest) {
+        let endpoint = Self.normalizedManifestURL(from: rawURL)
+        guard !endpoint.isEmpty else {
             throw AIOStreamsError.missingManifestURL
         }
-
-        let manifestEndpoint = manifestURL.hasSuffix("/manifest.json")
-            ? manifestURL
-            : "\(baseURL)/manifest.json"
-
-        guard let url = URL(string: manifestEndpoint) else {
+        guard let url = URL(string: endpoint),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host != nil else {
             throw AIOStreamsError.invalidURL
         }
 
@@ -111,10 +119,15 @@ final class AIOStreamsService {
         }
 
         do {
-            return try decoder.decode(StremioManifest.self, from: data)
+            let manifest = try decoder.decode(StremioManifest.self, from: data)
+            return (endpoint, manifest)
         } catch {
             throw AIOStreamsError.decodingError(error)
         }
+    }
+
+    func fetchManifest() async throws -> StremioManifest {
+        try await validateManifest(at: manifestURL).manifest
     }
 
     // MARK: - Fetch Streams (Raw Order Preserved)
