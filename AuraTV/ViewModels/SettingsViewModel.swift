@@ -38,9 +38,9 @@ final class SettingsViewModel {
 
     var subdlApiKey: String = ""
     var openSubtitlesApiKey: String = ""
-    var subtitleFontSize: Double = 44.0
-    var subtitleFontWeight: String = "Bold"
-    var subtitleFontName: String = "System"
+    var subtitleFontSize: Double = 58.0
+    var subtitleFontWeight: String = "Medium"
+    var subtitleFontName: String = "The Year of The Camel"
     var subtitleTextColor: String = "Light Gray"
     var subtitleTextOpacity: Double = 0.80
     var subtitleBackgroundOpacity: Double = 0.0

@@ -152,6 +152,7 @@ final class SubtitleProcessor {
     static var availableFonts: [String] { bundledFonts + ImportedSubtitleFonts.names }
 
     private static let bundledFonts: [String] = [
+        "The Year of The Camel",
         "System",
         "IBM Plex Sans Arabic",
         "Tajawal",

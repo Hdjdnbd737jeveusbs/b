@@ -876,6 +876,10 @@ struct SettingsView: View {
                             isSelected: isSelected
                         ) {
                             viewModel.subtitleFontName = fontName
+                            if fontName == "The Year of The Camel" {
+                                viewModel.subtitleFontWeight = "Medium"
+                                viewModel.subtitleFontSize = 58
+                            }
                             viewModel.saveSettings(context: modelContext)
                         }
 

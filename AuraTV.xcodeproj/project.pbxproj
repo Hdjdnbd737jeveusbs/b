@@ -73,6 +73,7 @@
 		1055 /* IBMPlexSansArabic-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2056 /* IBMPlexSansArabic-Bold.ttf */; };
 		1056 /* Tajawal-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2057 /* Tajawal-Regular.ttf */; };
 		1057 /* Tajawal-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2058 /* Tajawal-Medium.ttf */; };
+		C95A /* TheYearofTheCamel-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = C95B /* TheYearofTheCamel-Medium.otf */; };
 		1058 /* Tajawal-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2059 /* Tajawal-Bold.ttf */; };
 		1059 /* AITranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2060 /* AITranslationService.swift */; };
 		1060 /* ASSRenderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2061 /* ASSRenderCoordinator.swift */; };
@@ -178,6 +179,7 @@
 		2056 /* IBMPlexSansArabic-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexSansArabic-Bold.ttf"; sourceTree = "<group>"; };
 		2057 /* Tajawal-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tajawal-Regular.ttf"; sourceTree = "<group>"; };
 		2058 /* Tajawal-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tajawal-Medium.ttf"; sourceTree = "<group>"; };
+		C95B /* TheYearofTheCamel-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "TheYearofTheCamel-Medium.otf"; sourceTree = "<group>"; };
 		2059 /* Tajawal-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tajawal-Bold.ttf"; sourceTree = "<group>"; };
 		2060 /* AITranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITranslationService.swift; sourceTree = "<group>"; };
 		2061 /* ASSRenderCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASSRenderCoordinator.swift; sourceTree = "<group>"; };
@@ -437,6 +439,7 @@
 				2056 /* IBMPlexSansArabic-Bold.ttf */,
 				2057 /* Tajawal-Regular.ttf */,
 				2058 /* Tajawal-Medium.ttf */,
+				C95B /* TheYearofTheCamel-Medium.otf */,
 				2059 /* Tajawal-Bold.ttf */,
 			);
 			path = Fonts;
@@ -558,6 +561,7 @@
 				1055 /* IBMPlexSansArabic-Bold.ttf in Resources */,
 				1056 /* Tajawal-Regular.ttf in Resources */,
 				1057 /* Tajawal-Medium.ttf in Resources */,
+				C95A /* TheYearofTheCamel-Medium.otf in Resources */,
 				1058 /* Tajawal-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
