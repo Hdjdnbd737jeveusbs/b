@@ -225,6 +225,13 @@ jobs:
           xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
           sleep 3
 
+      - name: Verify subtitle controls with the Apple TV remote
+        run: |
+          xcodebuild test -project AuraTV.xcodeproj -scheme AuraTV \
+            -destination "platform=tvOS Simulator,id=$DEVICE_UDID" \
+            -derivedDataPath build/DerivedData -parallel-testing-enabled NO \
+            -only-testing:PlayerRemoteTests CODE_SIGNING_ALLOWED=NO
+
       - name: Launch AuraTV and capture screenshots
         run: |
           mkdir -p screenshots

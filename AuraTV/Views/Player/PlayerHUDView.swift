@@ -380,6 +380,7 @@ struct PlayerHUDView: View {
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
+        .accessibilityIdentifier("hud-\(control)")
         .focused($focusedControl, equals: control)
     }
 

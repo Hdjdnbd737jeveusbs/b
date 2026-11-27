@@ -6,6 +6,15 @@
 	objectVersion = 56;
 	objects = {
 
+/* Player remote regression test target */
+        D901 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PlayerRemoteTests.swift; sourceTree = SOURCE_ROOT; };
+        D902 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PlayerRemoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        D903 = {isa = PBXBuildFile; fileRef = D901; };
+        D904 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D903,); runOnlyForDeploymentPostprocessing = 0; };
+        D905 = {isa = PBXNativeTarget; buildConfigurationList = D906; buildPhases = (D904,); buildRules = (); dependencies = (); name = PlayerRemoteTests; productName = PlayerRemoteTests; productReference = D902; productType = "com.apple.product-type.bundle.ui-testing"; };
+        D906 = {isa = XCConfigurationList; buildConfigurations = (D907,D908,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        D907 = {isa = XCBuildConfiguration; buildSettings = { SDKROOT = appletvos; TARGETED_DEVICE_FAMILY = 3; TVOS_DEPLOYMENT_TARGET = 18.0; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.auratv.RemoteTests; SWIFT_VERSION = 5.0; TEST_TARGET_NAME = AuraTV; PRODUCT_NAME = "$(TARGET_NAME)"; }; name = Debug; };
+        D908 = {isa = XCBuildConfiguration; buildSettings = { SDKROOT = appletvos; TARGETED_DEVICE_FAMILY = 3; TVOS_DEPLOYMENT_TARGET = 18.0; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.auratv.RemoteTests; SWIFT_VERSION = 5.0; TEST_TARGET_NAME = AuraTV; PRODUCT_NAME = "$(TARGET_NAME)"; }; name = Release; };
 /* Begin PBXBuildFile section */
 		1001 /* AuraTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001 /* AuraTVApp.swift */; };
 		1002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002 /* ContentView.swift */; };
@@ -211,6 +220,7 @@
 		4000 /* Main Group */ = {
 			isa = PBXGroup;
 			children = (
+				D901,
 				4001 /* AuraTV */,
 				4019 /* Shared */,
 				4020 /* AuraTVTopShelf */,
@@ -530,6 +540,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				D905,
 				5001 /* AuraTV */,
 				5002 /* AuraTVTopShelf */,
 			);
