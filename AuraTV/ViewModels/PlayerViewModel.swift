@@ -56,6 +56,9 @@ final class PlayerViewModel {
     var totalDuration: Double = 0
     var playbackRate: Double = 1.0
     var seekTrigger: Double?
+    var hasPlaybackEverStarted: Bool = false
+    var isSeekingActive: Bool = false
+    var seekTargetTime: Double?
     var isPreviewMode: Bool = false
     var playerEngineName: String = "AetherEngine"
     var audioOutputMode: String = "Dolby Digital Plus 5.1"
@@ -258,6 +261,8 @@ final class PlayerViewModel {
 
     private var hudHideTimer: Timer?
     private var progressSaveTimer: Timer?
+    private var seekCommitTask: Task<Void, Never>?
+    private var ignoreClockUpdatesUntil: Date?
     private var saveContext: ModelContext?
 
     // MARK: - Computed Properties
@@ -271,12 +276,18 @@ final class PlayerViewModel {
         formatTime(currentTime)
     }
 
+    var totalTimeFormatted: String {
+        formatTime(totalDuration)
+    }
+
     var remainingTimeFormatted: String {
         let remaining = max(totalDuration - currentTime, 0)
         return "-\(formatTime(remaining))"
     }
 
-    private(set) var hasStartedPlayback = false
+    var hasStartedPlayback: Bool {
+        hasPlaybackEverStarted || (isPreviewMode && !isBuffering)
+    }
 
     // MARK: - Setup
 
@@ -299,7 +310,6 @@ final class PlayerViewModel {
         nextEpisode: TMDBEpisode? = nil,
         onPlayNextEpisode: ((TMDBEpisode) -> Void)? = nil
     ) {
-        self.hasStartedPlayback = false
         self.isPreviewMode = false
         self.streamURL = url
         self.title = title
@@ -319,6 +329,12 @@ final class PlayerViewModel {
         self.nextEpisode = nextEpisode
         self.onPlayNextEpisode = onPlayNextEpisode
         self.isBuffering = true
+        self.hasPlaybackEverStarted = false
+        self.isSeekingActive = false
+        self.seekTargetTime = nil
+        self.seekCommitTask?.cancel()
+        self.seekCommitTask = nil
+        self.ignoreClockUpdatesUntil = nil
         self.isPlaying = false
         self.playbackError = nil
         self.videoDynamicRangeBadge = nil
@@ -367,7 +383,6 @@ final class PlayerViewModel {
         self.totalDuration = 8589
         self.isBuffering = mode == .loading
         self.isPlaying = mode != .loading
-        self.hasStartedPlayback = mode != .loading
         self.isHUDVisible = mode != .loading
         self.previewBadges = ["4K", "Dolby Vision", "5.1"]
         self.availableStreams = [
@@ -459,24 +474,49 @@ final class PlayerViewModel {
     }
 
     func seek(to time: Double) {
-        let target = max(0, min(time, totalDuration))
+        let upperBound = totalDuration > 0 ? totalDuration : max(currentTime, time)
+        let target = max(0, min(time, upperBound))
+        seekTargetTime = target
+        isSeekingActive = true
         currentTime = target
-        seekTrigger = target
-        resetHUDTimer()
+        ignoreClockUpdatesUntil = Date().addingTimeInterval(0.85)
+        showHUD()
+
+        seekCommitTask?.cancel()
+        seekCommitTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.seekTrigger = target
+            self.seekCommitTask = nil
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            if self.seekCommitTask == nil {
+                self.isSeekingActive = false
+                self.seekTargetTime = nil
+            }
+        }
     }
 
-    func seekForward(seconds: Double = 10) {
-        seek(to: currentTime + seconds)
+    func seekForward(seconds: Double = 15) {
+        let base = seekTargetTime ?? currentTime
+        seek(to: base + seconds)
     }
 
-    func seekBackward(seconds: Double = 10) {
-        seek(to: currentTime - seconds)
+    func seekBackward(seconds: Double = 15) {
+        let base = seekTargetTime ?? currentTime
+        seek(to: base - seconds)
     }
 
     func switchStream(_ stream: StremioStream) {
         guard let urlStr = stream.url, let url = URL(string: urlStr) else { return }
         guard url != streamURL else { showStreamPicker = false; return }
         playbackError = nil
+        hasPlaybackEverStarted = false
+        isSeekingActive = false
+        seekTargetTime = nil
+        seekCommitTask?.cancel()
+        seekCommitTask = nil
+        ignoreClockUpdatesUntil = nil
         activeEmbeddedTextCue = nil
         currentBitmapSubtitle = nil
         externalASSContent = nil
@@ -487,7 +527,6 @@ final class PlayerViewModel {
         translationTask?.cancel()
         translationTask = nil
         activeEmbeddedTrackLanguageCode = nil
-        hasStartedPlayback = false
         selectedStream = stream
         resumeFromTime = currentTime
         streamURL = url
@@ -717,10 +756,10 @@ final class PlayerViewModel {
     }
 
     func onPlaybackReady(duration: Double) {
-        hasStartedPlayback = true
-        if duration.isFinite && duration > 0 {
+        if duration.isFinite, duration > 0, duration < Double(Int.max) {
             totalDuration = duration
         }
+        hasPlaybackEverStarted = true
         isBuffering = false
 
         if resumeFromTime > 0 {
@@ -736,24 +775,39 @@ final class PlayerViewModel {
     @MainActor
     func onTimeUpdate(current: Double, total: Double) {
         guard current.isFinite, current >= 0, current < Double(Int.max) else { return }
-        currentTime = current
-        if total.isFinite && total < Double(Int.max) && total > 0 { totalDuration = total }
+        if total.isFinite, total > 0, total < Double(Int.max) { totalDuration = total }
+        if current > 0.25 && totalDuration > 0 {
+            hasPlaybackEverStarted = true
+        }
 
-        // Update active subtitle cue based on current time & manual offset
+        let effectiveTime: Double
+        if let until = ignoreClockUpdatesUntil, Date() < until {
+            effectiveTime = currentTime
+        } else {
+            currentTime = current
+            effectiveTime = current
+            ignoreClockUpdatesUntil = nil
+            if isSeekingActive && seekCommitTask == nil {
+                isSeekingActive = false
+                seekTargetTime = nil
+            }
+        }
+
+        // Update active subtitle cue based on current time & manual offset (O(log n) binary search)
         if !activeCues.isEmpty {
             let offset = subtitleSyncSettings.manualOffset
-            if let matchingCue = activeCues.first(where: { $0.isActive(at: current, offset: offset) }) {
+            if let matchingCue = findActiveCue(in: activeCues, at: effectiveTime, offset: offset) {
                 currentSubtitleCue = externalASSContent == nil ? applyTranslationIfAvailable(to: matchingCue) : nil
             } else {
                 currentSubtitleCue = nil
             }
-            scheduleUpcomingTranslationIfNeeded(at: current)
+            scheduleUpcomingTranslationIfNeeded(at: effectiveTime)
         } else if let embeddedCue = activeEmbeddedTextCue {
             currentSubtitleCue = isActiveEmbeddedASS ? nil : applyTranslationIfAvailable(to: embeddedCue)
-            scheduleUpcomingTranslationIfNeeded(at: current)
+            scheduleUpcomingTranslationIfNeeded(at: effectiveTime)
         } else if !isPreviewMode {
             currentSubtitleCue = nil
-            scheduleUpcomingTranslationIfNeeded(at: current)
+            scheduleUpcomingTranslationIfNeeded(at: effectiveTime)
         }
 
         // Auto-skip intro if configured in Settings
@@ -772,6 +826,37 @@ final class PlayerViewModel {
            (totalDuration - currentTime) <= 2 {
             playNextEpisodeNow()
         }
+    }
+
+    // MARK: - O(log n) Cue Binary Search
+
+    private func findActiveCue(in cues: [AuraSubtitleCue], at playbackTime: Double, offset: Double) -> AuraSubtitleCue? {
+        let adjusted = playbackTime - offset
+        var low = 0
+        var high = cues.count - 1
+        var candidate = -1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            if cues[mid].startTime <= adjusted {
+                candidate = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        if candidate >= 0 {
+            // Check small window back in case overlapping cues share nearby startTimes
+            let floorIdx = max(0, candidate - 3)
+            for idx in stride(from: candidate, through: floorIdx, by: -1) {
+                let cue = cues[idx]
+                if adjusted >= cue.startTime && adjusted <= cue.endTime {
+                    return cue
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - Subtitle Operations
@@ -992,6 +1077,7 @@ final class PlayerViewModel {
             subtitleStyle.fontWeight = settings.subtitleFontWeight
             subtitleStyle.fontName = settings.subtitleFontName
             subtitleStyle.textColor = settings.subtitleTextColor
+            subtitleStyle.textOpacity = settings.subtitleTextOpacity
             subtitleStyle.backgroundOpacity = settings.subtitleBackgroundOpacity
             subtitleStyle.bottomOffset = settings.subtitleBottomOffset
 
@@ -1054,6 +1140,7 @@ final class PlayerViewModel {
         settings.subtitleFontWeight = subtitleStyle.fontWeight
         settings.subtitleFontName = subtitleStyle.fontName
         settings.subtitleTextColor = subtitleStyle.textColor
+        settings.subtitleTextOpacity = subtitleStyle.textOpacity
         settings.subtitleBackgroundOpacity = subtitleStyle.backgroundOpacity
         settings.subtitleBottomOffset = subtitleStyle.bottomOffset
 
@@ -1147,6 +1234,8 @@ final class PlayerViewModel {
     func cleanup() {
         translationTask?.cancel()
         translationTask = nil
+        seekCommitTask?.cancel()
+        seekCommitTask = nil
         hudHideTimer?.invalidate()
         hudHideTimer = nil
         sleepTimerCountdown?.invalidate()

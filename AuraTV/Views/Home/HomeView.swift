@@ -8,7 +8,6 @@ struct HomeView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = HomeViewModel()
-    @State private var themeCoordinator = AppThemeCoordinator.shared
 
     @State private var artworkDate = Date()
 
@@ -91,9 +90,12 @@ struct HomeView: View {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .focusable()
+                    .auraLeftEdgeSidebarTrigger()
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 34) {
+                    LazyVStack(alignment: .leading, spacing: 34) {
                         // Hero Spotlight / Ambient Banner
                         SpotlightCarouselView(
                             items: viewModel.spotlightItems,
@@ -103,7 +105,7 @@ struct HomeView: View {
                             certifications: viewModel.spotlightCertifications,
                             customBackdrops: customMovieBackdrops,
                             showLogos: includeLogos,
-                            trailerPreview: autoPlayTrailersOnFocus ? themeCoordinator.heroTrailerPreview : nil
+                            autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
                         )
 
                         // Continue Watching Row (16:9 cards with flush bottom progress bar)
@@ -114,6 +116,7 @@ struct HomeView: View {
                         )
 
                         // Series Shelf (2:3 clean portrait posters with count)
+                        let firstSeriesId = viewModel.trendingSeries.first?.id
                         MediaRowView(title: "Series", count: viewModel.trendingSeries.count) {
                             ForEach(viewModel.trendingSeries) { series in
                                 SeriesPosterCardView(
@@ -122,12 +125,14 @@ struct HomeView: View {
                                     isWatched: viewModel.watchedSeriesIds.contains(series.id),
                                     showWatchedBadge: showWatchedIndicators,
                                     autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                    isFirstInRow: series.id == firstSeriesId,
                                     posterWidth: 372
                                 )
                             }
                         }
 
                         // Movies Shelf (2:3 clean portrait posters with count)
+                        let firstMovieId = viewModel.trendingMovies.first?.id
                         MediaRowView(title: "Movies", count: viewModel.trendingMovies.count) {
                             ForEach(viewModel.trendingMovies) { movie in
                                 PosterCardView(
@@ -136,6 +141,7 @@ struct HomeView: View {
                                     isWatched: viewModel.watchedMovieIds.contains(movie.id),
                                     showWatchedBadge: showWatchedIndicators,
                                     autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                    isFirstInRow: movie.id == firstMovieId,
                                     posterWidth: 372
                                 )
                             }
@@ -161,7 +167,7 @@ struct HomeView: View {
             await viewModel.refresh(context: modelContext)
         }
         .onDisappear {
-            themeCoordinator.clearHomePreview()
+            AppThemeCoordinator.shared.clearHomePreview()
         }
     }
 }

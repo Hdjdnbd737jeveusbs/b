@@ -11,23 +11,26 @@ struct ContinueWatchingRow: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Continue Watching")
-                    .font(.system(size: 31, weight: .bold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 156)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 24) {
+                    LazyHStack(spacing: 26) {
+                        let firstItemId = items.first?.id
                         ForEach(items) { item in
                             let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
                             ContinueWatchingCard(
                                 item: item,
                                 overrideBackdropPath: backdropOverrides[key],
-                                autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
+                                autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                isFirstInRow: item.id == firstItemId
                             )
+                            .equatable()
                         }
                     }
                     .padding(.horizontal, 156)
-                    .padding(.vertical, 18)
+                    .padding(.vertical, 16)
                 }
             }
         }
@@ -36,13 +39,25 @@ struct ContinueWatchingRow: View {
 
 // MARK: - Continue Watching Card
 
-private struct ContinueWatchingCard: View {
+private struct ContinueWatchingCard: View, Equatable {
     let item: WatchHistory
     var overrideBackdropPath: String? = nil
     var autoPlayTrailersOnFocus: Bool = false
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
-    @State private var themeCoordinator = AppThemeCoordinator.shared
+
+    static func == (lhs: ContinueWatchingCard, rhs: ContinueWatchingCard) -> Bool {
+        lhs.item.tmdbId == rhs.item.tmdbId &&
+        lhs.item.mediaType == rhs.item.mediaType &&
+        lhs.item.progress == rhs.item.progress &&
+        lhs.item.title == rhs.item.title &&
+        lhs.item.seasonNumber == rhs.item.seasonNumber &&
+        lhs.item.episodeNumber == rhs.item.episodeNumber &&
+        lhs.overrideBackdropPath == rhs.overrideBackdropPath &&
+        lhs.autoPlayTrailersOnFocus == rhs.autoPlayTrailersOnFocus &&
+        lhs.isFirstInRow == rhs.isFirstInRow
+    }
 
     var body: some View {
         NavigationLink(destination: destinationView) {
@@ -58,44 +73,40 @@ private struct ContinueWatchingCard: View {
 
                         Rectangle()
                             .fill(Color.white)
-                            .frame(width: 414 * max(min(item.progress, 1.0), 0.04), height: 4)
+                            .frame(width: 415 * max(min(item.progress, 1.0), 0.04), height: 4)
                     }
                 }
-                .frame(width: 414, height: 233)
+                .frame(width: 415, height: 234)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
+                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
                 )
 
                 // Title & remaining time underneath
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 21, weight: .semibold))
+                        .font(.system(size: 23, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
                     Text(subtitleText)
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 19, weight: .regular))
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
                 }
-                .frame(width: 414, alignment: .leading)
+                .frame(width: 415, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.4),
-                radius: isFocused ? 18 : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
         .onChange(of: isFocused) { _, focused in
             if focused {
-                themeCoordinator.onHomeCardFocused(
+                AppThemeCoordinator.shared.onHomeCardFocused(
                     mediaType: item.mediaType,
                     tmdbId: item.tmdbId,
                     title: item.title,
@@ -107,7 +118,7 @@ private struct ContinueWatchingCard: View {
                     autoPlayTrailers: autoPlayTrailersOnFocus
                 )
             } else if autoPlayTrailersOnFocus {
-                themeCoordinator.onHomeCardBlurred(mediaType: item.mediaType, tmdbId: item.tmdbId)
+                AppThemeCoordinator.shared.onHomeCardBlurred(mediaType: item.mediaType, tmdbId: item.tmdbId)
             }
         }
     }
@@ -140,11 +151,11 @@ private struct ContinueWatchingCard: View {
         let imagePath = item.episodeStillPath ?? overrideBackdropPath ?? item.backdropPath ?? item.posterPath
         if let path = imagePath,
            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-            AuraCachedImage(url: url) { image in
+            AuraCachedImage(url: url, targetSize: CGSize(width: 415, height: 234)) { image in
                 image
                     .resizable()
                     .aspectRatio(16 / 9, contentMode: .fill)
-                    .frame(width: 414, height: 233)
+                    .frame(width: 415, height: 234)
                     .clipped()
             } placeholder: {
                 placeholder
@@ -157,10 +168,10 @@ private struct ContinueWatchingCard: View {
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 414, height: 233)
+            .frame(width: 415, height: 234)
             .overlay {
                 Image(systemName: "play.rectangle")
-                    .font(.system(size: 48))
+                    .font(.system(size: 38))
                     .foregroundStyle(.white.opacity(0.25))
             }
     }

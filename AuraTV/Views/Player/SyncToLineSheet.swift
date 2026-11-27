@@ -72,7 +72,7 @@ struct SyncToLineSheet: View {
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
-                            VStack(spacing: 6) {
+                            LazyVStack(spacing: 6) {
                                 ForEach(nearbyCues) { cue in
                                     cueRow(for: cue)
                                         .id(cue.id)

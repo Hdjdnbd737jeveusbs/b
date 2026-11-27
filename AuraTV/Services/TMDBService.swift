@@ -254,42 +254,44 @@ final class TMDBService {
             return nil
         }
         #if canImport(UIKit)
-        guard let cgImage = UIImage(data: data)?.cgImage else { return nil }
-        let width = min(cgImage.width, 64)
-        let height = min(cgImage.height, 32)
-        guard width > 0, height > 0 else { return nil }
+        return await Task.detached(priority: .utility) {
+            guard let cgImage = UIImage(data: data)?.cgImage else { return nil }
+            let width = min(cgImage.width, 64)
+            let height = min(cgImage.height, 32)
+            guard width > 0, height > 0 else { return nil }
 
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(
-            data: &pixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return nil
-        }
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            guard let ctx = CGContext(
+                data: &pixels,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+                return nil
+            }
 
-        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        var lumSum: Double = 0
-        var opaqueCount: Int = 0
-        for i in stride(from: 0, to: pixels.count, by: 4) {
-            let alpha = Int(pixels[i + 3])
-            guard alpha > 32 else { continue }
-            let a = Double(alpha) / 255.0
-            let r = min(Double(pixels[i]) / 255.0 / a, 1.0)
-            let g = min(Double(pixels[i + 1]) / 255.0 / a, 1.0)
-            let b = min(Double(pixels[i + 2]) / 255.0 / a, 1.0)
-            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-            lumSum += lum
-            opaqueCount += 1
-        }
-        guard opaqueCount > 0 else { return nil }
-        return lumSum / Double(opaqueCount)
+            var lumSum: Double = 0
+            var opaqueCount: Int = 0
+            for i in stride(from: 0, to: pixels.count, by: 4) {
+                let alpha = Int(pixels[i + 3])
+                guard alpha > 32 else { continue }
+                let a = Double(alpha) / 255.0
+                let r = min(Double(pixels[i]) / 255.0 / a, 1.0)
+                let g = min(Double(pixels[i + 1]) / 255.0 / a, 1.0)
+                let b = min(Double(pixels[i + 2]) / 255.0 / a, 1.0)
+                let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                lumSum += lum
+                opaqueCount += 1
+            }
+            guard opaqueCount > 0 else { return nil }
+            return lumSum / Double(opaqueCount)
+        }.value
         #else
         return nil
         #endif
@@ -347,7 +349,11 @@ final class TMDBService {
         }
 
         do {
-            return try decoder.decode(T.self, from: data)
+            return try await Task.detached(priority: .userInitiated) {
+                let bgDecoder = JSONDecoder()
+                bgDecoder.keyDecodingStrategy = .convertFromSnakeCase
+                return try bgDecoder.decode(T.self, from: data)
+            }.value
         } catch {
             Self.logger.error("Decoding error for \(endpoint, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw TMDBError.decodingError(error)

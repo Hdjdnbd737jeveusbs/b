@@ -91,36 +91,41 @@ final class HomeViewModel {
         await task.value
     }
 
-    // MARK: - Spotlight Enrichment
+    // MARK: - Spotlight Enrichment (Off-MainActor + Single Batch Commit)
 
     @MainActor
     private func enrichSpotlightItems(_ items: [TMDBMovie]) async {
         let tmdbService = self.service
-        await withTaskGroup(of: (Int, String?, Int?, String?).self) { group in
-            for item in items {
-                group.addTask {
-                    async let logo = tmdbService.fetchBestLogoPath(mediaType: "movie", id: item.id)
-                    async let detail = try? tmdbService.fetchMovieDetails(id: item.id)
+        let batch = await Task.detached(priority: .utility) {
+            var logos: [Int: String] = [:]
+            var runtimes: [Int: Int] = [:]
+            var certs: [Int: String] = [:]
 
-                    let (resolvedLogo, resolvedDetail) = await (logo, detail)
-                    let runtime = resolvedDetail?.runtime
-                    let cert = Self.extractUSCertification(from: resolvedDetail)
-                    return (item.id, resolvedLogo, runtime, cert)
+            await withTaskGroup(of: (Int, String?, Int?, String?).self) { group in
+                for item in items {
+                    group.addTask {
+                        async let logo = tmdbService.fetchBestLogoPath(mediaType: "movie", id: item.id)
+                        async let detail = try? tmdbService.fetchMovieDetails(id: item.id)
+
+                        let (resolvedLogo, resolvedDetail) = await (logo, detail)
+                        let runtime = resolvedDetail?.runtime
+                        let cert = Self.extractUSCertification(from: resolvedDetail)
+                        return (item.id, resolvedLogo, runtime, cert)
+                    }
+                }
+
+                for await (id, logo, runtime, cert) in group {
+                    if let logo { logos[id] = logo }
+                    if let runtime, runtime > 0 { runtimes[id] = runtime }
+                    if let cert, !cert.isEmpty { certs[id] = cert }
                 }
             }
+            return (logos, runtimes, certs)
+        }.value
 
-            for await (id, logo, runtime, cert) in group {
-                if let logo {
-                    spotlightLogos[id] = logo
-                }
-                if let runtime, runtime > 0 {
-                    spotlightRuntimes[id] = runtime
-                }
-                if let cert, !cert.isEmpty {
-                    spotlightCertifications[id] = cert
-                }
-            }
-        }
+        if !batch.0.isEmpty { spotlightLogos.merge(batch.0) { _, new in new } }
+        if !batch.1.isEmpty { spotlightRuntimes.merge(batch.1) { _, new in new } }
+        if !batch.2.isEmpty { spotlightCertifications.merge(batch.2) { _, new in new } }
     }
 
     private nonisolated static func extractUSCertification(from detail: TMDBMovieDetail?) -> String? {
@@ -163,31 +168,29 @@ final class HomeViewModel {
             let path = item.episodeStillPath ?? item.backdropPath ?? item.posterPath
             return service.imageURL(path: path, size: "w780")
         }
-        AuraImageCache.shared.prefetch(urls: urls)
+        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 415, height: 234))
     }
 
     @MainActor
     private func prefetchHomeImages() {
-        var urls: [URL] = []
-        urls.reserveCapacity(48)
-
-        for movie in spotlightItems {
-            if let url = service.imageURL(path: movie.backdropPath ?? movie.posterPath, size: "w1280") {
-                urls.append(url)
-            }
+        let heroURLs = spotlightItems.compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w1280")
         }
+        AuraImageCache.shared.prefetch(urls: heroURLs, targetSize: CGSize(width: 1440, height: 550))
+
+        var posterURLs: [URL] = []
+        posterURLs.reserveCapacity(40)
         for movie in trendingMovies.prefix(20) {
             if let url = service.imageURL(path: movie.posterPath, size: "w500") {
-                urls.append(url)
+                posterURLs.append(url)
             }
         }
         for show in trendingSeries.prefix(20) {
             if let url = service.imageURL(path: show.posterPath, size: "w500") {
-                urls.append(url)
+                posterURLs.append(url)
             }
         }
-
-        AuraImageCache.shared.prefetch(urls: urls)
+        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 268, height: 402))
     }
 
     @MainActor
@@ -247,7 +250,9 @@ final class HomeViewModel {
             continueWatching: cwEntries,
             featured: featuredEntries
         )
-        TopShelfSharedStore.save(snapshot)
+        Task.detached(priority: .background) {
+            TopShelfSharedStore.save(snapshot)
+        }
     }
 
     @MainActor

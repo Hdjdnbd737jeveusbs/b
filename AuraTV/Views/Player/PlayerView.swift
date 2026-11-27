@@ -21,6 +21,7 @@ struct PlayerView: View {
     #if canImport(AetherEngine)
     @StateObject private var aetherCoordinator = AetherPlayerCoordinator()
     #endif
+    @StateObject private var avCoordinator = AVPlayerCoordinator()
     #if canImport(SwiftAssRenderer)
     @StateObject private var assCoordinator = ASSRenderCoordinator()
     #endif
@@ -33,9 +34,9 @@ struct PlayerView: View {
 
     var body: some View {
         ZStack {
-            Color.auraBackground.ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
-            // Video Player Layer (or backdrop frame when in CI Preview Mode)
+            // Persistent Video Player Layer (or backdrop frame when in CI Preview Mode)
             if viewModel.isPreviewMode {
                 previewBackdropLayer
             } else {
@@ -73,17 +74,36 @@ struct PlayerView: View {
                 .transition(.opacity)
             }
 
-            // Player HUD (Title top-left, 5 icons + scrubber bottom; hidden while Sync/Style popovers are open)
-            if viewModel.hasStartedPlayback && viewModel.isHUDVisible && viewModel.playbackError == nil && !viewModel.showSubtitleSyncSheet && !viewModel.showSubtitleStyleSheet && !viewModel.showSyncToLineSheet {
+            // Player HUD (Title top-left, 5 icons + scrubber bottom; only mounted while visible so hidden buttons never trap remote focus)
+            if viewModel.hasStartedPlayback
+                && viewModel.isHUDVisible
+                && viewModel.playbackError == nil
+                && !viewModel.showSubtitleSyncSheet
+                && !viewModel.showSubtitleStyleSheet
+                && !viewModel.showSyncToLineSheet {
                 PlayerHUDView(viewModel: viewModel)
-            } else if viewModel.hasStartedPlayback && !viewModel.isHUDVisible && !viewModel.hasActiveModalOverlay && viewModel.playbackError == nil {
-                Button { viewModel.showHUD() } label: {
-                    Color.clear.contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .focusEffectDisabled()
-                .accessibilityLabel("Show playback controls")
-                .onMoveCommand { _ in viewModel.showHUD() }
+                    .transition(.opacity)
+            } else if !viewModel.hasActiveModalOverlay && viewModel.playbackError == nil {
+                // Dedicated tvOS Siri Remote / D-pad responder when HUD is hidden
+                PlayerRemoteCatcherView(
+                    onSelectOrPlayPause: {
+                        viewModel.togglePlayPause()
+                        viewModel.showHUD()
+                    },
+                    onSeekBackward: {
+                        viewModel.seekBackward(seconds: 15)
+                    },
+                    onSeekForward: {
+                        viewModel.seekForward(seconds: 15)
+                    },
+                    onShowHUD: {
+                        viewModel.showHUD()
+                    },
+                    onMenuPressed: {
+                        handleExit()
+                    }
+                )
+                .ignoresSafeArea()
             }
 
             // Live Subtitle Sync Popover (Right-Anchored, no full-screen dark dimmer)
@@ -228,12 +248,16 @@ struct PlayerView: View {
                 onDismiss: { viewModel.showStreamPicker = false }
             )
         }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.isHUDVisible)
         .onDisappear {
             #if canImport(AetherEngine)
             if !viewModel.isPreviewMode {
                 aetherCoordinator.stop()
             }
             #endif
+            if !viewModel.isPreviewMode {
+                avCoordinator.stop()
+            }
             #if canImport(SwiftAssRenderer)
             assCoordinator.clearAll()
             #endif
@@ -241,6 +265,7 @@ struct PlayerView: View {
         }
         .onPlayPauseCommand {
             viewModel.togglePlayPause()
+            viewModel.showHUD()
         }
         .onExitCommand {
             handleExit()
@@ -260,9 +285,10 @@ struct PlayerView: View {
     @ViewBuilder
     private var previewBackdropLayer: some View {
         ZStack {
+            Color.black.ignoresSafeArea()
             if let path = viewModel.backdropPath,
                let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-                AuraCachedImage(url: url) { image in
+                AuraCachedImage(url: url, targetSize: CGSize(width: 1920, height: 1080)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -275,85 +301,29 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: - Video Player Layer
+    // MARK: - Persistent Video Player Layer
 
     @ViewBuilder
     private var videoPlayerLayer: some View {
         if didResolveEnginePreference {
             #if canImport(AetherEngine)
-            if viewModel.playerEngineName != "AVPlayer" && !aetherCoordinator.didFailInitialization {
-                aetherPlayerView
-            } else {
-                avPlayerView
-            }
+            PersistentPlayerContainerView(
+                viewModel: viewModel,
+                useAether: viewModel.playerEngineName != "AVPlayer" && !aetherCoordinator.didFailInitialization,
+                aetherCoordinator: aetherCoordinator,
+                avCoordinator: avCoordinator
+            )
+            .ignoresSafeArea()
             #else
-            avPlayerView
+            PersistentPlayerContainerView(
+                viewModel: viewModel,
+                useAether: false,
+                avCoordinator: avCoordinator
+            )
+            .ignoresSafeArea()
             #endif
         } else {
             Color.black.ignoresSafeArea()
-        }
-    }
-
-    // MARK: - AetherEngine Integration
-
-    #if canImport(AetherEngine)
-    @ViewBuilder
-    private var aetherPlayerView: some View {
-        if let url = viewModel.streamURL {
-            Group {
-                if let engine = aetherCoordinator.engine {
-                    AetherPlayerSurface(engine: engine)
-                        .ignoresSafeArea()
-                } else {
-                    Color.black.ignoresSafeArea()
-                }
-            }
-            .onAppear {
-                aetherCoordinator.load(url: url, viewModel: viewModel)
-            }
-            .onChange(of: viewModel.streamURL) { _, newURL in
-                guard let newURL else { return }
-                aetherCoordinator.load(url: newURL, viewModel: viewModel)
-            }
-            .onChange(of: viewModel.isPlaying) { _, shouldPlay in
-                aetherCoordinator.syncPlayState(shouldPlay: shouldPlay)
-            }
-            .onChange(of: viewModel.seekTrigger) { _, targetTime in
-                guard let targetTime else { return }
-                viewModel.seekTrigger = nil
-                aetherCoordinator.seek(to: targetTime)
-            }
-            .onChange(of: viewModel.selectedAudioTrackId) { _, trackId in
-                aetherCoordinator.selectAudioTrack(trackId)
-            }
-            .onChange(of: viewModel.selectedSubtitleTrackId) { _, trackId in
-                aetherCoordinator.selectSubtitleTrack(trackId)
-            }
-            .onChange(of: viewModel.playbackRate) { _, newRate in
-                aetherCoordinator.setPlaybackRate(Float(newRate))
-            }
-            .onChange(of: viewModel.aspectRatioMode) { _, mode in
-                aetherCoordinator.setAspectRatio(mode)
-            }
-            .onChange(of: viewModel.audioSyncOffsetMs) { _, offsetMs in
-                aetherCoordinator.setAudioDelayMs(offsetMs)
-            }
-        }
-    }
-    #endif
-
-    // MARK: - AVPlayer Fallback
-
-    @ViewBuilder
-    private var avPlayerView: some View {
-        if let url = viewModel.streamURL {
-            AVPlayerViewWrapper(
-                url: url,
-                viewModel: viewModel,
-                resumeFrom: viewModel.resumeFromTime
-            )
-            .id(url)
-            .ignoresSafeArea()
         }
     }
 
@@ -450,6 +420,7 @@ final class AetherPlayerCoordinator: ObservableObject {
     weak var assCoordinator: ASSRenderCoordinator?
     #endif
     private var loadTask: Task<Void, Never>?
+    private var seekTask: Task<Void, Never>?
     private var currentLoadedURL: URL?
     private var lastCues: [SubtitleCue] = []
     private var currentSourceTime: Double = 0
@@ -544,8 +515,11 @@ final class AetherPlayerCoordinator: ObservableObject {
 
     func seek(to seconds: Double) {
         guard let engine else { return }
-        Task { @MainActor in
+        seekTask?.cancel()
+        seekTask = Task { @MainActor [weak self] in
             await engine.seek(to: seconds)
+            guard !Task.isCancelled else { return }
+            self?.boundViewModel?.onBufferingEnded()
         }
     }
 
@@ -751,7 +725,7 @@ final class AetherPlayerCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] duration in
                 MainActor.assumeIsolated {
-                    guard let vm = self?.boundViewModel, duration.isFinite, duration > 0 else { return }
+                    guard let vm = self?.boundViewModel, duration > 0 else { return }
                     vm.totalDuration = duration
                 }
             }
@@ -1033,16 +1007,277 @@ final class AetherPlayerCoordinator: ObservableObject {
 }
 #endif
 
-// MARK: - AVPlayer Wrapper (Fallback Engine)
+// MARK: - Isolated Persistent Player Surface (Immune to Timer & Subtitle Re-renders)
 
-struct AVPlayerViewWrapper: UIViewControllerRepresentable {
-    let url: URL
+private struct PersistentPlayerContainerView: View {
     let viewModel: PlayerViewModel
-    let resumeFrom: Double
+    let useAether: Bool
+    #if canImport(AetherEngine)
+    @ObservedObject var aetherCoordinator: AetherPlayerCoordinator
+    #endif
+    @ObservedObject var avCoordinator: AVPlayerCoordinator
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
-        controller.showsPlaybackControls = false
+    var body: some View {
+        ZStack {
+            // Permanent opaque black UIViewController backing so UIKit transitions never flash white.
+            BlackBackdropControllerView()
+                .ignoresSafeArea()
+
+            #if canImport(AetherEngine)
+            if useAether {
+                if let engine = aetherCoordinator.engine {
+                    AetherPlayerSurface(engine: engine)
+                        .allowsHitTesting(false)
+                        .background(Color.black)
+                        .ignoresSafeArea()
+                }
+            } else {
+                AVPlayerViewWrapper(avCoordinator: avCoordinator)
+                    .allowsHitTesting(false)
+                    .background(Color.black)
+                    .ignoresSafeArea()
+            }
+            #else
+            AVPlayerViewWrapper(avCoordinator: avCoordinator)
+                .allowsHitTesting(false)
+                .background(Color.black)
+                .ignoresSafeArea()
+            #endif
+        }
+        .background(Color.black.ignoresSafeArea())
+        .onAppear {
+            loadActiveEngine()
+        }
+        .onChange(of: viewModel.streamURL) { _, _ in
+            loadActiveEngine()
+        }
+        .onChange(of: useAether) { _, _ in
+            loadActiveEngine()
+        }
+        .onChange(of: viewModel.isPlaying) { _, shouldPlay in
+            #if canImport(AetherEngine)
+            if useAether {
+                aetherCoordinator.syncPlayState(shouldPlay: shouldPlay)
+                return
+            }
+            #endif
+            avCoordinator.syncPlayState(shouldPlay: shouldPlay, rate: Float(viewModel.playbackRate))
+        }
+        .onChange(of: viewModel.seekTrigger) { _, targetTime in
+            guard let targetTime else { return }
+            viewModel.seekTrigger = nil
+            #if canImport(AetherEngine)
+            if useAether {
+                aetherCoordinator.seek(to: targetTime)
+                return
+            }
+            #endif
+            avCoordinator.seek(to: targetTime)
+        }
+        .onChange(of: viewModel.playbackRate) { _, newRate in
+            #if canImport(AetherEngine)
+            if useAether {
+                aetherCoordinator.setPlaybackRate(Float(newRate))
+                return
+            }
+            #endif
+            avCoordinator.setPlaybackRate(Float(newRate), isPlaying: viewModel.isPlaying)
+        }
+        .onChange(of: viewModel.aspectRatioMode) { _, mode in
+            #if canImport(AetherEngine)
+            if useAether {
+                aetherCoordinator.setAspectRatio(mode)
+                return
+            }
+            #endif
+            avCoordinator.setAspectRatio(mode)
+        }
+        .onChange(of: viewModel.selectedAudioTrackId) { _, trackId in
+            #if canImport(AetherEngine)
+            if useAether { aetherCoordinator.selectAudioTrack(trackId) }
+            #endif
+        }
+        .onChange(of: viewModel.selectedSubtitleTrackId) { _, trackId in
+            #if canImport(AetherEngine)
+            if useAether { aetherCoordinator.selectSubtitleTrack(trackId) }
+            #endif
+        }
+        .onChange(of: viewModel.audioSyncOffsetMs) { _, offsetMs in
+            #if canImport(AetherEngine)
+            if useAether { aetherCoordinator.setAudioDelayMs(offsetMs) }
+            #endif
+        }
+    }
+
+    private func loadActiveEngine() {
+        guard let url = viewModel.streamURL else { return }
+        #if canImport(AetherEngine)
+        if useAether {
+            avCoordinator.stop()
+            aetherCoordinator.load(url: url, viewModel: viewModel)
+            return
+        }
+        aetherCoordinator.stop()
+        #endif
+        avCoordinator.load(url: url, viewModel: viewModel)
+    }
+}
+
+private struct BlackBackdropControllerView: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let vc = UIViewController()
+        vc.view.backgroundColor = .black
+        vc.view.isOpaque = true
+        vc.view.isUserInteractionEnabled = false
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        if uiViewController.view.backgroundColor != .black {
+            uiViewController.view.backgroundColor = .black
+        }
+    }
+}
+
+// MARK: - Native tvOS Remote Responder (Active When Player HUD Is Hidden)
+
+private struct PlayerRemoteCatcherView: UIViewRepresentable {
+    let onSelectOrPlayPause: () -> Void
+    let onSeekBackward: () -> Void
+    let onSeekForward: () -> Void
+    let onShowHUD: () -> Void
+    let onMenuPressed: () -> Void
+
+    func makeUIView(context: Context) -> RemoteCatcherUIView {
+        let view = RemoteCatcherUIView()
+        view.backgroundColor = .clear
+        view.coordinator = context.coordinator
+
+        let selectTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSelect))
+        selectTap.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+        view.addGestureRecognizer(selectTap)
+
+        let swipeLeft = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLeft))
+        swipeLeft.direction = .left
+        view.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleRight))
+        swipeRight.direction = .right
+        view.addGestureRecognizer(swipeRight)
+
+        let swipeUp = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleUpDown))
+        swipeUp.direction = .up
+        view.addGestureRecognizer(swipeUp)
+
+        let swipeDown = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleUpDown))
+        swipeDown.direction = .down
+        view.addGestureRecognizer(swipeDown)
+
+        return view
+    }
+
+    func updateUIView(_ uiView: RemoteCatcherUIView, context: Context) {
+        context.coordinator.onSelectOrPlayPause = onSelectOrPlayPause
+        context.coordinator.onSeekBackward = onSeekBackward
+        context.coordinator.onSeekForward = onSeekForward
+        context.coordinator.onShowHUD = onShowHUD
+        context.coordinator.onMenuPressed = onMenuPressed
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onSelectOrPlayPause: onSelectOrPlayPause,
+            onSeekBackward: onSeekBackward,
+            onSeekForward: onSeekForward,
+            onShowHUD: onShowHUD,
+            onMenuPressed: onMenuPressed
+        )
+    }
+
+    final class RemoteCatcherUIView: UIView {
+        weak var coordinator: Coordinator?
+        private var didClaimFocus = false
+
+        override var canBecomeFocused: Bool { true }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil, !didClaimFocus else { return }
+            didClaimFocus = true
+            DispatchQueue.main.async { [weak self] in
+                self?.setNeedsFocusUpdate()
+                self?.updateFocusIfNeeded()
+            }
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var onSelectOrPlayPause: () -> Void
+        var onSeekBackward: () -> Void
+        var onSeekForward: () -> Void
+        var onShowHUD: () -> Void
+        var onMenuPressed: () -> Void
+
+        init(
+            onSelectOrPlayPause: @escaping () -> Void,
+            onSeekBackward: @escaping () -> Void,
+            onSeekForward: @escaping () -> Void,
+            onShowHUD: @escaping () -> Void,
+            onMenuPressed: @escaping () -> Void
+        ) {
+            self.onSelectOrPlayPause = onSelectOrPlayPause
+            self.onSeekBackward = onSeekBackward
+            self.onSeekForward = onSeekForward
+            self.onShowHUD = onShowHUD
+            self.onMenuPressed = onMenuPressed
+        }
+
+        @objc func handleSelect() { onSelectOrPlayPause() }
+        @objc func handleLeft() { onSeekBackward() }
+        @objc func handleRight() { onSeekForward() }
+        @objc func handleUpDown() { onShowHUD() }
+        @objc func handleMenu() { onMenuPressed() }
+    }
+}
+
+// MARK: - Persistent AVPlayer Coordinator & Wrapper
+
+@MainActor
+final class AVPlayerCoordinator: ObservableObject {
+    let controller: AVPlayerViewController
+    private var player: AVPlayer
+    private var timeObserver: Any?
+    private var cancellables = Set<AnyCancellable>()
+    private var loadedURL: URL?
+    private weak var boundViewModel: PlayerViewModel?
+
+    init() {
+        let vc = AVPlayerViewController()
+        vc.showsPlaybackControls = false
+        vc.view.backgroundColor = .black
+        vc.view.isOpaque = true
+
+        let player = AVPlayer()
+        vc.player = player
+
+        self.controller = vc
+        self.player = player
+    }
+
+    func load(url: URL, viewModel: PlayerViewModel) {
+        boundViewModel = viewModel
+        controller.view.backgroundColor = .black
+        controller.videoGravity = Self.avVideoGravity(for: viewModel.aspectRatioMode)
+
+        if loadedURL == url && player.currentItem != nil {
+            return
+        }
+
+        clearObservers()
+        loadedURL = url
+        viewModel.playbackError = nil
+        viewModel.onBufferingStarted()
 
         let playerItem = AVPlayerItem(url: url)
         switch viewModel.bufferAheadMode {
@@ -1053,94 +1288,121 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
         default:
             playerItem.preferredForwardBufferDuration = 40
         }
-        let player = AVPlayer(playerItem: playerItem)
-        controller.player = player
-        controller.videoGravity = Self.avVideoGravity(for: viewModel.aspectRatioMode)
+
+        player.replaceCurrentItem(with: playerItem)
 
         let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        context.coordinator.timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
-            guard let player else { return }
-            let current = CMTimeGetSeconds(time)
-            let total = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
-            if current.isFinite {
-                let loadedRanges = player.currentItem?.loadedTimeRanges.compactMap { $0.timeRangeValue } ?? []
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            MainActor.assumeIsolated {
+                guard let self, let vm = self.boundViewModel else { return }
+                let current = CMTimeGetSeconds(time)
+                let total = CMTimeGetSeconds(self.player.currentItem?.duration ?? .zero)
+                guard current.isFinite else { return }
+
+                let loadedRanges = self.player.currentItem?.loadedTimeRanges.compactMap { $0.timeRangeValue } ?? []
                 let bufferedAhead = loadedRanges
                     .filter { current >= CMTimeGetSeconds($0.start) && current <= CMTimeGetSeconds($0.end) }
                     .map { CMTimeGetSeconds($0.end) - current }
                     .max() ?? 0
-                let accessEvent = player.currentItem?.accessLog()?.events.last
+                let accessEvent = self.player.currentItem?.accessLog()?.events.last
                 let droppedCount = accessEvent?.numberOfDroppedVideoFrames
                 let observedBitrate = accessEvent?.observedBitrate
-                Task { @MainActor in
-                    viewModel.onTimeUpdate(current: current, total: total)
-                    var stats = viewModel.playbackStats
-                    stats.activeEngine = "AVPlayer"
-                    stats.forwardBuffer = bufferedAhead > 0 ? String(format: "%.1f s", bufferedAhead) : "—"
-                    if let droppedCount {
-                        stats.droppedFrames = droppedCount
-                    }
-                    if let observedBitrate, observedBitrate > 0 {
-                        stats.throughput = String(format: "%.1f Mbps", observedBitrate / 1_000_000.0)
-                    }
-                    viewModel.playbackStats = stats
+
+                vm.onTimeUpdate(current: current, total: total)
+                var stats = vm.playbackStats
+                stats.activeEngine = "AVPlayer"
+                stats.forwardBuffer = bufferedAhead > 0 ? String(format: "%.1f s", bufferedAhead) : "—"
+                if let droppedCount { stats.droppedFrames = droppedCount }
+                if let observedBitrate, observedBitrate > 0 {
+                    stats.throughput = String(format: "%.1f Mbps", observedBitrate / 1_000_000.0)
                 }
+                vm.playbackStats = stats
             }
         }
 
         playerItem.publisher(for: \.isPlaybackBufferEmpty)
             .receive(on: DispatchQueue.main)
-            .sink { empty in
-                if empty { viewModel.onBufferingStarted() }
+            .sink { [weak self] empty in
+                MainActor.assumeIsolated {
+                    if empty { self?.boundViewModel?.onBufferingStarted() }
+                }
             }
-            .store(in: &context.coordinator.cancellables)
+            .store(in: &cancellables)
 
         playerItem.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
-            .sink { status in
-                switch status {
-                case .readyToPlay:
-                    viewModel.onPlaybackReady(duration: CMTimeGetSeconds(playerItem.duration))
-                case .failed:
-                    viewModel.onBufferingEnded()
-                    viewModel.playbackError = playerItem.error?.localizedDescription ?? "Unable to load this stream."
-                default:
-                    break
+            .sink { [weak self] status in
+                MainActor.assumeIsolated {
+                    guard let self, self.player.currentItem === playerItem, let vm = self.boundViewModel else { return }
+                    switch status {
+                    case .readyToPlay: vm.onPlaybackReady(duration: CMTimeGetSeconds(playerItem.duration))
+                    case .failed:
+                        vm.onBufferingEnded()
+                        vm.playbackError = playerItem.error?.localizedDescription ?? "Unable to load this stream."
+                    default: break
+                    }
                 }
             }
-            .store(in: &context.coordinator.cancellables)
+            .store(in: &cancellables)
 
         playerItem.publisher(for: \.isPlaybackLikelyToKeepUp)
             .receive(on: DispatchQueue.main)
-            .sink { ready in
-                if ready { viewModel.onBufferingEnded() }
+            .sink { [weak self] ready in
+                MainActor.assumeIsolated {
+                    if ready { self?.boundViewModel?.onBufferingEnded() }
+                }
             }
-            .store(in: &context.coordinator.cancellables)
+            .store(in: &cancellables)
 
-        if resumeFrom > 0 {
-            player.seek(to: CMTime(seconds: resumeFrom, preferredTimescale: 1))
+        let resume = viewModel.resumeFromTime
+        if resume > 0 {
+            viewModel.resumeFromTime = 0
+            player.seek(to: CMTime(seconds: resume, preferredTimescale: 1))
         }
 
         player.play()
-        return controller
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        controller.videoGravity = Self.avVideoGravity(for: viewModel.aspectRatioMode)
-        if viewModel.isPlaying {
-            let targetRate = Float(viewModel.playbackRate)
-            if controller.player?.rate != targetRate {
-                controller.player?.rate = targetRate
-            }
-        } else {
-            controller.player?.pause()
+    func syncPlayState(shouldPlay: Bool, rate: Float) {
+        if shouldPlay {
+            player.rate = rate
+        } else if loadedURL != nil {
+            player.pause()
         }
+    }
 
-        if let targetTime = viewModel.seekTrigger {
-            controller.player?.seek(to: CMTime(seconds: targetTime, preferredTimescale: 1))
+    func seek(to seconds: Double) {
+        let target = CMTime(seconds: seconds, preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor in
-                viewModel.seekTrigger = nil
+                self?.boundViewModel?.onBufferingEnded()
             }
         }
+    }
+
+    func setPlaybackRate(_ rate: Float, isPlaying: Bool) {
+        if isPlaying {
+            player.rate = rate
+        }
+    }
+
+    func setAspectRatio(_ mode: AspectRatioMode) {
+        controller.videoGravity = Self.avVideoGravity(for: mode)
+    }
+
+    func stop() {
+        clearObservers()
+        loadedURL = nil
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+    }
+
+    private func clearObservers() {
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
+        }
+        cancellables.removeAll()
     }
 
     private static func avVideoGravity(for mode: AspectRatioMode) -> AVLayerVideoGravity {
@@ -1150,24 +1412,29 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
         case .stretch: return .resize
         }
     }
+}
 
-    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
-        coordinator.cancellables.removeAll()
-        if let token = coordinator.timeObserver {
-            controller.player?.removeTimeObserver(token)
-            coordinator.timeObserver = nil
+struct AVPlayerViewWrapper: UIViewControllerRepresentable {
+    @ObservedObject var avCoordinator: AVPlayerCoordinator
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        avCoordinator.controller.showsPlaybackControls = false
+        avCoordinator.controller.view.backgroundColor = .black
+        avCoordinator.controller.view.isOpaque = true
+        avCoordinator.controller.view.isUserInteractionEnabled = false
+        return avCoordinator.controller
+    }
+
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        if controller.showsPlaybackControls {
+            controller.showsPlaybackControls = false
         }
-        controller.player?.pause()
-        controller.player = nil
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    class Coordinator {
-        var timeObserver: Any?
-        var cancellables = Set<AnyCancellable>()
+        if controller.view.backgroundColor != .black {
+            controller.view.backgroundColor = .black
+        }
+        if controller.view.isUserInteractionEnabled {
+            controller.view.isUserInteractionEnabled = false
+        }
     }
 }
 

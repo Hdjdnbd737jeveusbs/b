@@ -23,12 +23,11 @@ struct TitleLogoView: View {
         Group {
             if let path = effectivePath,
                let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                AuraCachedImage(url: url) { image in
+                AuraCachedImage(url: url, targetSize: CGSize(width: maxWidth, height: maxHeight), cropToFill: false) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
-                        .shadow(color: .black.opacity(0.65), radius: 12, y: 4)
                 } placeholder: {
                     fallbackTitleView
                         .opacity(0.85)

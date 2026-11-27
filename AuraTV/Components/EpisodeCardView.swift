@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Episode Card View (16:9 Aspect Ratio)
 
-struct EpisodeCardView: View {
+struct EpisodeCardView: View, Equatable {
     let episode: TMDBEpisode
     var isWatched: Bool = false
     var blurThumbnail: Bool = false
@@ -13,6 +13,15 @@ struct EpisodeCardView: View {
     var onPlay: (() -> Void)? = nil
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: EpisodeCardView, rhs: EpisodeCardView) -> Bool {
+        lhs.episode.id == rhs.episode.id &&
+        lhs.episode.stillPath == rhs.episode.stillPath &&
+        lhs.isWatched == rhs.isWatched &&
+        lhs.blurThumbnail == rhs.blurThumbnail &&
+        lhs.hideDescription == rhs.hideDescription &&
+        lhs.isSpoilerRevealed == rhs.isSpoilerRevealed
+    }
 
     init(
         episode: TMDBEpisode,
@@ -50,7 +59,7 @@ struct EpisodeCardView: View {
                     Group {
                         if let path = episode.stillPath,
                            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                            AuraCachedImage(url: url) { image in
+                            AuraCachedImage(url: url, targetSize: CGSize(width: 360, height: 202)) { image in
                                 image
                                     .resizable()
                                     .aspectRatio(16/9, contentMode: .fill)
@@ -62,13 +71,12 @@ struct EpisodeCardView: View {
                             episodePlaceholder
                         }
                     }
-                    .blur(radius: shouldBlurThumbnail ? 18 : 0)
                     .frame(width: 360, height: 202)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay {
                         if shouldBlurThumbnail {
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.black.opacity(0.32))
+                                .fill(Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.95))
                                 .overlay {
                                     VStack(spacing: 6) {
                                         Image(systemName: "eye.slash.fill")
@@ -79,11 +87,10 @@ struct EpisodeCardView: View {
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
-                                    .background(Color.black.opacity(0.55), in: Capsule())
+                                    .background(Color.white.opacity(0.10), in: Capsule())
                                 }
                         }
                     }
-                    .animation(.easeInOut(duration: 0.18), value: shouldBlurThumbnail)
 
                     // Top-right watched badge & bottom-right runtime badge
                     if isWatched {
@@ -113,27 +120,27 @@ struct EpisodeCardView: View {
                 }
 
                 // Episode Metadata
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
                         Text("E\(episode.episodeNumber)")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(Color.auraAccent)
 
                         Text(episode.name)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 23, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                     }
 
                     if shouldHideDescription {
                         Text("Synopsis hidden · Focus or mark watched to reveal")
-                            .font(.system(size: 13))
+                            .font(.system(size: 18))
                             .foregroundStyle(.white.opacity(0.45))
                             .italic()
                             .lineLimit(2)
                     } else if let overview = episode.overview, !overview.isEmpty {
                         Text(overview)
-                            .font(.system(size: 13))
+                            .font(.system(size: 18))
                             .foregroundStyle(Color.auraSecondaryText)
                             .lineLimit(2)
                             .lineSpacing(2)
@@ -147,13 +154,8 @@ struct EpisodeCardView: View {
                     .frame(width: 360, height: 202),
                 alignment: .top
             )
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.16) : Color.black.opacity(0.35),
-                radius: isFocused ? 18 : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

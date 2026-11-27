@@ -19,43 +19,53 @@ struct CollectionsView: View {
     }
 
     private let columns = [
-        GridItem(.adaptive(minimum: 210, maximum: 240), spacing: 28)
+        GridItem(.adaptive(minimum: 255, maximum: 280), spacing: 28)
     ]
 
     var body: some View {
-        ZStack {
-            AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
+        GeometryReader { geometry in
+            let availableWidth = max(geometry.size.width - 136, 255)
+            let columnCount = max(1, Int((availableWidth + 28) / (255 + 28)))
 
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Collections")
-                            .font(.system(size: 38, weight: .bold))
-                            .foregroundStyle(.white)
+            ZStack {
+                AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
 
-                        Text("Watchlist (\(watchlist.count) items)")
-                            .font(.system(size: 20))
-                            .foregroundStyle(Color.auraSecondaryText)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 75)
-                .padding(.top, 84)
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Collections")
+                                .font(.system(size: 52, weight: .bold))
+                                .foregroundStyle(.white)
 
-                // Content
-                if watchlist.isEmpty {
-                    emptyWatchlistView
-                } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVGrid(columns: columns, spacing: 32) {
-                            ForEach(watchlist) { item in
-                                let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
-                                WatchlistCard(item: item, overridePosterPath: posterOverrideMap[key])
-                            }
+                            Text("Watchlist (\(watchlist.count) items)")
+                                .font(.system(size: 24))
+                                .foregroundStyle(Color.auraSecondaryText)
                         }
-                        .padding(.horizontal, 75)
-                        .padding(.bottom, 60)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 68)
+                    .padding(.top, 92)
+
+                    // Content
+                    if watchlist.isEmpty {
+                        emptyWatchlistView
+                    } else {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVGrid(columns: columns, spacing: 32) {
+                                ForEach(Array(watchlist.enumerated()), id: \.element.persistentModelID) { index, item in
+                                    let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
+                                    WatchlistCard(
+                                        item: item,
+                                        overridePosterPath: posterOverrideMap[key],
+                                        isFirstInRow: index % columnCount == 0
+                                    )
+                                    .equatable()
+                                }
+                            }
+                            .padding(.horizontal, 68)
+                            .padding(.bottom, 60)
+                        }
                     }
                 }
             }
@@ -80,16 +90,27 @@ struct CollectionsView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusable()
+        .auraLeftEdgeSidebarTrigger()
     }
 }
 
 // MARK: - Watchlist Card
 
-private struct WatchlistCard: View {
+private struct WatchlistCard: View, Equatable {
     let item: WatchlistItem
     var overridePosterPath: String? = nil
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: WatchlistCard, rhs: WatchlistCard) -> Bool {
+        lhs.item.tmdbId == rhs.item.tmdbId &&
+        lhs.item.mediaType == rhs.item.mediaType &&
+        lhs.item.title == rhs.item.title &&
+        lhs.overridePosterPath == rhs.overridePosterPath &&
+        lhs.isFirstInRow == rhs.isFirstInRow
+    }
 
     var body: some View {
         NavigationLink(destination: destinationView) {
@@ -98,11 +119,11 @@ private struct WatchlistCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = overridePosterPath ?? item.posterPath ?? item.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AuraCachedImage(url: url) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: 260, height: 390)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(2/3, contentMode: .fill)
-                                .frame(width: 220, height: 330)
+                                .frame(width: 260, height: 390)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                         } placeholder: {
                             placeholder
@@ -113,36 +134,32 @@ private struct WatchlistCard: View {
 
                     // Media badge
                     Text(item.mediaType == "series" ? "SERIES" : item.mediaType.uppercased())
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 7)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(8)
+                        .padding(10)
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3.5 : 1)
+                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
                 )
 
                 // Title
                 Text(item.title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .frame(width: 220, alignment: .leading)
+                    .frame(width: 260, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.07 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.22) : Color.black.opacity(0.35),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
-            )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .scaleEffect(isFocused ? 1.055 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
     }
 
     @ViewBuilder
@@ -157,7 +174,7 @@ private struct WatchlistCard: View {
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 220, height: 330)
+            .frame(width: 260, height: 390)
             .overlay {
                 Image(systemName: item.mediaType == "series" ? "tv" : "film")
                     .font(.system(size: 40))

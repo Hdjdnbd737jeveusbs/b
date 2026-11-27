@@ -55,7 +55,7 @@ struct PlayerHUDView: View {
                         upNextCard(episode: nextEp)
                     }
                 }
-                .padding(.horizontal, 90)
+                .padding(.horizontal, 70)
                 .padding(.bottom, 165)
             }
 
@@ -93,18 +93,26 @@ struct PlayerHUDView: View {
         .ignoresSafeArea()
         .defaultFocus($focusedControl, .subtitles)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 if viewModel.showSubtitlePicker {
                     focusedTrackId = "search_subs"
+                } else if viewModel.showAudioPicker {
+                    focusedTrackId = "audio_\(viewModel.selectedAudioTrackId)"
+                } else if viewModel.showOptionsMenu {
+                    focusedTrackId = "opt_aspect"
+                } else if viewModel.showInfoPanel {
+                    focusedTrackId = "info_toggle_stats"
                 } else if focusedControl == nil {
                     focusedControl = .subtitles
                 }
             }
         }
+        .onChange(of: focusedControl) { _, control in
+            if control != nil { viewModel.showHUD() }
+        }
         .onChange(of: viewModel.showSubtitlePicker) { _, isOpen in
             if isOpen {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    guard viewModel.showSubtitlePicker else { return }
                     focusedTrackId = "search_subs"
                 }
             } else {
@@ -130,9 +138,6 @@ struct PlayerHUDView: View {
                 focusedControl = .info
             }
         }
-        .onChange(of: focusedControl) { _, control in
-            if control != nil { viewModel.showHUD() }
-        }
     }
 
     // MARK: - Top Bar (Clean White Title Logo Only)
@@ -147,21 +152,21 @@ struct PlayerHUDView: View {
             )
             .frame(height: 150)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 if viewModel.tmdbId > 0 {
                     TitleLogoView(
                         title: viewModel.title,
                         mediaType: viewModel.mediaType,
                         tmdbId: viewModel.tmdbId,
-                        maxWidth: 340,
-                        maxHeight: 54,
-                        fallbackFontSize: 28,
+                        maxWidth: 420,
+                        maxHeight: 74,
+                        fallbackFontSize: 34,
                         alignment: .leading
                     )
                 } else {
                     Text(viewModel.title.uppercased())
-                        .font(.system(size: 42, weight: .bold))
-                        .tracking(8)
+                        .font(.system(size: 34, weight: .bold))
+                        .tracking(6)
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.75), radius: 8, x: 0, y: 2)
                 }
@@ -171,21 +176,21 @@ struct PlayerHUDView: View {
                    let episode = viewModel.episodeNumber {
                     HStack(spacing: 8) {
                         Text("S\(season) • E\(episode)")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.82))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.86))
 
                         if let epTitle = viewModel.episodeTitle, !epTitle.isEmpty {
                             Text("-")
                                 .foregroundStyle(.white.opacity(0.5))
                             Text(epTitle)
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.78))
                                 .lineLimit(1)
                         }
                     }
                 }
             }
-            .padding(.horizontal, 90)
+            .padding(.horizontal, 70)
             .padding(.top, 46)
         }
     }
@@ -200,7 +205,7 @@ struct PlayerHUDView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 248)
+            .frame(height: 165)
 
             VStack(spacing: 0) {
                 // 5 icon-only buttons aligned above the right side of the scrubber
@@ -269,70 +274,95 @@ struct PlayerHUDView: View {
                         }
                     }
                 }
-                .padding(.bottom, 22)
+                .padding(.bottom, 12)
 
-                // Full-width slim scrubber
+                // Full-width slim scrubber (Select toggles Play/Pause, Left/Right scrubs)
                 timelineBar
 
-                // Elapsed time under thumb + remaining time flush right
-                GeometryReader { geo in
-                    let totalWidth = geo.size.width
-                    let thumbCenterX = totalWidth * viewModel.progress
-                    let elapsedX = min(max(0, thumbCenterX - 24), max(0, totalWidth - 180))
+                // Large crisp tvOS timestamps under scrubber: Elapsed left, Remaining / Total right
+                HStack(alignment: .center) {
+                    Text(viewModel.currentTimeFormatted)
+                        .font(.system(size: 22, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.white)
 
-                    ZStack(alignment: .leading) {
-                        HStack {
-                            Spacer()
-                            Text(viewModel.remainingTimeFormatted)
-                                .font(.system(size: 24, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.92))
-                        }
+                    Spacer()
 
-                        Text(viewModel.currentTimeFormatted)
-                            .font(.system(size: 24, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.92))
-                            .offset(x: elapsedX)
+                    if !viewModel.isPlaying {
+                        Text("PAUSED")
+                            .font(.system(size: 15, weight: .bold))
+                            .tracking(1.6)
+                            .foregroundStyle(.white.opacity(0.72))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.14), in: Capsule())
+
+                        Spacer()
                     }
+
+                    HStack(spacing: 10) {
+                        Text(viewModel.remainingTimeFormatted)
+                            .foregroundStyle(.white.opacity(0.88))
+                        Text("/")
+                            .foregroundStyle(.white.opacity(0.45))
+                        Text(viewModel.totalTimeFormatted)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                    .font(.system(size: 22, weight: .semibold).monospacedDigit())
                 }
-                .frame(height: 24)
-                .padding(.top, 8)
+                .padding(.top, 10)
             }
-            .padding(.horizontal, 90)
+            .padding(.horizontal, 70)
             .padding(.bottom, 100)
         }
     }
 
-    // MARK: - Timeline Scrubber
+    // MARK: - Timeline Scrubber (Interactive Select = Play/Pause, Left/Right = Smooth Seek)
 
     @ViewBuilder
     private var timelineBar: some View {
         let isFocused = focusedControl == .timeline
 
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let thumbX = max(0, (width * viewModel.progress) - (isFocused ? 3 : 1.5))
+        Button {
+            viewModel.togglePlayPause()
+        } label: {
+            GeometryReader { geometry in
+                let width = max(geometry.size.width, 1)
+                let fillWidth = width * viewModel.progress
+                let thumbX = max(0, fillWidth - (isFocused ? 4 : 2))
+                let pillX = min(max(0, fillWidth - 54), max(0, width - 108))
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.white.opacity(0.26))
-                    .frame(height: isFocused ? 8 : 4)
+                ZStack(alignment: .leading) {
+                    if viewModel.isSeekingActive {
+                        Text(viewModel.currentTimeFormatted)
+                            .font(.system(size: 20, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 5)
+                            .background(Color.white, in: Capsule())
+                            .offset(x: pillX, y: -32)
+                    }
 
-                Capsule()
-                    .fill(Color.white)
-                    .frame(width: width * viewModel.progress, height: isFocused ? 8 : 4)
+                    Capsule()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(height: isFocused ? 10 : 5)
 
-                // Slim vertical playhead tick matching reference scrubber
-                Capsule()
-                    .fill(Color.white)
-                    .frame(width: isFocused ? 6 : 3, height: isFocused ? 20 : 12)
-                    .shadow(color: .black.opacity(0.6), radius: 4)
-                    .offset(x: thumbX)
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: fillWidth, height: isFocused ? 10 : 5)
+
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: isFocused ? 8 : 4, height: isFocused ? 24 : 14)
+                        .offset(x: thumbX)
+                }
+                .frame(maxHeight: .infinity, alignment: .center)
+                .animation(.easeOut(duration: 0.14), value: isFocused)
             }
-            .frame(maxHeight: .infinity, alignment: .center)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .frame(height: 28)
+            .contentShape(Rectangle())
         }
-        .frame(height: 20)
-        .focusable()
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
         .focused($focusedControl, equals: .timeline)
         .onMoveCommand { direction in
             guard isFocused else { return }
@@ -363,10 +393,10 @@ struct PlayerHUDView: View {
             Group {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.system(size: 22, weight: .medium))
                 } else if let textLabel {
                     Text(textLabel)
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                 }
             }
             .foregroundStyle(isFocused ? Color.black : Color.white)
@@ -398,15 +428,14 @@ struct PlayerHUDView: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                 Text(title)
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
             }
             .foregroundStyle(isFocused ? Color.black : Color.white)
             .padding(.horizontal, 26)
             .padding(.vertical, 14)
-            .background(.ultraThinMaterial, in: Capsule())
-            .background(isFocused ? Color.white : Color.white.opacity(0.12), in: Capsule())
+            .background(isFocused ? Color.white : Color.auraCardSurface, in: Capsule())
             .overlay(
                 Capsule()
                     .stroke(Color.white.opacity(isFocused ? 1.0 : 0.35), lineWidth: isFocused ? 2.5 : 1)
@@ -424,14 +453,14 @@ struct PlayerHUDView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("UP NEXT")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .tracking(2.5)
                     .foregroundStyle(.white.opacity(0.7))
 
                 Spacer()
 
                 Text("Starting in \(viewModel.upNextCountdownRemaining)s")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -439,7 +468,7 @@ struct PlayerHUDView: View {
             }
 
             Text("S\(episode.seasonNumber) • E\(episode.episodeNumber) — \(episode.name)")
-                .font(.system(size: 27, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
 
@@ -451,10 +480,10 @@ struct PlayerHUDView: View {
                         Image(systemName: "play.fill")
                         Text("Play Next")
                     }
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 15)
+                    .padding(.vertical, 10)
                     .background(Color.white, in: Capsule())
                     .scaleEffect(focusedControl == .playNext ? 1.06 : 1.0)
                 }
@@ -466,10 +495,10 @@ struct PlayerHUDView: View {
                     viewModel.dismissUpNext()
                 } label: {
                     Text("Dismiss")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
-                        .padding(.vertical, 15)
+                        .padding(.vertical, 10)
                         .background(
                             Capsule().fill(focusedControl == .dismissUpNext ? Color.white.opacity(0.28) : Color.white.opacity(0.12))
                         )
@@ -501,7 +530,7 @@ struct PlayerHUDView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    LazyVStack(alignment: .leading, spacing: 2) {
                         // Top: Search Subtitles row (white pill only when focused)
                         if isSearchFieldActive {
                             HStack(spacing: 10) {
@@ -526,7 +555,7 @@ struct PlayerHUDView: View {
                                         .frame(width: 18)
 
                                     Text("Search Subtitles...")
-                                        .font(.system(size: 24, weight: .medium))
+                                        .font(.system(size: 23, weight: .medium))
                                         .foregroundStyle(isSearchFocused ? Color.black : Color.white)
 
                                     Spacer()
@@ -560,7 +589,7 @@ struct PlayerHUDView: View {
                             HStack(spacing: 10) {
                                 ProgressView().scaleEffect(0.8).tint(.white)
                                 Text("Searching subtitles...")
-                                    .font(.system(size: 21))
+                                    .font(.system(size: 20))
                                     .foregroundStyle(Color.auraSecondaryText)
                             }
                             .padding(14)
@@ -606,7 +635,7 @@ struct PlayerHUDView: View {
                                     .frame(width: 18)
 
                                 Text("Subtitle Sync...")
-                                    .font(.system(size: 24, weight: .medium))
+                                    .font(.system(size: 23, weight: .medium))
                                     .foregroundStyle(syncFocused ? Color.black : Color.white)
 
                                 Spacer()
@@ -634,7 +663,7 @@ struct PlayerHUDView: View {
                                     .frame(width: 18)
 
                                 Text("Sync to a Line...")
-                                    .font(.system(size: 24, weight: .medium))
+                                    .font(.system(size: 23, weight: .medium))
                                     .foregroundStyle(syncLineFocused ? Color.black : Color.white)
 
                                 Spacer()
@@ -662,7 +691,7 @@ struct PlayerHUDView: View {
                                     .frame(width: 18)
 
                                 Text("Text Encoding")
-                                    .font(.system(size: 24, weight: .medium))
+                                    .font(.system(size: 23, weight: .medium))
                                     .foregroundStyle(encodingFocused ? Color.black : Color.white)
 
                                 Spacer()
@@ -693,7 +722,7 @@ struct PlayerHUDView: View {
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
-            .padding(.trailing, 80)
+            .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -715,7 +744,7 @@ struct PlayerHUDView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("Audio Tracks")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
@@ -723,7 +752,7 @@ struct PlayerHUDView: View {
                 Divider().background(Color.white.opacity(0.14))
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
+                    LazyVStack(spacing: 4) {
                         ForEach(viewModel.availableAudioTracks) { track in
                             trackRow(
                                 id: "audio_\(track.id)",
@@ -752,7 +781,7 @@ struct PlayerHUDView: View {
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
-            .padding(.trailing, 80)
+            .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -767,7 +796,7 @@ struct PlayerHUDView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("Playback Options")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
@@ -832,7 +861,7 @@ struct PlayerHUDView: View {
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
-            .padding(.trailing, 80)
+            .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -856,7 +885,7 @@ struct PlayerHUDView: View {
                     .frame(width: 18)
 
                 Text(title)
-                    .font(.system(size: 24, weight: .medium))
+                    .font(.system(size: 23, weight: .medium))
                     .foregroundStyle(isFocused ? Color.black : Color.white)
 
                 Spacer()
@@ -889,7 +918,7 @@ struct PlayerHUDView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("Playback & Stream Info")
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(.white)
                     Spacer()
                     BadgeView(text: viewModel.selectedStream?.parsedInfo.resolution.displayName ?? viewModel.playbackStats.resolution, style: .filled, fontSize: 12)
@@ -915,7 +944,7 @@ struct PlayerHUDView: View {
                 }
                 if !viewModel.overview.isEmpty {
                     Text(viewModel.overview)
-                        .font(.system(size: 21))
+                        .font(.system(size: 20))
                         .foregroundStyle(.white.opacity(0.72))
                         .lineLimit(3)
                         .padding(.top, 4)
@@ -940,7 +969,7 @@ struct PlayerHUDView: View {
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
-            .padding(.trailing, 80)
+            .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -949,11 +978,11 @@ struct PlayerHUDView: View {
     private func infoItem(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 21, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
             Spacer()
             Text(value)
-                .font(.system(size: 21, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
@@ -969,7 +998,7 @@ struct PlayerHUDView: View {
             HStack(spacing: 12) {
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 21, weight: .bold))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(isFocused ? Color.black : Color.white)
                         .frame(width: 18)
                 } else {
@@ -977,7 +1006,7 @@ struct PlayerHUDView: View {
                 }
 
                 Text(name)
-                    .font(.system(size: 24, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 23, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.92))
                     .lineLimit(1)
 

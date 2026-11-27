@@ -63,6 +63,11 @@ struct ContentView: View {
     @State private var selectedTab: AppTab = ContentView.initialTabFromArguments()
     @State private var launchMode: ScreenshotLaunchMode = ContentView.screenshotLaunchModeFromArguments()
     @State private var deepLinkDestination: DeepLinkDestination?
+    @State private var isSidebarExpanded: Bool = false
+
+    @FocusState private var isCollapsedPillFocused: Bool
+    @FocusState private var focusedSidebarTab: AppTab?
+    @Namespace private var rootFocusScope
 
     private struct DeepLinkDestination: Identifiable, Hashable {
         let mediaType: String
@@ -84,7 +89,7 @@ struct ContentView: View {
             case .home: return "house.fill"
             case .series: return "tv"
             case .movies: return "film"
-            case .collections: return "square.stack"
+            case .collections: return "square.stack.fill"
             case .settings: return "gearshape.fill"
             }
         }
@@ -115,62 +120,24 @@ struct ContentView: View {
                     )
                 }
             case .standard:
-                TabView(selection: $selectedTab) {
-                    // Search Tab
+                ZStack(alignment: .topLeading) {
+                    // Main Tab Content Zone (Prefers Initial Focus; preserves scroll position across sidebar opens)
                     NavigationStack {
-                        SearchView()
+                        activeTabRootView
                     }
-                    .tabItem {
-                        Label(AppTab.search.rawValue, systemImage: AppTab.search.iconName)
-                    }
-                    .tag(AppTab.search)
+                    .id(selectedTab)
+                    .environment(\.auraOpenSidebar, openSidebar)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .focusSection()
+                    .prefersDefaultFocus(true, in: rootFocusScope)
 
-                    // Home Tab
-                    NavigationStack {
-                        HomeView()
-                    }
-                    .tabItem {
-                        Label(AppTab.home.rawValue, systemImage: AppTab.home.iconName)
-                    }
-                    .tag(AppTab.home)
-
-                    // Series Tab
-                    NavigationStack {
-                        SeriesView()
-                    }
-                    .tabItem {
-                        Label(AppTab.series.rawValue, systemImage: AppTab.series.iconName)
-                    }
-                    .tag(AppTab.series)
-
-                    // Movies Tab
-                    NavigationStack {
-                        MoviesView()
-                    }
-                    .tabItem {
-                        Label(AppTab.movies.rawValue, systemImage: AppTab.movies.iconName)
-                    }
-                    .tag(AppTab.movies)
-
-                    // Collections Tab
-                    NavigationStack {
-                        CollectionsView()
-                    }
-                    .tabItem {
-                        Label(AppTab.collections.rawValue, systemImage: AppTab.collections.iconName)
-                    }
-                    .tag(AppTab.collections)
-
-                    // Settings Tab
-                    NavigationStack {
-                        SettingsView()
-                    }
-                    .tabItem {
-                        Label(AppTab.settings.rawValue, systemImage: AppTab.settings.iconName)
-                    }
-                    .tag(AppTab.settings)
+                    // Floating Rounded Left Sidebar (Collapsed Pill <-> Expanded Panel)
+                    floatingSidebarOverlay
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
+                        .focusSection()
                 }
-                .tabViewStyle(.sidebarAdaptable)
+                .focusScope(rootFocusScope)
+                .ignoresSafeArea()
             }
         }
         .onAppear {
@@ -196,6 +163,20 @@ struct ContentView: View {
                 AppThemeCoordinator.shared.clearHomePreview()
             }
         }
+        .onChange(of: focusedSidebarTab) { oldTab, newTab in
+            if oldTab != nil && newTab == nil && isSidebarExpanded {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    isSidebarExpanded = false
+                }
+            }
+        }
+        .onExitCommand {
+            if isSidebarExpanded {
+                closeSidebarReturningFocus()
+            } else if selectedTab == .settings {
+                openSidebar()
+            }
+        }
         .onOpenURL { url in
             guard let destination = Self.parseDeepLink(url) else { return }
             Self.logger.notice("Opening Top Shelf deep link: \(destination.mediaType, privacy: .public) id=\(destination.tmdbId)")
@@ -212,6 +193,128 @@ struct ContentView: View {
                     MovieDetailView(tmdbId: dest.tmdbId)
                 }
             }
+        }
+    }
+
+    // MARK: - Sidebar Focus Transitions
+
+    private func openSidebar() {
+        guard !isSidebarExpanded else { return }
+        withAnimation(.easeOut(duration: 0.14)) {
+            isSidebarExpanded = true
+        }
+        DispatchQueue.main.async {
+            focusedSidebarTab = selectedTab
+        }
+    }
+
+    private func closeSidebarReturningFocus() {
+        withAnimation(.easeOut(duration: 0.14)) {
+            isSidebarExpanded = false
+        }
+        focusedSidebarTab = nil
+        isCollapsedPillFocused = false
+    }
+
+    // MARK: - Active Tab View & Floating Rounded Left Sidebar
+
+    @ViewBuilder
+    private var activeTabRootView: some View {
+        switch selectedTab {
+        case .search: SearchView()
+        case .home: HomeView()
+        case .series: SeriesView()
+        case .movies: MoviesView()
+        case .collections: CollectionsView()
+        case .settings: SettingsView()
+        }
+    }
+
+    @ViewBuilder
+    private var floatingSidebarOverlay: some View {
+        if isSidebarExpanded {
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.42)
+                    .ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(AppTab.allCases, id: \.self) { tab in
+                        let isFocused = focusedSidebarTab == tab
+                        let isSelected = selectedTab == tab
+
+                        Button {
+                            selectedTab = tab
+                            withAnimation(.easeOut(duration: 0.16)) {
+                                isSidebarExpanded = false
+                            }
+                            focusedSidebarTab = nil
+                        } label: {
+                            HStack(spacing: 18) {
+                                Image(systemName: tab.iconName)
+                                    .font(.system(size: 26, weight: .semibold))
+                                    .frame(width: 34)
+
+                                Text(tab.rawValue)
+                                    .font(.system(size: 29, weight: isFocused ? .semibold : .medium))
+
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(isFocused ? Color.black : Color.white.opacity(isSelected ? 0.98 : 0.88))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 18)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.10) : Color.clear))
+                            )
+                        }
+                        .buttonStyle(AuraButtonStyle())
+                        .focusEffectDisabled()
+                        .focused($focusedSidebarTab, equals: tab)
+                        .animation(.easeOut(duration: 0.14), value: focusedSidebarTab)
+                    }
+                }
+                .padding(20)
+                .frame(width: 372)
+                .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .padding(.top, 42)
+                .padding(.leading, 48)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+            }
+        } else if selectedTab != .settings {
+            Button {
+                openSidebar()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(isCollapsedPillFocused ? Color.black.opacity(0.7) : Color.white.opacity(0.65))
+
+                    Image(systemName: selectedTab.iconName)
+                        .font(.system(size: 22, weight: .semibold))
+
+                    Text(selectedTab.rawValue)
+                        .font(.system(size: 25, weight: .semibold))
+                }
+                .foregroundStyle(isCollapsedPillFocused ? Color.black : Color.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 13)
+                .background(isCollapsedPillFocused ? Color.white : Color.auraCardSurface, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(isCollapsedPillFocused ? 1.0 : 0.14), lineWidth: isCollapsedPillFocused ? 2 : 1)
+                )
+            }
+            .buttonStyle(AuraButtonStyle())
+            .focusEffectDisabled()
+            .focused($isCollapsedPillFocused)
+            .auraLeftEdgeSidebarTrigger()
+            .padding(.top, 38)
+            .padding(.leading, 52)
         }
     }
 

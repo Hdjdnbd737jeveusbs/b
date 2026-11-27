@@ -25,10 +25,15 @@ struct SpotlightCarouselView: View {
     var certifications: [Int: String] = [:]
     var customBackdrops: [Int: String] = [:]
     var showLogos: Bool = true
-    var trailerPreview: HomeFocusedTrailerPreview? = nil
+    var autoPlayTrailersOnFocus: Bool = false
 
     @State private var currentIndex: Int = 0
+    @State private var previewStore = HeroTrailerPreviewStore.shared
     @FocusState private var isHeroFocused: Bool
+
+    private var trailerPreview: HomeFocusedTrailerPreview? {
+        autoPlayTrailersOnFocus ? previewStore.heroTrailerPreview : nil
+    }
 
     private let timer = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
 
@@ -67,8 +72,8 @@ struct SpotlightCarouselView: View {
         NavigationLink(destination: activeHeroDestination) {
             ZStack(alignment: .bottomLeading) {
                 // Full-bleed background artwork or muted trailer preview, soft-masked at bottom into page background
-                heroBackdropLayer(width: nil, height: 640)
-                    .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
+                heroBackdropLayer(width: nil, height: 550)
+                    .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
                     .clipped()
                     .mask(
                         LinearGradient(
@@ -100,16 +105,16 @@ struct SpotlightCarouselView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         activeEyebrowView
 
-                        activeTitleView(maxWidth: 620, maxHeight: 154, fallbackSize: 54)
+                        activeTitleView(maxWidth: 600, maxHeight: 135, fallbackSize: 54)
 
                         activeMetadataRow
 
                         if let overview = activeOverview, !overview.isEmpty {
                             Text(overview)
-                                .font(.system(size: 22, weight: .regular))
-                                .foregroundStyle(.white.opacity(0.78))
+                                .font(.system(size: 21, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.80))
                                 .lineLimit(3)
-                                .lineSpacing(3)
+                                .lineSpacing(4)
                                 .frame(maxWidth: 870, alignment: .leading)
                         }
                     }
@@ -123,16 +128,17 @@ struct SpotlightCarouselView: View {
                     }
                 }
                 .padding(.horizontal, 156)
-                .padding(.bottom, 34)
+                .padding(.bottom, 22)
             }
-            .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
+            .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
             .clipped()
             .scaleEffect(isHeroFocused ? 1.008 : 1.0)
-            .animation(.easeOut(duration: 0.2), value: isHeroFocused)
+            .animation(.easeOut(duration: 0.14), value: isHeroFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isHeroFocused)
+        .auraLeftEdgeSidebarTrigger()
     }
 
     // MARK: - Style B: Spotlight Rounded Carousel (With Peeking Next Card)
@@ -140,8 +146,8 @@ struct SpotlightCarouselView: View {
     private var spotlightHero: some View {
         VStack(spacing: 18) {
             GeometryReader { geometry in
-                let cardWidth = max(geometry.size.width - 232, 960)
-                let cardHeight: CGFloat = 466
+                let cardWidth = max(geometry.size.width - 200, 960)
+                let cardHeight: CGFloat = 490
 
                 HStack(spacing: 28) {
                     // Main Active Hero Card
@@ -174,7 +180,7 @@ struct SpotlightCarouselView: View {
 
                                 if let overview = activeOverview, !overview.isEmpty {
                                     Text(overview)
-                                        .font(.system(size: 21))
+                                        .font(.system(size: 17))
                                         .foregroundStyle(.white.opacity(0.75))
                                         .lineLimit(2)
                                         .frame(maxWidth: 620, alignment: .leading)
@@ -190,16 +196,12 @@ struct SpotlightCarouselView: View {
                                 .stroke(isHeroFocused ? Color.white : Color.white.opacity(0.12), lineWidth: isHeroFocused ? 3 : 1)
                         )
                         .scaleEffect(isHeroFocused ? 1.015 : 1.0)
-                        .shadow(
-                            color: isHeroFocused ? Color.white.opacity(0.15) : Color.black.opacity(0.5),
-                            radius: 22,
-                            y: 10
-                        )
-                        .animation(.easeOut(duration: 0.2), value: isHeroFocused)
+                        .animation(.easeOut(duration: 0.14), value: isHeroFocused)
                     }
                     .buttonStyle(AuraButtonStyle())
                     .focusEffectDisabled()
                     .focused($isHeroFocused)
+                    .auraLeftEdgeSidebarTrigger()
 
                     // Next Peeking Card on the right edge
                     if items.count > 1 {
@@ -214,7 +216,7 @@ struct SpotlightCarouselView: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("RECENTLY ADDED")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .font(.system(size: 12, weight: .bold))
                                     .tracking(2.5)
                                     .foregroundStyle(.white.opacity(0.65))
 
@@ -239,7 +241,7 @@ struct SpotlightCarouselView: View {
             // Centered pagination dots underneath Spotlight card
             paginationDots(activeWidth: 22, dotWidth: 8, height: 5)
         }
-        .padding(.top, 120)
+        .padding(.top, 92)
     }
 
     // MARK: - Subviews
@@ -266,16 +268,16 @@ struct SpotlightCarouselView: View {
         if let preview = trailerPreview {
             HStack(spacing: 8) {
                 Image(systemName: preview.trailerStreamURL != nil ? "speaker.slash.fill" : "play.tv.fill")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                 Text(preview.trailerName.map { "TRAILER PREVIEW · \($0.uppercased())" } ?? "TRAILER PREVIEW")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .tracking(2.4)
                     .lineLimit(1)
             }
             .foregroundStyle(Color.auraAccent)
         } else {
             Text("RECENTLY ADDED")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .tracking(2.8)
                 .foregroundStyle(.white.opacity(0.72))
         }
@@ -317,13 +319,13 @@ struct SpotlightCarouselView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
-                            .font(.system(size: 17))
+                            .font(.system(size: 14))
                         Text(String(format: "%.1f", vote))
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                     }
                 }
             }
-            .font(.system(size: 21, weight: .medium))
+            .font(.system(size: 20, weight: .medium))
             .foregroundStyle(.white.opacity(0.88))
         } else {
             metadataRow(for: currentItem)
@@ -393,13 +395,13 @@ struct SpotlightCarouselView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.yellow)
-                        .font(.system(size: 17))
+                        .font(.system(size: 14))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                 }
             }
         }
-        .font(.system(size: 21, weight: .medium))
+        .font(.system(size: 20, weight: .medium))
         .foregroundStyle(.white.opacity(0.88))
     }
 
@@ -412,7 +414,7 @@ struct SpotlightCarouselView: View {
     private func backdropPathImage(path: String?, width: CGFloat?, height: CGFloat) -> some View {
         if let path,
            let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-            AuraCachedImage(url: url) { image in
+            AuraCachedImage(url: url, targetSize: CGSize(width: width ?? 1440, height: height)) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -433,7 +435,7 @@ struct SpotlightCarouselView: View {
             .frame(maxWidth: width ?? .infinity, minHeight: height, maxHeight: height)
             .overlay {
                 Image(systemName: "film")
-                    .font(.system(size: 69))
+                    .font(.system(size: 56))
                     .foregroundStyle(.white.opacity(0.18))
             }
     }

@@ -63,21 +63,27 @@ final class DetailViewModel {
             defer { self.isLoading = false }
 
             do {
-                async let detailFetch = self.service.fetchMovieDetails(id: id)
-                async let logoFetch = self.service.fetchBestLogoPath(mediaType: "movie", id: id)
-                async let ratingsFetch = MDBListService.shared.fetchRatings(tmdbId: id, mediaType: "movie")
+                let svc = self.service
+                let resolved = try await Task.detached(priority: .userInitiated) {
+                    async let detailFetch = svc.fetchMovieDetails(id: id)
+                    async let logoFetch = svc.fetchBestLogoPath(mediaType: "movie", id: id)
+                    async let ratingsFetch = MDBListService.shared.fetchRatings(tmdbId: id, mediaType: "movie")
 
-                let detail = try await detailFetch
-                let resolvedLogo = await logoFetch
-                let resolvedRatings = await ratingsFetch
-                self.movieDetail = detail
-                self.logoPath = resolvedLogo
-                self.mdblistRatings = resolvedRatings
-                self.cast = detail.credits?.cast ?? []
-                self.certification = self.extractMovieCertification(from: detail)
+                    let detail = try await detailFetch
+                    let resolvedLogo = await logoFetch
+                    let resolvedRatings = await ratingsFetch
+                    let cert = Self.extractMovieCertification(from: detail)
+                    return (detail, resolvedLogo, resolvedRatings, cert)
+                }.value
+
+                self.movieDetail = resolved.0
+                self.logoPath = resolved.1
+                self.mdblistRatings = resolved.2
+                self.cast = resolved.0.credits?.cast ?? []
+                self.certification = resolved.3
                 self.prefetchDetailAssets(
-                    backdropPath: detail.backdropPath,
-                    posterPath: detail.posterPath,
+                    backdropPath: resolved.0.backdropPath,
+                    posterPath: resolved.0.posterPath,
                     cast: self.cast
                 )
             } catch {
@@ -115,28 +121,34 @@ final class DetailViewModel {
             defer { self.isLoading = false }
 
             do {
-                async let detailFetch = self.service.fetchSeriesDetails(id: id)
-                async let logoFetch = self.service.fetchBestLogoPath(mediaType: "tv", id: id)
-                async let ratingsFetch = MDBListService.shared.fetchRatings(tmdbId: id, mediaType: "series")
+                let svc = self.service
+                let resolved = try await Task.detached(priority: .userInitiated) {
+                    async let detailFetch = svc.fetchSeriesDetails(id: id)
+                    async let logoFetch = svc.fetchBestLogoPath(mediaType: "tv", id: id)
+                    async let ratingsFetch = MDBListService.shared.fetchRatings(tmdbId: id, mediaType: "series")
 
-                let detail = try await detailFetch
-                let resolvedLogo = await logoFetch
-                let resolvedRatings = await ratingsFetch
-                self.seriesDetail = detail
-                self.logoPath = resolvedLogo
-                self.mdblistRatings = resolvedRatings
-                self.cast = detail.credits?.cast ?? []
-                self.certification = self.extractSeriesCertification(from: detail)
+                    let detail = try await detailFetch
+                    let resolvedLogo = await logoFetch
+                    let resolvedRatings = await ratingsFetch
+                    let cert = Self.extractSeriesCertification(from: detail)
+                    return (detail, resolvedLogo, resolvedRatings, cert)
+                }.value
 
-                if let seasons = detail.seasons, !seasons.isEmpty {
+                self.seriesDetail = resolved.0
+                self.logoPath = resolved.1
+                self.mdblistRatings = resolved.2
+                self.cast = resolved.0.credits?.cast ?? []
+                self.certification = resolved.3
+
+                if let seasons = resolved.0.seasons, !seasons.isEmpty {
                     let targetSeason = self.watchProgress?.seasonNumber
                         ?? (seasons.first(where: { $0.seasonNumber > 0 }) ?? seasons.first!).seasonNumber
                     self.selectedSeasonNumber = targetSeason
                     await self.loadSeasonDetail(seriesId: id, seasonNumber: targetSeason)
                 }
                 self.prefetchDetailAssets(
-                    backdropPath: detail.backdropPath,
-                    posterPath: detail.posterPath,
+                    backdropPath: resolved.0.backdropPath,
+                    posterPath: resolved.0.posterPath,
                     cast: self.cast,
                     episodes: self.seasonDetail?.episodes ?? []
                 )
@@ -170,24 +182,14 @@ final class DetailViewModel {
         cast: [TMDBCastMember] = [],
         episodes: [TMDBEpisode] = []
     ) {
-        var urls: [URL] = []
-        if let backdrop = service.imageURL(path: backdropPath, size: "original") {
-            urls.append(backdrop)
+        if let backdrop = service.imageURL(path: backdropPath, size: "w1280") {
+            AuraImageCache.shared.prefetch(urls: [backdrop], targetSize: CGSize(width: 1440, height: 840))
         }
-        if let poster = service.imageURL(path: posterPath, size: "w500") {
-            urls.append(poster)
-        }
-        for member in cast.prefix(15) {
-            if let profile = service.imageURL(path: member.profilePath, size: "w185") {
-                urls.append(profile)
-            }
-        }
-        for ep in episodes.prefix(16) {
-            if let still = service.imageURL(path: ep.stillPath, size: "w500") {
-                urls.append(still)
-            }
-        }
-        AuraImageCache.shared.prefetch(urls: urls)
+        let castURLs = cast.prefix(15).compactMap { service.imageURL(path: $0.profilePath, size: "w185") }
+        AuraImageCache.shared.prefetch(urls: castURLs, targetSize: CGSize(width: 112, height: 112))
+
+        let epURLs = episodes.prefix(16).compactMap { service.imageURL(path: $0.stillPath, size: "w780") }
+        AuraImageCache.shared.prefetch(urls: epURLs, targetSize: CGSize(width: 360, height: 202))
     }
 
     // MARK: - Watchlist Management
@@ -441,7 +443,7 @@ final class DetailViewModel {
 
     // MARK: - Certification Extraction
 
-    private func extractMovieCertification(from detail: TMDBMovieDetail) -> String? {
+    private nonisolated static func extractMovieCertification(from detail: TMDBMovieDetail) -> String? {
         guard let results = detail.releaseDates?.results else { return nil }
 
         if let usRelease = results.first(where: { $0.iso31661 == "US" }) {
@@ -459,7 +461,7 @@ final class DetailViewModel {
         return nil
     }
 
-    private func extractSeriesCertification(from detail: TMDBSeriesDetail) -> String? {
+    private nonisolated static func extractSeriesCertification(from detail: TMDBSeriesDetail) -> String? {
         guard let results = detail.contentRatings?.results else { return nil }
 
         if let usRating = results.first(where: { $0.iso31661 == "US" }) {

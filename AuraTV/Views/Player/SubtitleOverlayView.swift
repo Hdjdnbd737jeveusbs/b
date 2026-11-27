@@ -37,8 +37,7 @@ struct SubtitleOverlayView: View {
                                 .fill(Color.black.opacity(style.backgroundOpacity))
                         }
                     }
-                    .shadow(color: .black.opacity(0.95), radius: 5, x: 0, y: 2)
-                    .shadow(color: .black.opacity(0.75), radius: 12, x: 0, y: 0)
+                    .shadow(color: .black.opacity(0.92), radius: 3, x: 0, y: 2)
                     .padding(.horizontal, 80)
                     // Keep subtitles clearly above the scrubber bar whenever HUD is visible
                     .padding(.bottom, isHUDVisible ? max(CGFloat(style.bottomOffset), 132) : CGFloat(style.bottomOffset))

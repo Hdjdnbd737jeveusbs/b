@@ -13,47 +13,53 @@ struct SearchView: View {
     ]
 
     var body: some View {
-        ZStack {
-            AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
+        GeometryReader { geometry in
+            let availableWidth = max(geometry.size.width - 150, 210)
+            let columnCount = max(1, Int((availableWidth + 28) / (210 + 28)))
 
-            VStack(alignment: .leading, spacing: 28) {
-                // Search Input Header
-                HStack(spacing: 16) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.auraSecondaryText)
+            ZStack {
+                AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
 
-                    TextField("Search movies, series...", text: $viewModel.query)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(.white)
-                        .focused($isFieldFocused)
+                VStack(alignment: .leading, spacing: 28) {
+                    // Search Input Header
+                    HStack(spacing: 16) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.auraSecondaryText)
 
-                    if !viewModel.query.isEmpty {
-                        Button(action: { viewModel.clearSearch() }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(Color.auraSecondaryText)
+                        TextField("Search movies, series...", text: $viewModel.query)
+                            .font(.system(size: 26, weight: .medium))
+                            .foregroundStyle(.white)
+                            .focused($isFieldFocused)
+                            .auraLeftEdgeSidebarTrigger()
+
+                        if !viewModel.query.isEmpty {
+                            Button(action: { viewModel.clearSearch() }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(Color.auraSecondaryText)
+                            }
+                            .buttonStyle(AuraButtonStyle())
+                            .focusEffectDisabled()
                         }
-                        .buttonStyle(AuraButtonStyle())
-                        .focusEffectDisabled()
                     }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                .background(Color.auraSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 75)
-                .padding(.top, 84)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    .background(Color.auraSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, 75)
+                    .padding(.top, 84)
 
-                // Results or Empty State
-                if viewModel.isSearching {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .tint(.white)
-                } else if viewModel.searchResults.isEmpty {
-                    emptyStateView
-                } else {
-                    resultsGrid
+                    // Results or Empty State
+                    if viewModel.isSearching {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .tint(.white)
+                    } else if viewModel.searchResults.isEmpty {
+                        emptyStateView
+                    } else {
+                        resultsGrid(columnCount: columnCount)
+                    }
                 }
             }
         }
@@ -63,11 +69,15 @@ struct SearchView: View {
     // MARK: - Results Grid
 
     @ViewBuilder
-    private var resultsGrid: some View {
+    private func resultsGrid(columnCount: Int) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVGrid(columns: columns, spacing: 32) {
-                ForEach(viewModel.searchResults) { result in
-                    SearchResultCard(result: result)
+                ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.id) { index, result in
+                    SearchResultCard(
+                        result: result,
+                        isFirstInRow: index % columnCount == 0
+                    )
+                    .equatable()
                 }
             }
             .padding(.horizontal, 75)
@@ -86,11 +96,11 @@ struct SearchView: View {
                 .foregroundStyle(Color.auraSecondaryText.opacity(0.6))
 
             Text(viewModel.query.isEmpty ? "Discover Movies & Series" : "No results for \"\(viewModel.query)\"")
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(.white)
 
             Text(viewModel.query.isEmpty ? "Type a title, genre, or actor to search TMDB." : "Try searching with a different spelling or keyword.")
-                .font(.system(size: 16))
+                .font(.system(size: 21))
                 .foregroundStyle(Color.auraSecondaryText)
             Spacer()
         }
@@ -100,10 +110,17 @@ struct SearchView: View {
 
 // MARK: - Search Result Card
 
-private struct SearchResultCard: View {
+private struct SearchResultCard: View, Equatable {
     let result: TMDBSearchResult
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: SearchResultCard, rhs: SearchResultCard) -> Bool {
+        lhs.result.id == rhs.result.id &&
+        lhs.result.mediaType == rhs.result.mediaType &&
+        lhs.isFirstInRow == rhs.isFirstInRow
+    }
 
     var body: some View {
         NavigationLink(destination: destinationView) {
@@ -112,7 +129,7 @@ private struct SearchResultCard: View {
                 ZStack(alignment: .topTrailing) {
                     if let path = result.posterPath ?? result.backdropPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                        AuraCachedImage(url: url) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: 220, height: 330)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(2/3, contentMode: .fill)
@@ -140,31 +157,27 @@ private struct SearchResultCard: View {
                 )
 
                 // Title & Date
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(result.displayTitle)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
                     if result.displayDate.count >= 4 {
                         Text(String(result.displayDate.prefix(4)))
-                            .font(.system(size: 14))
+                            .font(.system(size: 20))
                             .foregroundStyle(Color.auraSecondaryText)
                     }
                 }
                 .frame(width: 220, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.07 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.22) : Color.black.opacity(0.35),
-                radius: isFocused ? 20 : 6,
-                y: isFocused ? 10 : 3
-            )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
     }
 
     @ViewBuilder

@@ -20,6 +20,8 @@ struct SeriesDetailView: View {
     @State private var availableStreams: [StremioStream] = []
     @State private var selectedStream: StremioStream?
     @State private var isLoadingStreams = false
+    @State private var isLoadingMoreStreams = false
+    @State private var activeStreamFetchTask: Task<Void, Never>?
     @State private var streamError: String?
     @State private var playerViewModel = PlayerViewModel()
     @State private var pendingEpisodeSeason: Int?
@@ -88,7 +90,7 @@ struct SeriesDetailView: View {
             ZStack(alignment: .topLeading) {
                 AuraDynamicBackgroundView(
                     styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow",
-                    fallbackBackdropURL: effectiveBackdropPath.flatMap { TMDBService.shared.imageURL(path: $0, size: "original") }
+                    fallbackBackdropURL: effectiveBackdropPath.flatMap { TMDBService.shared.imageURL(path: $0, size: "w780") }
                 )
 
                 // Full-bleed dark cinema backdrop + left & bottom vignettes
@@ -96,7 +98,7 @@ struct SeriesDetailView: View {
 
                 // Scrollable foreground content
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 34) {
+                    LazyVStack(alignment: .leading, spacing: 34) {
                         // Left hero metadata column
                         VStack(alignment: .leading, spacing: 18) {
                             Spacer().frame(height: geometry.size.height * 0.13)
@@ -146,7 +148,10 @@ struct SeriesDetailView: View {
                 streams: availableStreams,
                 selectedStream: selectedStream,
                 preferredQuality: preferredQuality,
+                isLoadingMore: isLoadingMoreStreams,
                 onSelect: { stream in
+                    activeStreamFetchTask?.cancel()
+                    isLoadingMoreStreams = false
                     selectedStream = stream
                     if let urlString = stream.url, let url = URL(string: urlString) {
                         let s = pendingEpisodeSeason ?? 1
@@ -162,7 +167,12 @@ struct SeriesDetailView: View {
                         )
                     }
                 },
-                onDismiss: { showStreamPicker = false }
+                onDismiss: {
+                    activeStreamFetchTask?.cancel()
+                    isLoadingStreams = false
+                    isLoadingMoreStreams = false
+                    showStreamPicker = false
+                }
             )
         }
         .fullScreenCover(isPresented: $showChangeArtwork) {
@@ -219,7 +229,7 @@ struct SeriesDetailView: View {
                             .scaleEffect(1.5)
                             .tint(.white)
                         Text("Finding streams...")
-                            .font(.system(size: 25, weight: .medium))
+                            .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(.white)
                     }
                 }
@@ -242,8 +252,8 @@ struct SeriesDetailView: View {
         let height = geometry.size.height * 0.78
         ZStack(alignment: .topTrailing) {
             if let path = effectiveBackdropPath,
-               let url = TMDBService.shared.imageURL(path: path, size: "original") {
-                AuraCachedImage(url: url) { image in
+               let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
+                AuraCachedImage(url: url, targetSize: CGSize(width: 1440, height: 840)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -299,7 +309,7 @@ struct SeriesDetailView: View {
                 mediaType: "tv",
                 tmdbId: detail.id,
                 preloadedLogoPath: effectiveLogoPath,
-                maxWidth: 640,
+                maxWidth: 560,
                 maxHeight: 145,
                 fallbackFontSize: 58,
                 alignment: .leading
@@ -339,7 +349,7 @@ struct SeriesDetailView: View {
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 24, weight: .medium))
+            .font(.system(size: 21, weight: .medium))
             .foregroundStyle(.white.opacity(0.76))
         }
     }
@@ -360,9 +370,9 @@ struct SeriesDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.white.opacity(0.65))
-                        .font(.system(size: 16))
+                        .font(.system(size: 13))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 19, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .padding(.leading, 4)
@@ -376,7 +386,7 @@ struct SeriesDetailView: View {
     private var overviewSection: some View {
         if let overview = viewModel.seriesDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 22, weight: .regular))
+                .font(.system(size: 21, weight: .regular))
                 .foregroundStyle(.white.opacity(0.78))
                 .lineLimit(3)
                 .lineSpacing(4)
@@ -414,7 +424,7 @@ struct SeriesDetailView: View {
             Button(action: { playSeries() }) {
                 HStack(spacing: 12) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 21))
+                        .font(.system(size: 17))
 
                     if let progress = viewModel.watchProgress,
                        progress.progress > 0 && !progress.isCompleted,
@@ -429,13 +439,13 @@ struct SeriesDetailView: View {
                         }
 
                         Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 24, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 24, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 36)
                 .padding(.vertical, 16)
                 .background(Color.white)
                 .foregroundStyle(.black)
@@ -456,9 +466,9 @@ struct SeriesDetailView: View {
                 Button(action: { rewatchSeries() }) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                         Text("Rewatch")
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold))
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
@@ -520,8 +530,8 @@ struct SeriesDetailView: View {
         let isFocused = focusedButton == target
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 22, weight: .bold))
-                .frame(width: 64, height: 64)
+                .font(.system(size: 18, weight: .bold))
+                .frame(width: 52, height: 52)
                 .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
                 .foregroundStyle(isFocused ? Color.black : Color.white)
                 .clipShape(Circle())
@@ -549,7 +559,7 @@ struct SeriesDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Episodes")
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(.white)
 
                     if !seasons.isEmpty || blurUnwatchedThumbnails || hideUnwatchedDescriptions {
@@ -576,9 +586,9 @@ struct SeriesDetailView: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Text("Season \(viewModel.selectedSeasonNumber)")
-                                            .font(.system(size: 20, weight: .semibold))
+                                            .font(.system(size: 16, weight: .semibold))
                                         Image(systemName: "chevron.down")
-                                            .font(.system(size: 15, weight: .bold))
+                                            .font(.system(size: 12, weight: .bold))
                                     }
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 18)
@@ -598,9 +608,9 @@ struct SeriesDetailView: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: viewModel.showAllSpoilers ? "eye.fill" : "eye.slash.fill")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(size: 13, weight: .semibold))
                                         Text(viewModel.showAllSpoilers ? "Hide Unwatched Spoilers" : "Reveal Spoilers")
-                                            .font(.system(size: 19, weight: .semibold))
+                                            .font(.system(size: 15, weight: .semibold))
                                     }
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 16)
@@ -651,6 +661,7 @@ struct SeriesDetailView: View {
                                 ) {
                                     playEpisode(episode: episode)
                                 }
+                                .equatable()
                             }
                         }
                         .padding(.horizontal, 80)
@@ -668,7 +679,7 @@ struct SeriesDetailView: View {
         if !viewModel.cast.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Cast")
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
@@ -676,6 +687,7 @@ struct SeriesDetailView: View {
                     LazyHStack(spacing: 20) {
                         ForEach(viewModel.cast.prefix(20)) { member in
                             CastCardView(member: member)
+                                .equatable()
                         }
                     }
                     .padding(.horizontal, 80)
@@ -751,44 +763,88 @@ struct SeriesDetailView: View {
         pendingEpisodeTitle = title
         pendingEpisodeStillPath = stillPath
 
-        Task {
+        activeStreamFetchTask?.cancel()
+        activeStreamFetchTask = Task {
             isLoadingStreams = true
+            isLoadingMoreStreams = true
             streamError = nil
+            availableStreams = []
+
+            var didOpenOrLaunch = false
             do {
                 if seriesImdbId == nil {
                     let ext = try? await TMDBService.shared.fetchSeriesExternalIds(id: tmdbId)
                     seriesImdbId = ext?.imdbId
                 }
-                let streams = try await AIOStreamsService.shared.fetchStreamsForEpisode(
+                let streams = try await AIOStreamsService.shared.fetchStreamsProgressiveForEpisode(
                     tmdbId: tmdbId,
                     season: season,
                     episode: episode,
                     preferredQuality: preferredQuality
-                )
-                availableStreams = streams
-                let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
-                selectedStream = firstPlayable
-                isLoadingStreams = false
-
-                if (!forcePicker && (playAtOnceEnabled || streams.count == 1)) || autoPlayBest,
-                   let chosen = firstPlayable,
-                   let urlString = chosen.url,
-                   let url = URL(string: urlString) {
-                    startPlayback(
-                        url: url,
-                        stream: chosen,
-                        season: season,
-                        episode: episode,
-                        episodeTitle: title,
-                        stillPath: stillPath,
-                        resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
-                    )
-                } else {
-                    showStreamPicker = true
+                ) { partialStreams, stillLoading in
+                    guard !Task.isCancelled else { return }
+                    availableStreams = partialStreams
+                    isLoadingMoreStreams = stillLoading
+                    guard !didOpenOrLaunch,
+                          let firstPlayable = partialStreams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? partialStreams.first else {
+                        return
+                    }
+                    selectedStream = firstPlayable
+                    isLoadingStreams = false
+                    if ((!forcePicker && (playAtOnceEnabled || (!stillLoading && partialStreams.count == 1))) || autoPlayBest),
+                       let urlString = firstPlayable.url,
+                       let url = URL(string: urlString) {
+                        didOpenOrLaunch = true
+                        activeStreamFetchTask?.cancel()
+                        startPlayback(
+                            url: url,
+                            stream: firstPlayable,
+                            season: season,
+                            episode: episode,
+                            episodeTitle: title,
+                            stillPath: stillPath,
+                            resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
+                        )
+                    } else if (!forcePicker && playAtOnceEnabled) || autoPlayBest {
+                        return
+                    } else {
+                        didOpenOrLaunch = true
+                        showStreamPicker = true
+                    }
                 }
+                guard !Task.isCancelled else { return }
+                isLoadingStreams = false
+                isLoadingMoreStreams = false
+                availableStreams = streams
+                if !didOpenOrLaunch {
+                    let firstPlayable = streams.first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) }) ?? streams.first
+                    selectedStream = firstPlayable
+                    if ((!forcePicker && (playAtOnceEnabled || streams.count == 1)) || autoPlayBest),
+                       let chosen = firstPlayable,
+                       let urlString = chosen.url,
+                       let url = URL(string: urlString) {
+                        startPlayback(
+                            url: url,
+                            stream: chosen,
+                            season: season,
+                            episode: episode,
+                            episodeTitle: title,
+                            stillPath: stillPath,
+                            resumeFrom: autoPlayBest ? 0 : effectiveResumeTime(forSeason: season, episode: episode)
+                        )
+                    } else {
+                        showStreamPicker = true
+                    }
+                }
+            } catch is CancellationError {
+                isLoadingStreams = false
+                isLoadingMoreStreams = false
             } catch {
                 isLoadingStreams = false
-                streamError = error.localizedDescription
+                isLoadingMoreStreams = false
+                if !didOpenOrLaunch {
+                    streamError = error.localizedDescription
+                }
             }
         }
     }

@@ -103,6 +103,7 @@ jobs:
           retention-days: 30
 
   screenshots:
+    if: github.event_name == 'pull_request'
     name: Simulator Screenshots (tvOS)
     runs-on: macos-15
     timeout-minutes: 45

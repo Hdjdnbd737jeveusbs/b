@@ -23,6 +23,41 @@ extension View {
     func glassMaterial(cornerRadius: CGFloat = 16) -> some View {
         self.modifier(GlassMaterialModifier(cornerRadius: cornerRadius))
     }
+
+    /// Triggers opening the left navigation sidebar when pressing Left on leftmost elements.
+    func auraLeftEdgeSidebarTrigger(_ enabled: Bool = true) -> some View {
+        self.modifier(AuraLeftEdgeSidebarModifier(enabled: enabled))
+    }
+}
+
+// MARK: - Sidebar Open Environment Key
+
+private struct AuraOpenSidebarKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var auraOpenSidebar: (() -> Void)? {
+        get { self[AuraOpenSidebarKey.self] }
+        set { self[AuraOpenSidebarKey.self] = newValue }
+    }
+}
+
+private struct AuraLeftEdgeSidebarModifier: ViewModifier {
+    let enabled: Bool
+    @Environment(\.auraOpenSidebar) private var openSidebar
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onMoveCommand { direction in
+                if direction == .left {
+                    openSidebar?()
+                }
+            }
+        } else {
+            content
+        }
+    }
 }
 
 // MARK: - FocusableCardModifier
@@ -38,12 +73,7 @@ private struct FocusableCardModifier: ViewModifier {
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
             .scaleEffect(isFocused ? 1.07 : 1.0)
-            .shadow(
-                color: isFocused ? Color.white.opacity(0.18) : Color.black.opacity(0.4),
-                radius: isFocused ? 18 : 6,
-                y: isFocused ? 8 : 3
-            )
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .animation(.easeOut(duration: 0.16), value: isFocused)
     }
 }
 
@@ -54,7 +84,7 @@ private struct GlassMaterialModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(Color.auraGlassBorder, lineWidth: 1)
