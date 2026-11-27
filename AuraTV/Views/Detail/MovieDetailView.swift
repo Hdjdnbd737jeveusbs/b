@@ -99,7 +99,7 @@ struct MovieDetailView: View {
                             actionButtons
                                 .padding(.top, 6)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.54, alignment: .leading)
+                        .frame(maxWidth: geometry.size.width * 0.54, minHeight: geometry.size.height * 0.84, alignment: .topLeading)
                         .padding(.leading, 80)
 
                         // Full-width circular Cast row below the fold

@@ -66,6 +66,12 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
 
     @State private var selectedCategory: SettingsCategory = .playback
+    private enum SubtitlePage: String, CaseIterable {
+        case style = "Style & Preview"
+        case placement = "Size & Position"
+        case fonts = "Custom Fonts"
+    }
+    @State private var subtitlePage: SubtitlePage?
     @State private var editingCategory = false
     @State private var showSavedAlert: Bool = false
     @State private var showPhoneQRSetup: Bool = false
@@ -113,6 +119,7 @@ struct SettingsView: View {
         .onChange(of: focusedCategory) { _, newCat in
             if let newCat {
                 selectedCategory = newCat
+                subtitlePage = nil
                 editingCategory = false
             }
         }
@@ -210,7 +217,10 @@ struct SettingsView: View {
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
         .onExitCommand {
-            if editingCategory || focusedCategory == nil {
+            if subtitlePage != nil {
+                subtitlePage = nil
+                isRightPrimaryFocused = true
+            } else if editingCategory || focusedCategory == nil {
                 editingCategory = false
                 focusedCategory = selectedCategory
             }
@@ -335,7 +345,7 @@ struct SettingsView: View {
                     )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(selectedCategory.rawValue)
+                    Text(subtitlePage?.rawValue ?? selectedCategory.rawValue)
                         .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(.white)
                     Text(selectedCategory.summarySubtitle)
@@ -362,7 +372,11 @@ struct SettingsView: View {
             // Full-Width Grouped Native Interactive Controls
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 12) {
-                    controlsContent(for: selectedCategory)
+                    if let subtitlePage, selectedCategory == .subtitles {
+                        subtitlePreferences(subtitlePage)
+                    } else {
+                        controlsContent(for: selectedCategory)
+                    }
 
                     if let status = viewModel.statusMessage {
                         Text(status)
@@ -375,6 +389,60 @@ struct SettingsView: View {
             }
         }
         .padding(42)
+    }
+
+    private var previewStyle: SubtitleStyle {
+        SubtitleStyle(fontSize: viewModel.subtitleFontSize, fontWeight: viewModel.subtitleFontWeight,
+                      fontName: viewModel.subtitleFontName, textColor: viewModel.subtitleTextColor,
+                      backgroundOpacity: viewModel.subtitleBackgroundOpacity, bottomOffset: viewModel.subtitleBottomOffset)
+    }
+
+    @ViewBuilder
+    private func subtitlePreferences(_ page: SubtitlePage) -> some View {
+        if page != .fonts {
+            Text("معاينة الترجمة  ·  Subtitle preview")
+                .font(previewStyle.font)
+                .foregroundStyle(previewStyle.colorValue)
+                .padding(10)
+                .background(Color.black.opacity(previewStyle.backgroundOpacity))
+                .padding(.bottom, page == .placement ? previewStyle.bottomOffset / 2 : 16)
+                .frame(maxWidth: .infinity, minHeight: 150, alignment: .bottom)
+        }
+        switch page {
+        case .style:
+            cycleSettingRow(title: "Font Family", value: viewModel.subtitleFontName) {
+                viewModel.subtitleFontName = viewModel.nextValue(after: viewModel.subtitleFontName, in: SettingsViewModel.fontNameOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
+            cycleSettingRow(title: "Font Weight", value: viewModel.subtitleFontWeight) {
+                viewModel.subtitleFontWeight = viewModel.nextValue(after: viewModel.subtitleFontWeight, in: SettingsViewModel.fontWeightOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
+            cycleSettingRow(title: "Text Color", value: viewModel.subtitleTextColor) {
+                viewModel.subtitleTextColor = viewModel.nextValue(after: viewModel.subtitleTextColor, in: ["White", "Yellow", "Green", "Cyan"])
+                viewModel.saveSettings(context: modelContext)
+            }
+            cycleSettingRow(title: "Background Opacity", value: "\(Int(viewModel.subtitleBackgroundOpacity * 100))%") {
+                viewModel.subtitleBackgroundOpacity = viewModel.nextValue(after: viewModel.subtitleBackgroundOpacity, in: [0, 0.25, 0.5, 0.75])
+                viewModel.saveSettings(context: modelContext)
+            }
+        case .placement:
+            cycleSettingRow(title: "Size", value: "\(Int(viewModel.subtitleFontSize)) pt") {
+                viewModel.subtitleFontSize = viewModel.nextValue(after: viewModel.subtitleFontSize, in: SettingsViewModel.subtitleSizeOptions)
+                viewModel.saveSettings(context: modelContext)
+            }
+            cycleSettingRow(title: "Distance from bottom", value: "\(Int(viewModel.subtitleBottomOffset)) pt") {
+                viewModel.subtitleBottomOffset = viewModel.nextValue(after: viewModel.subtitleBottomOffset, in: [40, 56, 80, 100, 140])
+                viewModel.saveSettings(context: modelContext)
+            }
+        case .fonts:
+            ForEach(SettingsViewModel.fontNameOptions, id: \.self) { name in
+                actionSettingRow(title: name, icon: name == viewModel.subtitleFontName ? "checkmark.circle.fill" : "textformat") {
+                    viewModel.subtitleFontName = name
+                    viewModel.saveSettings(context: modelContext)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -456,6 +524,12 @@ struct SettingsView: View {
             )
 
         case .subtitles:
+            ForEach(SubtitlePage.allCases, id: \.self) { page in
+                actionSettingRow(title: page.rawValue, icon: page == .fonts ? "textformat" : page == .style ? "paintbrush" : "arrow.up.and.down") {
+                    subtitlePage = page
+                    isRightPrimaryFocused = true
+                }
+            }
             cycleSettingRow(title: "Turn On Subtitles", value: viewModel.subtitleAutoMode) {
                 viewModel.subtitleAutoMode = viewModel.nextValue(after: viewModel.subtitleAutoMode, in: SettingsViewModel.subtitleAutoOptions)
                 viewModel.saveSettings(context: modelContext)
@@ -468,18 +542,6 @@ struct SettingsView: View {
             cycleSettingRow(title: "Second Language", value: viewModel.displayLanguageName(for: viewModel.secondarySubtitleLanguage)) {
                 let codes = SettingsViewModel.languageOptions.map(\.code)
                 viewModel.secondarySubtitleLanguage = viewModel.nextValue(after: viewModel.secondarySubtitleLanguage, in: codes)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Font Family", value: viewModel.subtitleFontName) {
-                viewModel.subtitleFontName = viewModel.nextValue(after: viewModel.subtitleFontName, in: SettingsViewModel.fontNameOptions)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Font Size", value: "\(Int(viewModel.subtitleFontSize)) pt") {
-                viewModel.subtitleFontSize = viewModel.nextValue(after: viewModel.subtitleFontSize, in: SettingsViewModel.subtitleSizeOptions)
-                viewModel.saveSettings(context: modelContext)
-            }
-            cycleSettingRow(title: "Font Weight", value: viewModel.subtitleFontWeight) {
-                viewModel.subtitleFontWeight = viewModel.nextValue(after: viewModel.subtitleFontWeight, in: SettingsViewModel.fontWeightOptions)
                 viewModel.saveSettings(context: modelContext)
             }
             toggleSettingRow(

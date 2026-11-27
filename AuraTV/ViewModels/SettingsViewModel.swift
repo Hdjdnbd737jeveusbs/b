@@ -25,7 +25,7 @@ final class SettingsViewModel {
 
     // MARK: - Published State
 
-    var tmdbApiKey: String = "d767cb12181edaa01840442c704329be"
+    var tmdbApiKey: String = ""
     var aioStreamsUrl: String = ""
     var aioStreamsAdditionalUrls: String = ""
     var quickManifestInput: String = ""
@@ -38,6 +38,9 @@ final class SettingsViewModel {
 
     var subdlApiKey: String = ""
     var openSubtitlesApiKey: String = ""
+    var subtitleBottomOffset: Double = 56
+    var subtitleTextColor: String = "White"
+    var subtitleBackgroundOpacity: Double = 0
     var subtitleFontSize: Double = 44.0
     var subtitleFontWeight: String = "Bold"
     var subtitleFontName: String = "System"
@@ -196,6 +199,9 @@ final class SettingsViewModel {
 
                 subdlApiKey = settings.subdlApiKey
                 openSubtitlesApiKey = settings.openSubtitlesApiKey
+                subtitleBottomOffset = settings.subtitleBottomOffset
+                subtitleTextColor = settings.subtitleTextColor
+                subtitleBackgroundOpacity = settings.subtitleBackgroundOpacity
                 subtitleFontSize = settings.subtitleFontSize
                 subtitleFontWeight = settings.subtitleFontWeight
                 subtitleFontName = settings.subtitleFontName
@@ -300,6 +306,9 @@ final class SettingsViewModel {
 
             settings.subdlApiKey = subdlApiKey
             settings.openSubtitlesApiKey = openSubtitlesApiKey
+            settings.subtitleBottomOffset = subtitleBottomOffset
+            settings.subtitleTextColor = subtitleTextColor
+            settings.subtitleBackgroundOpacity = subtitleBackgroundOpacity
             settings.subtitleFontSize = subtitleFontSize
             settings.subtitleFontWeight = subtitleFontWeight
             settings.subtitleFontName = subtitleFontName
@@ -352,7 +361,7 @@ final class SettingsViewModel {
 
             try context.save()
 
-            TMDBService.shared.apiKey = tmdbApiKey.isEmpty ? "d767cb12181edaa01840442c704329be" : tmdbApiKey
+            TMDBService.shared.apiKey = settings.tmdbApiKey
             AIOStreamsService.shared.manifestURL = aioStreamsUrl
             AIOStreamsService.shared.additionalManifestURLs = aioStreamsAdditionalUrls
             MDBListService.shared.apiKey = mdblistApiKey.trimmingCharacters(in: .whitespacesAndNewlines)

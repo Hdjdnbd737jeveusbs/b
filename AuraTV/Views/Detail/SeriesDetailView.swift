@@ -118,7 +118,7 @@ struct SeriesDetailView: View {
                             actionButtons
                                 .padding(.top, 4)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.54, alignment: .leading)
+                        .frame(maxWidth: geometry.size.width * 0.54, minHeight: geometry.size.height * 0.66, alignment: .topLeading)
                         .padding(.leading, 80)
 
                         // Full-width Episodes section with Season selector pill

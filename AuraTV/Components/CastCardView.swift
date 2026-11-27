@@ -17,7 +17,7 @@ struct CastCardView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 112, height: 112)
+                            .frame(width: 152, height: 152)
                             .clipShape(Circle())
                     } placeholder: {
                         castPlaceholder
@@ -28,25 +28,25 @@ struct CastCardView: View {
 
                 // Actor Name
                 Text(member.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .frame(width: 120)
+                    .frame(width: 168)
 
                 // Character Name
                 if let character = member.character, !character.isEmpty {
                     Text(character)
-                        .font(.system(size: 12))
+                        .font(.system(size: 17))
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
-                        .frame(width: 120)
+                        .frame(width: 168)
                 }
             }
             .padding(6)
             .overlay(
                 Circle()
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.12), lineWidth: isFocused ? 2.5 : 1)
-                    .frame(width: 114, height: 114)
+                    .frame(width: 154, height: 154)
                     .offset(y: -24)
             )
             .scaleEffect(isFocused ? 1.07 : 1.0)
@@ -60,7 +60,7 @@ struct CastCardView: View {
     private var castPlaceholder: some View {
         Circle()
             .fill(Color.auraSurface)
-            .frame(width: 112, height: 112)
+            .frame(width: 152, height: 152)
             .overlay {
                 Image(systemName: "person.fill")
                     .font(.system(size: 36))
