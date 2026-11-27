@@ -1058,11 +1058,11 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
         controller.videoGravity = Self.avVideoGravity(for: viewModel.aspectRatioMode)
 
         let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
+        context.coordinator.timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
             guard let player else { return }
             let current = CMTimeGetSeconds(time)
             let total = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
-            if !current.isNaN && !total.isNaN {
+            if current.isFinite {
                 let loadedRanges = player.currentItem?.loadedTimeRanges.compactMap { $0.timeRangeValue } ?? []
                 let bufferedAhead = loadedRanges
                     .filter { current >= CMTimeGetSeconds($0.start) && current <= CMTimeGetSeconds($0.end) }
@@ -1094,15 +1094,25 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
             }
             .store(in: &context.coordinator.cancellables)
 
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { status in
+                switch status {
+                case .readyToPlay:
+                    viewModel.onPlaybackReady(duration: CMTimeGetSeconds(playerItem.duration))
+                case .failed:
+                    viewModel.onBufferingEnded()
+                    viewModel.playbackError = playerItem.error?.localizedDescription ?? "Unable to load this stream."
+                default:
+                    break
+                }
+            }
+            .store(in: &context.coordinator.cancellables)
+
         playerItem.publisher(for: \.isPlaybackLikelyToKeepUp)
             .receive(on: DispatchQueue.main)
             .sink { ready in
-                if ready {
-                    let total = CMTimeGetSeconds(playerItem.duration)
-                    if !total.isNaN && total > 0 {
-                        viewModel.onPlaybackReady(duration: total)
-                    }
-                }
+                if ready { viewModel.onBufferingEnded() }
             }
             .store(in: &context.coordinator.cancellables)
 
@@ -1142,9 +1152,13 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
     }
 
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
+        coordinator.cancellables.removeAll()
+        if let token = coordinator.timeObserver {
+            controller.player?.removeTimeObserver(token)
+            coordinator.timeObserver = nil
+        }
         controller.player?.pause()
         controller.player = nil
-        coordinator.cancellables.removeAll()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -1152,6 +1166,7 @@ struct AVPlayerViewWrapper: UIViewControllerRepresentable {
     }
 
     class Coordinator {
+        var timeObserver: Any?
         var cancellables = Set<AnyCancellable>()
     }
 }
