@@ -12,7 +12,7 @@ struct MediaRowView<Content: View>: View {
             // Section Title + Muted Count (e.g. "Series 25")
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title)
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 29, weight: .bold))
                     .foregroundStyle(.white)
 
                 if let count, count > 0 {
@@ -21,14 +21,14 @@ struct MediaRowView<Content: View>: View {
                         .foregroundStyle(Color.white.opacity(0.42))
                 }
             }
-            .padding(.horizontal, 80)
+            .padding(.horizontal, 156)
 
             // Horizontal Scrollable Cards
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 24) {
                     content()
                 }
-                .padding(.horizontal, 80)
+                .padding(.horizontal, 156)
                 .padding(.vertical, 18)
             }
         }

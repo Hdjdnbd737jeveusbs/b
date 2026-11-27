@@ -100,17 +100,17 @@ struct SpotlightCarouselView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         activeEyebrowView
 
-                        activeTitleView(maxWidth: 560, maxHeight: 130, fallbackSize: 54)
+                        activeTitleView(maxWidth: 620, maxHeight: 154, fallbackSize: 54)
 
                         activeMetadataRow
 
                         if let overview = activeOverview, !overview.isEmpty {
                             Text(overview)
-                                .font(.system(size: 18, weight: .regular))
+                                .font(.system(size: 22, weight: .regular))
                                 .foregroundStyle(.white.opacity(0.78))
                                 .lineLimit(3)
                                 .lineSpacing(3)
-                                .frame(maxWidth: 660, alignment: .leading)
+                                .frame(maxWidth: 870, alignment: .leading)
                         }
                     }
 
@@ -122,7 +122,7 @@ struct SpotlightCarouselView: View {
                             .padding(.bottom, 8)
                     }
                 }
-                .padding(.horizontal, 80)
+                .padding(.horizontal, 156)
                 .padding(.bottom, 34)
             }
             .frame(maxWidth: .infinity, minHeight: 640, maxHeight: 640)
@@ -140,8 +140,8 @@ struct SpotlightCarouselView: View {
     private var spotlightHero: some View {
         VStack(spacing: 18) {
             GeometryReader { geometry in
-                let cardWidth = max(geometry.size.width - 200, 960)
-                let cardHeight: CGFloat = 490
+                let cardWidth = max(geometry.size.width - 232, 960)
+                let cardHeight: CGFloat = 466
 
                 HStack(spacing: 28) {
                     // Main Active Hero Card
@@ -174,7 +174,7 @@ struct SpotlightCarouselView: View {
 
                                 if let overview = activeOverview, !overview.isEmpty {
                                     Text(overview)
-                                        .font(.system(size: 17))
+                                        .font(.system(size: 21))
                                         .foregroundStyle(.white.opacity(0.75))
                                         .lineLimit(2)
                                         .frame(maxWidth: 620, alignment: .leading)
@@ -214,7 +214,7 @@ struct SpotlightCarouselView: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("RECENTLY ADDED")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(size: 15, weight: .bold))
                                     .tracking(2.5)
                                     .foregroundStyle(.white.opacity(0.65))
 
@@ -239,7 +239,7 @@ struct SpotlightCarouselView: View {
             // Centered pagination dots underneath Spotlight card
             paginationDots(activeWidth: 22, dotWidth: 8, height: 5)
         }
-        .padding(.top, 92)
+        .padding(.top, 120)
     }
 
     // MARK: - Subviews
@@ -266,16 +266,16 @@ struct SpotlightCarouselView: View {
         if let preview = trailerPreview {
             HStack(spacing: 8) {
                 Image(systemName: preview.trailerStreamURL != nil ? "speaker.slash.fill" : "play.tv.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                 Text(preview.trailerName.map { "TRAILER PREVIEW · \($0.uppercased())" } ?? "TRAILER PREVIEW")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .tracking(2.4)
                     .lineLimit(1)
             }
             .foregroundStyle(Color.auraAccent)
         } else {
             Text("RECENTLY ADDED")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 16, weight: .bold))
                 .tracking(2.8)
                 .foregroundStyle(.white.opacity(0.72))
         }
@@ -317,13 +317,13 @@ struct SpotlightCarouselView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
-                            .font(.system(size: 14))
+                            .font(.system(size: 17))
                         Text(String(format: "%.1f", vote))
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
                     }
                 }
             }
-            .font(.system(size: 17, weight: .medium))
+            .font(.system(size: 21, weight: .medium))
             .foregroundStyle(.white.opacity(0.88))
         } else {
             metadataRow(for: currentItem)
@@ -393,13 +393,13 @@ struct SpotlightCarouselView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.yellow)
-                        .font(.system(size: 14))
+                        .font(.system(size: 17))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                 }
             }
         }
-        .font(.system(size: 17, weight: .medium))
+        .font(.system(size: 21, weight: .medium))
         .foregroundStyle(.white.opacity(0.88))
     }
 
@@ -433,7 +433,7 @@ struct SpotlightCarouselView: View {
             .frame(maxWidth: width ?? .infinity, minHeight: height, maxHeight: height)
             .overlay {
                 Image(systemName: "film")
-                    .font(.system(size: 56))
+                    .font(.system(size: 69))
                     .foregroundStyle(.white.opacity(0.18))
             }
     }

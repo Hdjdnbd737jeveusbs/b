@@ -9,6 +9,8 @@ struct SeriesPosterCardView: View {
     var showWatchedBadge: Bool = true
     var autoPlayTrailersOnFocus: Bool = false
 
+    var posterWidth: CGFloat = 215
+
     @FocusState private var isFocused: Bool
     @State private var themeCoordinator = AppThemeCoordinator.shared
 
@@ -25,7 +27,7 @@ struct SeriesPosterCardView: View {
                         image
                             .resizable()
                             .aspectRatio(2 / 3, contentMode: .fill)
-                            .frame(width: 215, height: 322)
+                            .frame(width: posterWidth, height: posterWidth * 1.5)
                             .clipped()
                     } placeholder: {
                         posterPlaceholder
@@ -65,7 +67,7 @@ struct SeriesPosterCardView: View {
                         .padding(10)
                 }
             }
-            .frame(width: 215, height: 322)
+            .frame(width: posterWidth, height: posterWidth * 1.5)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
@@ -113,7 +115,7 @@ struct SeriesPosterCardView: View {
     private var posterPlaceholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 215, height: 322)
+            .frame(width: posterWidth, height: posterWidth * 1.5)
             .overlay {
                 VStack(spacing: 10) {
                     Image(systemName: "tv")

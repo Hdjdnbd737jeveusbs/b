@@ -9,7 +9,24 @@ class CustomArtwork {
     var customPosterPath: String?
     var customBackdropPath: String?
     var customLogoPath: String?
+    var multipleArtworkEnabled: Bool = false
+    var rotationPosters: [String] = []
+    var rotationBackdrops: [String] = []
     var updatedAt: Date = Date()
+
+    func poster(at date: Date) -> String? {
+        rotatedPath(rotationPosters, at: date) ?? customPosterPath
+    }
+
+    func backdrop(at date: Date) -> String? {
+        rotatedPath(rotationBackdrops, at: date) ?? customBackdropPath
+    }
+
+    private func rotatedPath(_ paths: [String], at date: Date) -> String? {
+        guard multipleArtworkEnabled, !paths.isEmpty else { return nil }
+        let interval = Int(max(0, date.timeIntervalSince(updatedAt)) / 300)
+        return paths[interval % paths.count]
+    }
 
     static func makeKey(tmdbId: Int, mediaType: String) -> String {
         let normalized = mediaType == "tv" ? "series" : mediaType

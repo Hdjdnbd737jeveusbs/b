@@ -10,6 +10,8 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var themeCoordinator = AppThemeCoordinator.shared
 
+    @State private var artworkDate = Date()
+
     private var heroStyle: HomeHeroStyle {
         HomeHeroStyle(settingValue: settingsList.first?.homeHeroStyle ?? "Ambient")
     }
@@ -33,7 +35,7 @@ struct HomeView: View {
     private var customMovieBackdrops: [Int: String] {
         Dictionary(
             artworkOverrides.filter { $0.mediaType == "movie" }.compactMap { item in
-                item.customBackdropPath.map { (item.tmdbId, $0) }
+                item.backdrop(at: artworkDate).map { (item.tmdbId, $0) }
             },
             uniquingKeysWith: { first, _ in first }
         )
@@ -42,7 +44,7 @@ struct HomeView: View {
     private var customMoviePosters: [Int: String] {
         Dictionary(
             artworkOverrides.filter { $0.mediaType == "movie" }.compactMap { item in
-                item.customPosterPath.map { (item.tmdbId, $0) }
+                item.poster(at: artworkDate).map { (item.tmdbId, $0) }
             },
             uniquingKeysWith: { first, _ in first }
         )
@@ -60,7 +62,7 @@ struct HomeView: View {
     private var customSeriesPosters: [Int: String] {
         Dictionary(
             artworkOverrides.filter { $0.mediaType == "series" }.compactMap { item in
-                item.customPosterPath.map { (item.tmdbId, $0) }
+                item.poster(at: artworkDate).map { (item.tmdbId, $0) }
             },
             uniquingKeysWith: { first, _ in first }
         )
@@ -69,7 +71,7 @@ struct HomeView: View {
     private var customContinueBackdrops: [String: String] {
         Dictionary(
             artworkOverrides.compactMap { item in
-                item.customBackdropPath.map { (item.key, $0) }
+                item.backdrop(at: artworkDate).map { (item.key, $0) }
             },
             uniquingKeysWith: { first, _ in first }
         )
@@ -119,7 +121,8 @@ struct HomeView: View {
                                     overridePosterPath: customSeriesPosters[series.id],
                                     isWatched: viewModel.watchedSeriesIds.contains(series.id),
                                     showWatchedBadge: showWatchedIndicators,
-                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
+                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                    posterWidth: 372
                                 )
                             }
                         }
@@ -132,7 +135,8 @@ struct HomeView: View {
                                     overridePosterPath: customMoviePosters[movie.id],
                                     isWatched: viewModel.watchedMovieIds.contains(movie.id),
                                     showWatchedBadge: showWatchedIndicators,
-                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
+                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                    posterWidth: 372
                                 )
                             }
                         }
@@ -140,11 +144,18 @@ struct HomeView: View {
                         Spacer().frame(height: 60)
                     }
                 }
-                .ignoresSafeArea(.container, edges: heroStyle == .ambient ? [.top, .horizontal] : [])
+                .ignoresSafeArea(.container, edges: [.top, .horizontal])
             }
         }
         .task {
             await viewModel.loadAll(context: modelContext)
+        }
+        .task(id: artworkOverrides.contains(where: { $0.multipleArtworkEnabled })) {
+            guard artworkOverrides.contains(where: { $0.multipleArtworkEnabled }) else { return }
+            while !Task.isCancelled {
+                artworkDate = Date()
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            }
         }
         .refreshable {
             await viewModel.refresh(context: modelContext)

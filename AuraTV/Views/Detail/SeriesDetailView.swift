@@ -165,7 +165,7 @@ struct SeriesDetailView: View {
                 onDismiss: { showStreamPicker = false }
             )
         }
-        .sheet(isPresented: $showChangeArtwork) {
+        .fullScreenCover(isPresented: $showChangeArtwork) {
             ChangeArtworkView(
                 tmdbId: tmdbId,
                 mediaType: "series",
@@ -219,7 +219,7 @@ struct SeriesDetailView: View {
                             .scaleEffect(1.5)
                             .tint(.white)
                         Text("Finding streams...")
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 25, weight: .medium))
                             .foregroundStyle(.white)
                     }
                 }
@@ -299,7 +299,7 @@ struct SeriesDetailView: View {
                 mediaType: "tv",
                 tmdbId: detail.id,
                 preloadedLogoPath: effectiveLogoPath,
-                maxWidth: 560,
+                maxWidth: 640,
                 maxHeight: 145,
                 fallbackFontSize: 58,
                 alignment: .leading
@@ -339,7 +339,7 @@ struct SeriesDetailView: View {
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 19, weight: .medium))
+            .font(.system(size: 24, weight: .medium))
             .foregroundStyle(.white.opacity(0.76))
         }
     }
@@ -360,9 +360,9 @@ struct SeriesDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.white.opacity(0.65))
-                        .font(.system(size: 13))
+                        .font(.system(size: 16))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .padding(.leading, 4)
@@ -376,7 +376,7 @@ struct SeriesDetailView: View {
     private var overviewSection: some View {
         if let overview = viewModel.seriesDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(.white.opacity(0.78))
                 .lineLimit(3)
                 .lineSpacing(4)
@@ -390,7 +390,7 @@ struct SeriesDetailView: View {
     private var currentEpisodeSubtitle: some View {
         if let ep = activeEpisode {
             Text("S\(ep.seasonNumber) • E\(ep.episodeNumber) - \(ep.name)")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
         }
@@ -414,7 +414,7 @@ struct SeriesDetailView: View {
             Button(action: { playSeries() }) {
                 HStack(spacing: 12) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 17))
+                        .font(.system(size: 21))
 
                     if let progress = viewModel.watchProgress,
                        progress.progress > 0 && !progress.isCompleted,
@@ -429,10 +429,10 @@ struct SeriesDetailView: View {
                         }
 
                         Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                     }
                 }
                 .padding(.horizontal, 32)
@@ -456,9 +456,9 @@ struct SeriesDetailView: View {
                 Button(action: { rewatchSeries() }) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
                         Text("Rewatch")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 22, weight: .semibold))
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
@@ -520,8 +520,8 @@ struct SeriesDetailView: View {
         let isFocused = focusedButton == target
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .bold))
-                .frame(width: 52, height: 52)
+                .font(.system(size: 22, weight: .bold))
+                .frame(width: 64, height: 64)
                 .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
                 .foregroundStyle(isFocused ? Color.black : Color.white)
                 .clipShape(Circle())
@@ -549,7 +549,7 @@ struct SeriesDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Episodes")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(.white)
 
                     if !seasons.isEmpty || blurUnwatchedThumbnails || hideUnwatchedDescriptions {
@@ -576,9 +576,9 @@ struct SeriesDetailView: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Text("Season \(viewModel.selectedSeasonNumber)")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(size: 20, weight: .semibold))
                                         Image(systemName: "chevron.down")
-                                            .font(.system(size: 12, weight: .bold))
+                                            .font(.system(size: 15, weight: .bold))
                                     }
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 18)
@@ -598,9 +598,9 @@ struct SeriesDetailView: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: viewModel.showAllSpoilers ? "eye.fill" : "eye.slash.fill")
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .font(.system(size: 16, weight: .semibold))
                                         Text(viewModel.showAllSpoilers ? "Hide Unwatched Spoilers" : "Reveal Spoilers")
-                                            .font(.system(size: 15, weight: .semibold))
+                                            .font(.system(size: 19, weight: .semibold))
                                     }
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 16)
@@ -668,7 +668,7 @@ struct SeriesDetailView: View {
         if !viewModel.cast.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Cast")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 

@@ -14,6 +14,8 @@ final class PlayerRemoteTests: XCTestCase {
         remote.press(.left)
         waitForFocus(subtitles)
         remote.press(.select)
+        waitForFocus(app.buttons["search-subtitles"])
+        remote.press(.down)
         let off = app.buttons["Off"]
         waitForFocus(off)
         remote.press(.select)

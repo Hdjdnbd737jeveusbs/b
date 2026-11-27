@@ -51,14 +51,6 @@ struct LoadingOverlayView: View {
                         .padding(.horizontal, 80)
                 }
 
-                VStack {
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(1.3)
-                        .tint(.white.opacity(0.75))
-                    Spacer()
-                        .frame(height: 220)
-                }
             }
         }
         .ignoresSafeArea()

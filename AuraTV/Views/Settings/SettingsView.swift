@@ -66,6 +66,7 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
 
     @State private var selectedCategory: SettingsCategory = .playback
+    @State private var editingCategory = false
     @State private var showSavedAlert: Bool = false
     @State private var showPhoneQRSetup: Bool = false
 
@@ -81,10 +82,10 @@ struct SettingsView: View {
                 }
             )
 
-            HStack(alignment: .top, spacing: 48) {
+            HStack(alignment: .top, spacing: 54) {
                 // LEFT COLUMN: Settings Title + Vertical Sidebar
                 leftSidebarColumn
-                    .frame(width: 430, alignment: .leading)
+                    .frame(width: 566, alignment: .leading)
                     .focusSection()
 
                 // RIGHT COLUMN: Live Detail Controls Card
@@ -92,10 +93,11 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .focusSection()
             }
-            .padding(.horizontal, 75)
-            .padding(.top, 96)
-            .padding(.bottom, 50)
+            .padding(.horizontal, 96)
+            .padding(.top, 120)
+            .padding(.bottom, 90)
         }
+        .ignoresSafeArea()
         .defaultFocus($focusedCategory, .playback)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -111,6 +113,7 @@ struct SettingsView: View {
         .onChange(of: focusedCategory) { _, newCat in
             if let newCat {
                 selectedCategory = newCat
+                editingCategory = false
             }
         }
         .alert("Settings Saved", isPresented: $showSavedAlert) {
@@ -133,7 +136,7 @@ struct SettingsView: View {
     private var leftSidebarColumn: some View {
         VStack(alignment: .leading, spacing: 26) {
             Text("Settings")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 54, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.leading, 12)
 
@@ -144,21 +147,21 @@ struct SettingsView: View {
 
                         Button {
                             selectedCategory = category
-                            isRightPrimaryFocused = true
+                            editingCategory = true
                         } label: {
                             HStack(spacing: 16) {
                                 Image(systemName: category.iconName)
-                                    .font(.system(size: 19, weight: .medium))
+                                    .font(.system(size: 26, weight: .medium))
                                     .frame(width: 26)
 
                                 Text(category.rawValue)
-                                    .font(.system(size: 19, weight: isHighlighted ? .semibold : .medium))
+                                    .font(.system(size: 27, weight: isHighlighted ? .semibold : .medium))
 
                                 Spacer()
                             }
                             .foregroundStyle(isHighlighted ? Color.black : Color.white.opacity(0.92))
                             .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 17)
                             .background(
                                 isHighlighted
                                 ? Color.white
@@ -194,7 +197,12 @@ struct SettingsView: View {
             ambientBannerHeader
 
             // Always-focusable interactive category controls panel
-            categoryControlsPanel
+            if editingCategory {
+                categoryControlsPanel
+                    .onAppear { isRightPrimaryFocused = true }
+            } else {
+                categorySummary
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
@@ -202,7 +210,8 @@ struct SettingsView: View {
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
         .onExitCommand {
-            if focusedCategory == nil {
+            if editingCategory || focusedCategory == nil {
+                editingCategory = false
                 focusedCategory = selectedCategory
             }
         }
@@ -248,6 +257,65 @@ struct SettingsView: View {
             .frame(width: geo.size.width, height: 240)
         }
         .frame(height: 240)
+    }
+
+    private var summaryItems: [(String, String)] {
+        switch selectedCategory {
+        case .playback:
+            return [("Resume", viewModel.resumePlaybackBehavior), ("Next episode", viewModel.nextEpisodeBehavior),
+                    ("Player engine", viewModel.playerEngineName), ("Audio output", viewModel.audioOutputMode)]
+        case .subtitles:
+            return [("Mode", viewModel.subtitleAutoMode), ("Languages", [viewModel.subtitleLanguage, viewModel.secondarySubtitleLanguage].map { viewModel.displayLanguageName(for: $0) }.joined(separator: ", ")),
+                    ("Font", viewModel.subtitleFontName), ("Size", "\(Int(viewModel.subtitleFontSize)) pt")]
+        case .skipIntroCredits:
+            return [("Intro", viewModel.skipIntroMode), ("Recap", viewModel.skipRecapMode),
+                    ("Credits", viewModel.skipCreditsMode), ("Delay", "\(viewModel.skipDelaySeconds) s")]
+        case .appearance:
+            return [("Home", viewModel.homeHeroStyle), ("Movies", viewModel.moviesLayoutStyle), ("Background", viewModel.backgroundStyle)]
+        case .library:
+            return [("Quality", viewModel.preferredQuality), ("Watched indicators", viewModel.showWatchedIndicators ? "On" : "Off")]
+        case .serversAccounts:
+            return [("Configured add-ons", "\(viewModel.configuredManifestURLs.count)")]
+        case .trakt:
+            return [("Account", viewModel.traktUsername.isEmpty ? "Unconfigured" : viewModel.traktUsername), ("Scrobbling", viewModel.traktScrobbleEnabled ? "On" : "Off")]
+        case .artworkMetadata:
+            return [("Logo language", viewModel.preferredArtworkLanguage), ("Title logos", viewModel.includeLogosInHome ? "On" : "Off")]
+        case .quickSetup:
+            return [("Setup", "Pair by QR code")]
+        case .about:
+            return [("App", "AuraTV"), ("Version", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")]
+        }
+    }
+
+    private var categorySummary: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Image(systemName: selectedCategory.iconName)
+                .font(.system(size: 42, weight: .medium))
+                .padding(.bottom, 28)
+            Text(selectedCategory.rawValue)
+                .font(.system(size: 50, weight: .semibold))
+            Text(selectedCategory.summarySubtitle)
+                .font(.system(size: 23))
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                ForEach(summaryItems.indices, id: \.self) { index in
+                    let item = summaryItems[index]
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(item.0).font(.system(size: 20)).foregroundStyle(.secondary)
+                        Text(item.1).font(.system(size: 28, weight: .semibold))
+                    }
+                    .padding(25)
+                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
+                    .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 22))
+                }
+            }
+            .padding(.top, 20)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 48)
+        .padding(.top, 165)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(.white)
     }
 
     // MARK: - Interactive Controls Panel

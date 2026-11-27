@@ -133,7 +133,7 @@ struct MovieDetailView: View {
                 onDismiss: { showStreamPicker = false }
             )
         }
-        .sheet(isPresented: $showChangeArtwork) {
+        .fullScreenCover(isPresented: $showChangeArtwork) {
             ChangeArtworkView(
                 tmdbId: tmdbId,
                 mediaType: "movie",
@@ -184,7 +184,7 @@ struct MovieDetailView: View {
                             .scaleEffect(1.5)
                             .tint(.white)
                         Text("Finding streams...")
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 25, weight: .medium))
                             .foregroundStyle(.white)
                     }
                 }
@@ -264,7 +264,7 @@ struct MovieDetailView: View {
                 mediaType: "movie",
                 tmdbId: detail.id,
                 preloadedLogoPath: effectiveLogoPath,
-                maxWidth: 560,
+                maxWidth: 640,
                 maxHeight: 145,
                 fallbackFontSize: 58,
                 alignment: .leading
@@ -304,7 +304,7 @@ struct MovieDetailView: View {
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 19, weight: .medium))
+            .font(.system(size: 24, weight: .medium))
             .foregroundStyle(.white.opacity(0.76))
         }
     }
@@ -325,9 +325,9 @@ struct MovieDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.white.opacity(0.65))
-                        .font(.system(size: 13))
+                        .font(.system(size: 16))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .padding(.leading, 4)
@@ -341,7 +341,7 @@ struct MovieDetailView: View {
     private var overviewSection: some View {
         if let overview = viewModel.movieDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(.white.opacity(0.78))
                 .lineLimit(3)
                 .lineSpacing(4)
@@ -358,7 +358,7 @@ struct MovieDetailView: View {
             Button(action: { playMovie() }) {
                 HStack(spacing: 12) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 17))
+                        .font(.system(size: 21))
 
                     if let progress = viewModel.watchProgress,
                        progress.progress > 0 && !progress.isCompleted,
@@ -373,10 +373,10 @@ struct MovieDetailView: View {
                         }
 
                         Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                     }
                 }
                 .padding(.horizontal, 32)
@@ -401,9 +401,9 @@ struct MovieDetailView: View {
                 Button(action: { rewatchMovie() }) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
                         Text("Rewatch")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 22, weight: .semibold))
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
@@ -468,8 +468,8 @@ struct MovieDetailView: View {
         let isFocused = focusedButton == target
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .bold))
-                .frame(width: 52, height: 52)
+                .font(.system(size: 22, weight: .bold))
+                .frame(width: 64, height: 64)
                 .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
                 .foregroundStyle(isFocused ? Color.black : Color.white)
                 .clipShape(Circle())
@@ -492,7 +492,7 @@ struct MovieDetailView: View {
         if !viewModel.cast.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Cast")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 

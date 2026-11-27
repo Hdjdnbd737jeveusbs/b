@@ -11,9 +11,9 @@ struct ContinueWatchingRow: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Continue Watching")
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 31, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 80)
+                    .padding(.horizontal, 156)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 24) {
@@ -26,7 +26,7 @@ struct ContinueWatchingRow: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 80)
+                    .padding(.horizontal, 156)
                     .padding(.vertical, 18)
                 }
             }
@@ -58,10 +58,10 @@ private struct ContinueWatchingCard: View {
 
                         Rectangle()
                             .fill(Color.white)
-                            .frame(width: 340 * max(min(item.progress, 1.0), 0.04), height: 4)
+                            .frame(width: 414 * max(min(item.progress, 1.0), 0.04), height: 4)
                     }
                 }
-                .frame(width: 340, height: 191)
+                .frame(width: 414, height: 233)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
@@ -71,16 +71,16 @@ private struct ContinueWatchingCard: View {
                 // Title & remaining time underneath
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 21, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
                     Text(subtitleText)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
                 }
-                .frame(width: 340, alignment: .leading)
+                .frame(width: 414, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.06 : 1.0)
             .shadow(
@@ -144,7 +144,7 @@ private struct ContinueWatchingCard: View {
                 image
                     .resizable()
                     .aspectRatio(16 / 9, contentMode: .fill)
-                    .frame(width: 340, height: 191)
+                    .frame(width: 414, height: 233)
                     .clipped()
             } placeholder: {
                 placeholder
@@ -157,10 +157,10 @@ private struct ContinueWatchingCard: View {
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 340, height: 191)
+            .frame(width: 414, height: 233)
             .overlay {
                 Image(systemName: "play.rectangle")
-                    .font(.system(size: 38))
+                    .font(.system(size: 48))
                     .foregroundStyle(.white.opacity(0.25))
             }
     }

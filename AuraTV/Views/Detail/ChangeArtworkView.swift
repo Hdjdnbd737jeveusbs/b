@@ -78,6 +78,7 @@ struct ChangeArtworkView: View {
     }
 
     private var currentAssets: [TMDBImageAsset] {
+        guard selectedSource == .tmdb else { return [] }
         switch selectedTab {
         case .posters: return posters
         case .seasonPosters: return seasonPosters
@@ -113,32 +114,53 @@ struct ChangeArtworkView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             Color.auraBackground.ignoresSafeArea()
+            if mediaType == "movie" {
+                HStack(alignment: .top, spacing: 50) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("CHANGE ARTWORK").font(.system(size: 19, weight: .medium)).tracking(2)
+                        Text(title).font(.system(size: 36, weight: .semibold))
+                        floatingMiniPreviewCard
+                        actionButtons
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 18) {
-                // Top Header Bar: Palette + "Change Artwork" + Media Title
-                headerBar
-
-                // Filter / Source / Action Toolbar Row
-                toolbarRow
-
-                // Sub-row: Multiple Artwork toggle & description
-                multipleArtworkRow
-
-                // Full-width Multi-Column Asset Grid
-                assetsGrid
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(alignment: .leading, spacing: 26) {
+                        artworkTabs
+                        artworkSources
+                        assetsGrid
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 80)
+                .padding(.vertical, 60)
+            } else {
+                ZStack(alignment: previewOnLeadingEdge ? .bottomLeading : .bottomTrailing) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        headerBar
+                        toolbarRow
+                        multipleArtworkRow
+                        assetsGrid
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .padding(.horizontal, 80)
+                    .padding(.top, 44)
+                    floatingMiniPreviewCard
+                        .padding(.horizontal, 54)
+                        .padding(.bottom, 34)
+                        .allowsHitTesting(false)
+                }
             }
-            .padding(.horizontal, 60)
-            .padding(.top, 38)
-
-            // Floating Bottom-Right Live Mini-Preview Card
-            floatingMiniPreviewCard
-                .padding(.trailing, 54)
-                .padding(.bottom, 34)
         }
+        .ignoresSafeArea()
         .task {
+            if let record = currentRecord {
+                isMultipleArtworkEnabled = record.multipleArtworkEnabled
+                selectedMultiPosters = Set(record.rotationPosters)
+                selectedMultiBackdrops = Set(record.rotationBackdrops)
+            }
             await loadArtwork()
         }
         .onExitCommand {
@@ -185,39 +207,52 @@ struct ChangeArtworkView: View {
     // MARK: - Toolbar Row
 
     private var toolbarRow: some View {
-        HStack(spacing: 12) {
-            // Left Filter Group: Posters | Season Posters | Backdrops | Logos
-            HStack(spacing: 6) {
-                ForEach(ArtworkTab.allCases) { tab in
-                    toolbarTabButton(tab: tab)
-                }
-            }
-
-            // Middle Source Group: TMDB | MediUX
-            HStack(spacing: 4) {
-                sourcePill(source: .tmdb, icon: "square.3.layers.3d")
-                sourcePill(source: .mediux, icon: "pencil.and.outline")
-            }
-            .padding(4)
-            .background(Color.white.opacity(0.08), in: Capsule())
-
+        HStack(spacing: 14) {
+            artworkTabs
+            artworkSources
             Spacer()
+            actionButtons
+        }
+    }
 
-            // Right Action Group: From Link | Aa Add Logo | Restore Default
-            HStack(spacing: 10) {
-                actionToolbarButton(title: "From Link", icon: "link", control: .fromLink) {
-                    showFromLinkAlert = true
-                }
-
-                actionToolbarButton(title: "Aa Add Logo", icon: nil, control: .addLogo) {
-                    selectedTab = .logos
-                }
-
-                actionToolbarButton(title: "Restore Default", icon: "arrow.counterclockwise", control: .restoreDefault) {
-                    restoreDefaultArtwork()
-                }
+    private var artworkTabs: some View {
+        HStack(spacing: 6) {
+            ForEach(ArtworkTab.allCases.filter { mediaType != "movie" || $0 != .seasonPosters }) { tab in
+                toolbarTabButton(tab: tab)
             }
         }
+        .padding(5)
+        .background(Color.white.opacity(0.065), in: Capsule())
+    }
+
+    private var artworkSources: some View {
+        HStack(spacing: 4) {
+            sourcePill(source: .tmdb, icon: "square.3.layers.3d")
+            sourcePill(source: .mediux, icon: "pencil.and.outline")
+        }
+        .padding(4)
+        .background(Color.white.opacity(0.08), in: Capsule())
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 10) {
+            actionToolbarButton(title: "From Link", icon: "link", control: .fromLink) {
+                showFromLinkAlert = true
+            }
+            if mediaType != "movie" {
+                actionToolbarButton(title: "Aa Add Logo", icon: nil, control: .addLogo) { selectedTab = .logos }
+            }
+            actionToolbarButton(title: "Restore Default", icon: "arrow.counterclockwise", control: .restoreDefault) {
+                restoreDefaultArtwork()
+            }
+        }
+    }
+
+    private var previewOnLeadingEdge: Bool {
+        guard let focusedAssetPath,
+              let index = currentAssets.firstIndex(where: { $0.filePath == focusedAssetPath }) else { return false }
+        let columns = selectedTab == .posters || selectedTab == .seasonPosters ? 7 : 4
+        return index % columns >= (columns + 1) / 2
     }
 
     @ViewBuilder
@@ -315,6 +350,7 @@ struct ChangeArtworkView: View {
         return HStack(spacing: 14) {
             Button {
                 isMultipleArtworkEnabled.toggle()
+                saveRotation()
             } label: {
                 HStack(spacing: 7) {
                     Image(systemName: "square.stack")
@@ -388,8 +424,8 @@ struct ChangeArtworkView: View {
         } else {
             let isPortrait = selectedTab == .posters || selectedTab == .seasonPosters
             let columns = isPortrait
-                ? Array(repeating: GridItem(.flexible(), spacing: 14), count: 7)
-                : Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
+                ? Array(repeating: GridItem(.flexible(), spacing: 14), count: mediaType == "movie" ? 3 : 7)
+                : Array(repeating: GridItem(.flexible(), spacing: 16), count: mediaType == "movie" ? 2 : 4)
 
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(columns: columns, spacing: 16) {
@@ -399,7 +435,7 @@ struct ChangeArtworkView: View {
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
-                .padding(.bottom, 220)
+                .padding(.bottom, mediaType == "movie" ? 30 : 370)
             }
         }
     }
@@ -492,6 +528,8 @@ struct ChangeArtworkView: View {
 
     // MARK: - Floating Bottom-Right Live Mini-Preview Card
 
+    private var previewWidth: CGFloat { mediaType == "movie" ? 792 : 550 }
+
     private var floatingMiniPreviewCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Miniature Detail Screen Preview
@@ -502,13 +540,13 @@ struct ChangeArtworkView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 376, height: 190)
+                            .frame(width: previewWidth, height: previewWidth * 9 / 16)
                             .clipped()
                     } placeholder: {
-                        Color.auraSurface.frame(width: 376, height: 190)
+                        Color.auraSurface.frame(width: previewWidth, height: previewWidth * 9 / 16)
                     }
                 } else {
-                    Color.auraSurface.frame(width: 376, height: 190)
+                    Color.auraSurface.frame(width: previewWidth, height: previewWidth * 9 / 16)
                 }
 
                 LinearGradient(
@@ -534,7 +572,7 @@ struct ChangeArtworkView: View {
                             mediaType: mediaType,
                             tmdbId: tmdbId,
                             preloadedLogoPath: previewLogoPath,
-                            maxWidth: 165,
+                            maxWidth: mediaType == "movie" ? 320 : 200,
                             maxHeight: 42,
                             fallbackFontSize: 16,
                             alignment: .leading
@@ -609,7 +647,7 @@ struct ChangeArtworkView: View {
                 }
                 .padding(14)
             }
-            .frame(width: 376, height: 190)
+            .frame(width: previewWidth, height: previewWidth * 9 / 16)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -696,6 +734,7 @@ struct ChangeArtworkView: View {
         case .logos:
             applyArtwork(path)
         }
+        saveRotation()
     }
 
     @MainActor
@@ -729,15 +768,26 @@ struct ChangeArtworkView: View {
     }
 
     @MainActor
-    private func applyArtwork(_ path: String) {
-        let record: CustomArtwork
-        if let existing = currentRecord {
-            record = existing
-        } else {
-            record = CustomArtwork(key: recordKey, tmdbId: tmdbId, mediaType: mediaType)
-            modelContext.insert(record)
-        }
+    private func editableRecord() -> CustomArtwork {
+        if let existing = currentRecord { return existing }
+        let record = CustomArtwork(key: recordKey, tmdbId: tmdbId, mediaType: mediaType)
+        modelContext.insert(record)
+        return record
+    }
 
+    @MainActor
+    private func saveRotation() {
+        let record = editableRecord()
+        record.multipleArtworkEnabled = isMultipleArtworkEnabled
+        record.rotationPosters = selectedMultiPosters.sorted()
+        record.rotationBackdrops = selectedMultiBackdrops.sorted()
+        record.updatedAt = Date()
+        try? modelContext.save()
+    }
+
+    @MainActor
+    private func applyArtwork(_ path: String) {
+        let record = editableRecord()
         switch selectedTab {
         case .posters, .seasonPosters:
             record.customPosterPath = path
@@ -753,6 +803,9 @@ struct ChangeArtworkView: View {
     @MainActor
     private func restoreDefaultArtwork() {
         if let existing = currentRecord {
+            isMultipleArtworkEnabled = false
+            selectedMultiPosters.removeAll()
+            selectedMultiBackdrops.removeAll()
             modelContext.delete(existing)
             try? modelContext.save()
         }
