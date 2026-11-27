@@ -12,7 +12,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case serversAccounts = "Servers & Accounts"
     case trakt = "Trakt"
     case artworkMetadata = "Artwork & Metadata"
-    case quickSetup = "Quick Setup / QR"
     case about = "About"
 
     var id: String { rawValue }
@@ -27,7 +26,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .serversAccounts: return "list.bullet.rectangle"
         case .trakt: return "checkmark.circle"
         case .artworkMetadata: return "photo.on.rectangle"
-        case .quickSetup: return "qrcode"
         case .about: return "info.circle"
         }
     }
@@ -50,8 +48,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
             return "Scrobbling and watched history sync settings."
         case .artworkMetadata:
             return "Transparent title logos, artwork language preferences, and subtitle auto-sync."
-        case .quickSetup:
-            return "Scan a QR code from your phone to enter manifest URLs and API keys effortlessly."
         case .about:
             return "AuraTV build details, video engine, and design specifications."
         }
@@ -227,30 +223,38 @@ struct SettingsView: View {
         }
     }
 
+    private var settingsArtworkURL: URL? {
+        if let recent = artworkOverrides.filter({ $0.customBackdropPath != nil }).max(by: { $0.updatedAt < $1.updatedAt }),
+           let url = TMDBService.shared.imageURL(path: recent.customBackdropPath, size: "w1280") {
+            return url
+        }
+        return AppThemeCoordinator.shared.focusedBackdropURL
+            ?? TMDBService.shared.imageURL(path: viewModel.ambientBannerBackdropPath, size: "w1280")
+    }
+
     @ViewBuilder
     private var ambientBannerHeader: some View {
         GeometryReader { geo in
             ZStack {
-                if let path = viewModel.ambientBannerBackdropPath,
-                   let url = TMDBService.shared.imageURL(path: path, size: "w780") {
+                if let url = settingsArtworkURL {
                     AuraCachedImage(url: url) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: 240)
+                            .frame(width: geo.size.width, height: 365)
                             .clipped()
-                            .blur(radius: 16)
-                            .opacity(0.45)
+                            .blur(radius: 4)
+                            .opacity(0.58)
                     } placeholder: {
-                        Color.clear.frame(width: geo.size.width, height: 240)
+                        Color.clear.frame(width: geo.size.width, height: 365)
                     }
                 } else {
                     LinearGradient(
-                        colors: [Color.auraAccent.opacity(0.28), Color.clear],
+                        colors: [Color.white.opacity(0.04), Color.clear],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(width: geo.size.width, height: 240)
+                    .frame(width: geo.size.width, height: 365)
                 }
 
                 // Bottom fade into the frosted glass body
@@ -264,9 +268,9 @@ struct SettingsView: View {
                     endPoint: .bottom
                 )
             }
-            .frame(width: geo.size.width, height: 240)
+            .frame(width: geo.size.width, height: 365)
         }
-        .frame(height: 240)
+        .frame(height: 365)
     }
 
     private var summaryItems: [(String, String)] {
@@ -290,8 +294,6 @@ struct SettingsView: View {
             return [("Account", viewModel.traktUsername.isEmpty ? "Unconfigured" : viewModel.traktUsername), ("Scrobbling", viewModel.traktScrobbleEnabled ? "On" : "Off")]
         case .artworkMetadata:
             return [("Logo language", viewModel.preferredArtworkLanguage), ("Title logos", viewModel.includeLogosInHome ? "On" : "Off")]
-        case .quickSetup:
-            return [("Setup", "Pair by QR code")]
         case .about:
             return [("App", "AuraTV"), ("Version", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")]
         }
@@ -738,38 +740,6 @@ struct SettingsView: View {
             ) {
                 viewModel.clearCustomArtwork(context: modelContext)
             }
-
-        case .quickSetup:
-            actionSettingRow(title: "Setup via Phone (QR Code)", icon: "qrcode.viewfinder") {
-                showPhoneQRSetup = true
-            }
-            addonManifestManagerSection
-            actionSettingRow(
-                title: "MDBList Ratings",
-                value: viewModel.mdblistApiKey.isEmpty ? "Optional (Not Set)" : "Configured",
-                icon: "star.bubble"
-            ) {
-                selectedCategory = .serversAccounts
-                DispatchQueue.main.async {
-                    isRightPrimaryFocused = true
-                }
-            }
-            actionSettingRow(
-                title: "AI Translation Key",
-                value: viewModel.aiTranslationApiKey.isEmpty ? "Optional (Not Set)" : "Configured (\(viewModel.aiTranslationProvider))",
-                icon: "sparkles"
-            ) {
-                selectedCategory = .subtitles
-                DispatchQueue.main.async {
-                    isRightPrimaryFocused = true
-                }
-            }
-            Text("Phone QR Web Server starts only while the Setup via Phone screen is open and stops immediately on close.")
-                .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.55))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .padding(.top, 2)
 
         case .about:
             infoRow(title: "Application", value: "AuraTV 1.0.0")
