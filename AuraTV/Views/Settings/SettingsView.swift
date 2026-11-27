@@ -224,6 +224,7 @@ struct SettingsView: View {
                         .buttonStyle(AuraButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedCategory, equals: category)
+                        .auraLeftEdgeSidebarTrigger()
                         .scaleEffect(focusedCategory == category ? 1.02 : 1.0)
                         .animation(.easeOut(duration: 0.14), value: focusedCategory)
                     }
@@ -560,7 +561,7 @@ struct SettingsView: View {
             )
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     controlsContent(for: selectedCategory)
 
                     if let status = viewModel.statusMessage {
@@ -639,7 +640,7 @@ struct SettingsView: View {
             )
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     // Live Mini LED Preview Card
                     let previewStyle = SubtitleStyle(
                         fontSize: viewModel.subtitleFontSize,
@@ -801,7 +802,7 @@ struct SettingsView: View {
             )
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     cycleSettingRow(title: "Font Size", value: "\(Int(viewModel.subtitleFontSize)) pt") {
                         viewModel.subtitleFontSize = viewModel.nextValue(
                             after: viewModel.subtitleFontSize,
@@ -847,7 +848,7 @@ struct SettingsView: View {
             )
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     ForEach(Array(SettingsViewModel.fontNameOptions.enumerated()), id: \.element) { idx, fontName in
                         let isSelected = viewModel.subtitleFontName == fontName
                         let sampleStyle = SubtitleStyle(
@@ -895,7 +896,7 @@ struct SettingsView: View {
             )
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 12) {
+                LazyVStack(spacing: 12) {
                     ForEach(Array(SettingsViewModel.languageOptions.enumerated()), id: \.element.code) { idx, lang in
                         let isSelected = selection.wrappedValue == lang.code
                         let btn = SettingsLanguageRowButton(

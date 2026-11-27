@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Episode Card View (16:9 Aspect Ratio)
 
-struct EpisodeCardView: View {
+struct EpisodeCardView: View, Equatable {
     let episode: TMDBEpisode
     var isWatched: Bool = false
     var blurThumbnail: Bool = false
@@ -13,6 +13,15 @@ struct EpisodeCardView: View {
     var onPlay: (() -> Void)? = nil
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: EpisodeCardView, rhs: EpisodeCardView) -> Bool {
+        lhs.episode.id == rhs.episode.id &&
+        lhs.episode.stillPath == rhs.episode.stillPath &&
+        lhs.isWatched == rhs.isWatched &&
+        lhs.blurThumbnail == rhs.blurThumbnail &&
+        lhs.hideDescription == rhs.hideDescription &&
+        lhs.isSpoilerRevealed == rhs.isSpoilerRevealed
+    }
 
     init(
         episode: TMDBEpisode,
@@ -62,13 +71,12 @@ struct EpisodeCardView: View {
                             episodePlaceholder
                         }
                     }
-                    .blur(radius: shouldBlurThumbnail ? 18 : 0)
                     .frame(width: 360, height: 202)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay {
                         if shouldBlurThumbnail {
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.black.opacity(0.32))
+                                .fill(Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.95))
                                 .overlay {
                                     VStack(spacing: 6) {
                                         Image(systemName: "eye.slash.fill")
@@ -79,11 +87,10 @@ struct EpisodeCardView: View {
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
-                                    .background(Color.black.opacity(0.55), in: Capsule())
+                                    .background(Color.white.opacity(0.10), in: Capsule())
                                 }
                         }
                     }
-                    .animation(.easeInOut(duration: 0.18), value: shouldBlurThumbnail)
 
                     // Top-right watched badge & bottom-right runtime badge
                     if isWatched {
@@ -148,7 +155,7 @@ struct EpisodeCardView: View {
                 alignment: .top
             )
             .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

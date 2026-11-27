@@ -25,10 +25,15 @@ struct SpotlightCarouselView: View {
     var certifications: [Int: String] = [:]
     var customBackdrops: [Int: String] = [:]
     var showLogos: Bool = true
-    var trailerPreview: HomeFocusedTrailerPreview? = nil
+    var autoPlayTrailersOnFocus: Bool = false
 
     @State private var currentIndex: Int = 0
+    @State private var previewStore = HeroTrailerPreviewStore.shared
     @FocusState private var isHeroFocused: Bool
+
+    private var trailerPreview: HomeFocusedTrailerPreview? {
+        autoPlayTrailersOnFocus ? previewStore.heroTrailerPreview : nil
+    }
 
     private let timer = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
 
@@ -128,11 +133,12 @@ struct SpotlightCarouselView: View {
             .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
             .clipped()
             .scaleEffect(isHeroFocused ? 1.008 : 1.0)
-            .animation(.easeOut(duration: 0.2), value: isHeroFocused)
+            .animation(.easeOut(duration: 0.14), value: isHeroFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isHeroFocused)
+        .auraLeftEdgeSidebarTrigger()
     }
 
     // MARK: - Style B: Spotlight Rounded Carousel (With Peeking Next Card)
@@ -190,11 +196,12 @@ struct SpotlightCarouselView: View {
                                 .stroke(isHeroFocused ? Color.white : Color.white.opacity(0.12), lineWidth: isHeroFocused ? 3 : 1)
                         )
                         .scaleEffect(isHeroFocused ? 1.015 : 1.0)
-                        .animation(.easeOut(duration: 0.2), value: isHeroFocused)
+                        .animation(.easeOut(duration: 0.14), value: isHeroFocused)
                     }
                     .buttonStyle(AuraButtonStyle())
                     .focusEffectDisabled()
                     .focused($isHeroFocused)
+                    .auraLeftEdgeSidebarTrigger()
 
                     // Next Peeking Card on the right edge
                     if items.count > 1 {

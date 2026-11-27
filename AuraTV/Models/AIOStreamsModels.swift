@@ -57,7 +57,7 @@ struct StremioStreamResponse: Codable {
     let streams: [StremioStream]?
 }
 
-struct StremioStream: Codable, Identifiable, Hashable {
+struct StremioStream: Codable, Identifiable, Hashable, Sendable {
     let name: String?
     let title: String?
     let description: String?
@@ -65,6 +65,11 @@ struct StremioStream: Codable, Identifiable, Hashable {
     let infoHash: String?
     let fileIdx: Int?
     let behaviorHints: StreamBehaviorHints?
+    private let cachedParsedInfo: ParsedStreamInfo?
+
+    enum CodingKeys: String, CodingKey {
+        case name, title, description, url, infoHash, fileIdx, behaviorHints
+    }
 
     init(
         name: String? = nil,
@@ -82,6 +87,19 @@ struct StremioStream: Codable, Identifiable, Hashable {
         self.infoHash = infoHash
         self.fileIdx = fileIdx
         self.behaviorHints = behaviorHints
+        self.cachedParsedInfo = ParsedStreamInfo(name: name, title: title, description: description, behaviorHints: behaviorHints)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let n = try c.decodeIfPresent(String.self, forKey: .name)
+        let t = try c.decodeIfPresent(String.self, forKey: .title)
+        let d = try c.decodeIfPresent(String.self, forKey: .description)
+        let u = try c.decodeIfPresent(String.self, forKey: .url)
+        let ih = try c.decodeIfPresent(String.self, forKey: .infoHash)
+        let fi = try c.decodeIfPresent(Int.self, forKey: .fileIdx)
+        let bh = try c.decodeIfPresent(StreamBehaviorHints.self, forKey: .behaviorHints)
+        self.init(name: n, title: t, description: d, url: u, infoHash: ih, fileIdx: fi, behaviorHints: bh)
     }
 
     var id: String {
@@ -96,13 +114,13 @@ struct StremioStream: Codable, Identifiable, Hashable {
             .joined(separator: " • ")
     }
 
-    /// Parse stream name/title/description into structured metadata
+    /// Returns cached stream metadata (precomputed off MainActor during JSON decoding)
     var parsedInfo: ParsedStreamInfo {
-        ParsedStreamInfo(name: name, title: title, description: description, behaviorHints: behaviorHints)
+        cachedParsedInfo ?? ParsedStreamInfo(name: name, title: title, description: description, behaviorHints: behaviorHints)
     }
 }
 
-struct StreamBehaviorHints: Codable, Hashable {
+struct StreamBehaviorHints: Codable, Hashable, Sendable {
     let bingeGroup: String?
     let filename: String?
     let videoSize: Int?
@@ -121,7 +139,7 @@ struct StreamBehaviorHints: Codable, Hashable {
 
 // MARK: - Parsed Stream Info
 
-struct ParsedStreamInfo: Hashable {
+struct ParsedStreamInfo: Hashable, Sendable {
     let resolution: StreamResolution
     let hdrType: StreamHDR?
     let releaseType: String?
@@ -243,7 +261,7 @@ struct ParsedStreamInfo: Hashable {
 
 // MARK: - Enums
 
-enum StreamResolution: String, Hashable, CaseIterable {
+enum StreamResolution: String, Hashable, CaseIterable, Sendable {
     case uhd4k = "4K"
     case fhd1080p = "1080p"
     case hd720p = "720p"
@@ -253,7 +271,7 @@ enum StreamResolution: String, Hashable, CaseIterable {
     var displayName: String { rawValue }
 }
 
-enum StreamHDR: String, Hashable {
+enum StreamHDR: String, Hashable, Sendable {
     case hdr10 = "HDR10"
     case hdr10Plus = "HDR10+"
     case dolbyVision = "Dolby Vision"

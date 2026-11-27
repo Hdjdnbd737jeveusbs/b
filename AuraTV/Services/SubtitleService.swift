@@ -72,18 +72,20 @@ final class SubtitleService: @unchecked Sendable {
             results.append(contentsOf: openSubTracks)
         }
 
-        // Sort: Preferred language first (e.g. Arabic), then English, then others
-        let sorted = results.sorted { a, b in
-            let aPref = a.languageCode.lowercased() == preferredLanguage.lowercased()
-            let bPref = b.languageCode.lowercased() == preferredLanguage.lowercased()
-            if aPref != bPref { return aPref }
+        // Sort off MainActor: Preferred language first (e.g. Arabic), then English, then others
+        let sorted = await Task.detached(priority: .userInitiated) {
+            results.sorted { a, b in
+                let aPref = a.languageCode.lowercased() == preferredLanguage.lowercased()
+                let bPref = b.languageCode.lowercased() == preferredLanguage.lowercased()
+                if aPref != bPref { return aPref }
 
-            let aEng = a.languageCode.lowercased() == "en"
-            let bEng = b.languageCode.lowercased() == "en"
-            if aEng != bEng { return aEng }
+                let aEng = a.languageCode.lowercased() == "en"
+                let bEng = b.languageCode.lowercased() == "en"
+                if aEng != bEng { return aEng }
 
-            return a.name < b.name
-        }
+                return a.name < b.name
+            }
+        }.value
 
         availableTracks = sorted
         return sorted

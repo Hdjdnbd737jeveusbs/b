@@ -525,7 +525,7 @@ struct PlayerHUDView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    LazyVStack(alignment: .leading, spacing: 2) {
                         // Top: Search Subtitles row (white pill only when focused)
                         if isSearchFieldActive {
                             HStack(spacing: 10) {
@@ -746,7 +746,7 @@ struct PlayerHUDView: View {
                 Divider().background(Color.white.opacity(0.14))
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
+                    LazyVStack(spacing: 4) {
                         ForEach(viewModel.availableAudioTracks) { track in
                             trackRow(
                                 id: "audio_\(track.id)",

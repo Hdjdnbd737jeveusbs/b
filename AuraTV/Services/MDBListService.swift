@@ -22,7 +22,7 @@ private struct CachedMDBListRecord: Codable {
 // MARK: - MDBList Service (With In-Memory & Disk Cache)
 
 @Observable
-final class MDBListService {
+final class MDBListService: @unchecked Sendable {
     static let shared = MDBListService()
 
     var apiKey: String = ""
@@ -52,7 +52,7 @@ final class MDBListService {
         let typeSlug = (mediaType == "series" || mediaType == "tv") ? "show" : "movie"
         let cacheKey = "\(typeSlug)_\(tmdbId)"
 
-        if let cached = readCachedSummary(for: cacheKey) {
+        if let cached = await readCachedSummaryOffMain(for: cacheKey) {
             return cached.isEmpty ? nil : cached
         }
 
@@ -67,8 +67,14 @@ final class MDBListService {
                 return nil
             }
 
-            if let summary = Self.parseRatings(from: data) {
-                writeCachedSummary(summary, for: cacheKey)
+            let parsed: MDBListRatingsSummary? = await Task.detached(priority: .utility) {
+                Self.parseRatings(from: data)
+            }.value
+
+            if let summary = parsed {
+                Task.detached(priority: .background) { [weak self] in
+                    self?.writeCachedSummary(summary, for: cacheKey)
+                }
                 return summary.isEmpty ? nil : summary
             }
         } catch {
@@ -144,7 +150,7 @@ final class MDBListService {
 
     // MARK: - Local Caching
 
-    private func readCachedSummary(for key: String) -> MDBListRatingsSummary? {
+    private func readCachedSummaryOffMain(for key: String) async -> MDBListRatingsSummary? {
         let now = Date()
 
         lock.lock()
@@ -156,9 +162,16 @@ final class MDBListService {
         }
 
         let fileURL = cacheDirectory.appendingPathComponent("\(key).json")
-        if let data = try? Data(contentsOf: fileURL),
-           let disk = try? JSONDecoder().decode(CachedMDBListRecord.self, from: data),
-           now.timeIntervalSince(disk.timestamp) < cacheTTL {
+        let disk = await Task.detached(priority: .utility) { () -> CachedMDBListRecord? in
+            guard let data = try? Data(contentsOf: fileURL),
+                  let record = try? JSONDecoder().decode(CachedMDBListRecord.self, from: data),
+                  now.timeIntervalSince(record.timestamp) < 24 * 60 * 60 else {
+                return nil
+            }
+            return record
+        }.value
+
+        if let disk {
             lock.lock()
             memoryCache[key] = disk
             lock.unlock()

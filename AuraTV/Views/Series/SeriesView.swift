@@ -7,9 +7,7 @@ struct SeriesView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = SeriesViewModel()
-    @State private var focusedSeries: TMDBSeries?
     @FocusState private var focusedCategory: SeriesCategory?
-    @FocusState private var focusedSeriesId: Int?
 
     private var backgroundStyle: String {
         settingsList.first?.backgroundStyle ?? "Soft Glow"
@@ -29,46 +27,42 @@ struct SeriesView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Ambient Backdrop
-            ambientBackdropView
+        GeometryReader { geometry in
+            let availableWidth = max(geometry.size.width - 136, 360)
+            let columnCount = max(1, Int((availableWidth + 28) / (360 + 28)))
+            let currentSeries = viewModel.series(for: viewModel.selectedCategory)
 
-            // Content pushed clearly below the floating tvOS sidebar pill (< Series)
-            VStack(alignment: .leading, spacing: 28) {
-                categoryBar
-                    .padding(.horizontal, 68)
-                    .padding(.top, 92)
+            ZStack {
+                // Ambient Backdrop (isolated observer — grid never re-renders on focus moves)
+                ambientBackdropView
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVGrid(columns: columns, spacing: 32) {
-                        ForEach(viewModel.series(for: viewModel.selectedCategory)) { series in
-                            SeriesCardView(
-                                series: series,
-                                overrideBackdropPath: customBackdrops[series.id]
-                            )
-                            .focused($focusedSeriesId, equals: series.id)
+                // Content pushed clearly below the floating tvOS sidebar pill (< Series)
+                VStack(alignment: .leading, spacing: 28) {
+                    categoryBar
+                        .padding(.horizontal, 68)
+                        .padding(.top, 92)
+
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVGrid(columns: columns, spacing: 32) {
+                            ForEach(Array(currentSeries.enumerated()), id: \.element.id) { index, series in
+                                SeriesCardView(
+                                    series: series,
+                                    overrideBackdropPath: customBackdrops[series.id],
+                                    isFirstInRow: index % columnCount == 0
+                                )
+                                .equatable()
+                            }
                         }
+                        .padding(.horizontal, 68)
+                        .padding(.top, 8)
+                        .padding(.bottom, 60)
                     }
-                    .padding(.horizontal, 68)
-                    .padding(.top, 8)
-                    .padding(.bottom, 60)
                 }
-            }
-        }
-        .onChange(of: focusedSeriesId) { _, newId in
-            guard let newId else { return }
-            let target = viewModel.series(for: viewModel.selectedCategory).first { $0.id == newId }
-            focusedSeries = target
-            if let target {
-                AppThemeCoordinator.shared.updateFocusedArtwork(
-                    posterPath: target.posterPath,
-                    backdropPath: customBackdrops[target.id] ?? target.backdropPath
-                )
             }
         }
         .task {
             await viewModel.loadSeries()
-            if let first = focusedSeries ?? viewModel.series(for: viewModel.selectedCategory).first ?? viewModel.popularSeries.first {
+            if let first = viewModel.series(for: viewModel.selectedCategory).first ?? viewModel.popularSeries.first {
                 AppThemeCoordinator.shared.updateFocusedArtwork(
                     posterPath: first.posterPath,
                     backdropPath: customBackdrops[first.id] ?? first.backdropPath
@@ -81,11 +75,11 @@ struct SeriesView: View {
 
     @ViewBuilder
     private var ambientBackdropView: some View {
-        let targetSeries = focusedSeries ?? viewModel.series(for: viewModel.selectedCategory).first ?? viewModel.popularSeries.first
+        let targetSeries = viewModel.series(for: viewModel.selectedCategory).first ?? viewModel.popularSeries.first
         let fallbackPath = targetSeries.flatMap { customBackdrops[$0.id] ?? $0.backdropPath ?? $0.posterPath }
         AuraDynamicBackgroundView(
             styleSetting: backgroundStyle,
-            fallbackBackdropURL: TMDBService.shared.imageURL(path: fallbackPath, size: "w1280")
+            fallbackBackdropURL: TMDBService.shared.imageURL(path: fallbackPath, size: "w780")
         )
     }
 
@@ -123,8 +117,9 @@ struct SeriesView: View {
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
                 .focused($focusedCategory, equals: category)
+                .auraLeftEdgeSidebarTrigger(category == .popular)
                 .scaleEffect(isFocused ? 1.05 : 1.0)
-                .animation(.easeOut(duration: 0.16), value: focusedCategory)
+                .animation(.easeOut(duration: 0.14), value: focusedCategory)
             }
         }
     }

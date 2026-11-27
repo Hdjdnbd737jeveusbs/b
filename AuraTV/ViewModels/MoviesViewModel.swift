@@ -172,7 +172,7 @@ final class MoviesViewModel {
     @MainActor
     func prefetchMovies(_ items: [TMDBMovie]) {
         let posterURLs = items.compactMap { service.imageURL(path: $0.posterPath, size: "w500") }
-        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 215, height: 322))
+        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 268, height: 402))
     }
 
     // MARK: - Helpers

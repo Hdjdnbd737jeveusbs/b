@@ -2,11 +2,18 @@ import SwiftUI
 
 // MARK: - Series Card View (16:9 Backdrop Card for Series Tab)
 
-struct SeriesCardView: View {
+struct SeriesCardView: View, Equatable {
     let series: TMDBSeries
     var overrideBackdropPath: String? = nil
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: SeriesCardView, rhs: SeriesCardView) -> Bool {
+        lhs.series.id == rhs.series.id &&
+        lhs.overrideBackdropPath == rhs.overrideBackdropPath &&
+        lhs.isFirstInRow == rhs.isFirstInRow
+    }
 
     var body: some View {
         NavigationLink(destination: SeriesDetailView(tmdbId: series.id)) {
@@ -71,11 +78,20 @@ struct SeriesCardView: View {
                     .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
             )
             .scaleEffect(isFocused ? 1.06 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                AppThemeCoordinator.shared.updateFocusedArtwork(
+                    posterPath: series.posterPath,
+                    backdropPath: overrideBackdropPath ?? series.backdropPath
+                )
+            }
+        }
         .modifier(MediaPosterContextMenuModifier(
             tmdbId: series.id,
             mediaType: "series",

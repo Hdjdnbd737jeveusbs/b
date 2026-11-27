@@ -16,6 +16,7 @@ final class AuraImageCache {
     private nonisolated static let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private init() {
+        ImageCache.shared.countLimit = 450
         ImageCache.shared.costLimit = 256 * 1024 * 1024
         var config = ImagePipeline.Configuration()
         config.imageCache = ImageCache.shared

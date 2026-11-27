@@ -2,10 +2,14 @@ import SwiftUI
 
 // MARK: - Cast Card View (Circular Actor Portrait)
 
-struct CastCardView: View {
+struct CastCardView: View, Equatable {
     let member: TMDBCastMember
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: CastCardView, rhs: CastCardView) -> Bool {
+        lhs.member.id == rhs.member.id && lhs.member.profilePath == rhs.member.profilePath
+    }
 
     var body: some View {
         Button(action: {}) {
@@ -50,7 +54,7 @@ struct CastCardView: View {
                     .offset(y: -24)
             )
             .scaleEffect(isFocused ? 1.07 : 1.0)
-            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

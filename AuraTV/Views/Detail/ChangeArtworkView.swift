@@ -459,7 +459,6 @@ struct ChangeArtworkView: View {
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
                             .background(Color.white, in: Capsule())
-                            .shadow(color: .black.opacity(0.45), radius: 6, y: 2)
                             .padding(8)
 
                             Spacer()
@@ -475,7 +474,6 @@ struct ChangeArtworkView: View {
                             Image(systemName: isMultiSelected ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 20))
                                 .foregroundStyle(.white)
-                                .shadow(color: .black.opacity(0.7), radius: 4)
                                 .padding(8)
                         }
                         Spacer()
@@ -502,7 +500,7 @@ struct ChangeArtworkView: View {
             ZStack(alignment: .bottomLeading) {
                 if let backdrop = previewBackdropPath,
                    let url = TMDBService.shared.imageURL(path: backdrop, size: "w780") {
-                    AuraCachedImage(url: url) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: 376, height: 190)) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -592,7 +590,7 @@ struct ChangeArtworkView: View {
                     VStack(spacing: 4) {
                         if let poster = previewPosterPath,
                            let posterURL = TMDBService.shared.imageURL(path: poster, size: "w342") {
-                            AuraCachedImage(url: posterURL) { image in
+                            AuraCachedImage(url: posterURL, targetSize: CGSize(width: 68, height: 102)) { image in
                                 image
                                     .resizable()
                                     .aspectRatio(2 / 3, contentMode: .fill)
@@ -642,7 +640,6 @@ struct ChangeArtworkView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.75), radius: 24, y: 8)
     }
 
     private var previewActionLabel: String {

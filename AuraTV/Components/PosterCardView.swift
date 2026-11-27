@@ -3,18 +3,24 @@ import SwiftData
 
 // MARK: - Poster Card View (Clean 2:3 Portrait Card + Long-Press Context Menu)
 
-struct PosterCardView: View {
+struct PosterCardView: View, Equatable {
     let movie: TMDBMovie
     var overridePosterPath: String? = nil
     var isWatched: Bool = false
     var showWatchedBadge: Bool = true
     var autoPlayTrailersOnFocus: Bool = false
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
-    @State private var themeCoordinator = AppThemeCoordinator.shared
+    @State private var isTrailerExpanded: Bool = false
 
-    private var isTrailerExpanded: Bool {
-        autoPlayTrailersOnFocus && themeCoordinator.expandedHomeCardKey == "movie_\(movie.id)"
+    static func == (lhs: PosterCardView, rhs: PosterCardView) -> Bool {
+        lhs.movie.id == rhs.movie.id &&
+        lhs.overridePosterPath == rhs.overridePosterPath &&
+        lhs.isWatched == rhs.isWatched &&
+        lhs.showWatchedBadge == rhs.showWatchedBadge &&
+        lhs.autoPlayTrailersOnFocus == rhs.autoPlayTrailersOnFocus &&
+        lhs.isFirstInRow == rhs.isFirstInRow
     }
 
     var body: some View {
@@ -73,27 +79,40 @@ struct PosterCardView: View {
                     .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
             )
             .scaleEffect(isTrailerExpanded ? 1.09 : (isFocused ? 1.055 : 1.0))
-            .animation(.easeOut(duration: 0.18), value: isFocused)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isTrailerExpanded)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .animation(.easeOut(duration: 0.25), value: isTrailerExpanded)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
+        .task(id: isFocused) {
+            guard isFocused else {
+                isTrailerExpanded = false
+                return
+            }
+            AppThemeCoordinator.shared.onHomeCardFocused(
+                mediaType: "movie",
+                tmdbId: movie.id,
+                title: movie.title,
+                overview: movie.overview,
+                posterPath: overridePosterPath ?? movie.posterPath,
+                backdropPath: movie.backdropPath,
+                releaseYear: movie.releaseDate.map { String($0.prefix(4)) },
+                voteAverage: movie.voteAverage,
+                autoPlayTrailers: autoPlayTrailersOnFocus
+            )
+            if autoPlayTrailersOnFocus {
+                try? await Task.sleep(for: .seconds(2.0))
+                if !Task.isCancelled && isFocused {
+                    isTrailerExpanded = true
+                }
+            }
+        }
         .onChange(of: isFocused) { _, focused in
-            if focused {
-                themeCoordinator.onHomeCardFocused(
-                    mediaType: "movie",
-                    tmdbId: movie.id,
-                    title: movie.title,
-                    overview: movie.overview,
-                    posterPath: overridePosterPath ?? movie.posterPath,
-                    backdropPath: movie.backdropPath,
-                    releaseYear: movie.releaseDate.map { String($0.prefix(4)) },
-                    voteAverage: movie.voteAverage,
-                    autoPlayTrailers: autoPlayTrailersOnFocus
-                )
-            } else if autoPlayTrailersOnFocus {
-                themeCoordinator.onHomeCardBlurred(mediaType: "movie", tmdbId: movie.id)
+            if !focused && autoPlayTrailersOnFocus {
+                isTrailerExpanded = false
+                AppThemeCoordinator.shared.onHomeCardBlurred(mediaType: "movie", tmdbId: movie.id)
             }
         }
         .modifier(MediaPosterContextMenuModifier(

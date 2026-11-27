@@ -23,39 +23,49 @@ struct CollectionsView: View {
     ]
 
     var body: some View {
-        ZStack {
-            AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
+        GeometryReader { geometry in
+            let availableWidth = max(geometry.size.width - 136, 255)
+            let columnCount = max(1, Int((availableWidth + 28) / (255 + 28)))
 
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Collections")
-                            .font(.system(size: 52, weight: .bold))
-                            .foregroundStyle(.white)
+            ZStack {
+                AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
 
-                        Text("Watchlist (\(watchlist.count) items)")
-                            .font(.system(size: 24))
-                            .foregroundStyle(Color.auraSecondaryText)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 68)
-                .padding(.top, 92)
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Collections")
+                                .font(.system(size: 52, weight: .bold))
+                                .foregroundStyle(.white)
 
-                // Content
-                if watchlist.isEmpty {
-                    emptyWatchlistView
-                } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVGrid(columns: columns, spacing: 32) {
-                            ForEach(watchlist) { item in
-                                let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
-                                WatchlistCard(item: item, overridePosterPath: posterOverrideMap[key])
-                            }
+                            Text("Watchlist (\(watchlist.count) items)")
+                                .font(.system(size: 24))
+                                .foregroundStyle(Color.auraSecondaryText)
                         }
-                        .padding(.horizontal, 75)
-                        .padding(.bottom, 60)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 68)
+                    .padding(.top, 92)
+
+                    // Content
+                    if watchlist.isEmpty {
+                        emptyWatchlistView
+                    } else {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVGrid(columns: columns, spacing: 32) {
+                                ForEach(Array(watchlist.enumerated()), id: \.element.persistentModelID) { index, item in
+                                    let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
+                                    WatchlistCard(
+                                        item: item,
+                                        overridePosterPath: posterOverrideMap[key],
+                                        isFirstInRow: index % columnCount == 0
+                                    )
+                                    .equatable()
+                                }
+                            }
+                            .padding(.horizontal, 68)
+                            .padding(.bottom, 60)
+                        }
                     }
                 }
             }
@@ -80,16 +90,27 @@ struct CollectionsView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusable()
+        .auraLeftEdgeSidebarTrigger()
     }
 }
 
 // MARK: - Watchlist Card
 
-private struct WatchlistCard: View {
+private struct WatchlistCard: View, Equatable {
     let item: WatchlistItem
     var overridePosterPath: String? = nil
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+
+    static func == (lhs: WatchlistCard, rhs: WatchlistCard) -> Bool {
+        lhs.item.tmdbId == rhs.item.tmdbId &&
+        lhs.item.mediaType == rhs.item.mediaType &&
+        lhs.item.title == rhs.item.title &&
+        lhs.overridePosterPath == rhs.overridePosterPath &&
+        lhs.isFirstInRow == rhs.isFirstInRow
+    }
 
     var body: some View {
         NavigationLink(destination: destinationView) {
@@ -133,11 +154,12 @@ private struct WatchlistCard: View {
                     .frame(width: 260, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.055 : 1.0)
-            .animation(.easeOut(duration: 0.16), value: isFocused)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
     }
 
     @ViewBuilder

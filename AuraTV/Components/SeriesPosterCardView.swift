@@ -2,18 +2,24 @@ import SwiftUI
 
 // MARK: - Series Poster Card View (Clean 2:3 Portrait Card for Home Row)
 
-struct SeriesPosterCardView: View {
+struct SeriesPosterCardView: View, Equatable {
     let series: TMDBSeries
     var overridePosterPath: String? = nil
     var isWatched: Bool = false
     var showWatchedBadge: Bool = true
     var autoPlayTrailersOnFocus: Bool = false
+    var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
-    @State private var themeCoordinator = AppThemeCoordinator.shared
+    @State private var isTrailerExpanded: Bool = false
 
-    private var isTrailerExpanded: Bool {
-        autoPlayTrailersOnFocus && themeCoordinator.expandedHomeCardKey == "series_\(series.id)"
+    static func == (lhs: SeriesPosterCardView, rhs: SeriesPosterCardView) -> Bool {
+        lhs.series.id == rhs.series.id &&
+        lhs.overridePosterPath == rhs.overridePosterPath &&
+        lhs.isWatched == rhs.isWatched &&
+        lhs.showWatchedBadge == rhs.showWatchedBadge &&
+        lhs.autoPlayTrailersOnFocus == rhs.autoPlayTrailersOnFocus &&
+        lhs.isFirstInRow == rhs.isFirstInRow
     }
 
     var body: some View {
@@ -72,27 +78,40 @@ struct SeriesPosterCardView: View {
                     .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
             )
             .scaleEffect(isTrailerExpanded ? 1.09 : (isFocused ? 1.055 : 1.0))
-            .animation(.easeOut(duration: 0.18), value: isFocused)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isTrailerExpanded)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .animation(.easeOut(duration: 0.25), value: isTrailerExpanded)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirstInRow)
+        .task(id: isFocused) {
+            guard isFocused else {
+                isTrailerExpanded = false
+                return
+            }
+            AppThemeCoordinator.shared.onHomeCardFocused(
+                mediaType: "series",
+                tmdbId: series.id,
+                title: series.name,
+                overview: series.overview,
+                posterPath: overridePosterPath ?? series.posterPath,
+                backdropPath: series.backdropPath,
+                releaseYear: series.firstAirDate.map { String($0.prefix(4)) },
+                voteAverage: series.voteAverage,
+                autoPlayTrailers: autoPlayTrailersOnFocus
+            )
+            if autoPlayTrailersOnFocus {
+                try? await Task.sleep(for: .seconds(2.0))
+                if !Task.isCancelled && isFocused {
+                    isTrailerExpanded = true
+                }
+            }
+        }
         .onChange(of: isFocused) { _, focused in
-            if focused {
-                themeCoordinator.onHomeCardFocused(
-                    mediaType: "series",
-                    tmdbId: series.id,
-                    title: series.name,
-                    overview: series.overview,
-                    posterPath: overridePosterPath ?? series.posterPath,
-                    backdropPath: series.backdropPath,
-                    releaseYear: series.firstAirDate.map { String($0.prefix(4)) },
-                    voteAverage: series.voteAverage,
-                    autoPlayTrailers: autoPlayTrailersOnFocus
-                )
-            } else if autoPlayTrailersOnFocus {
-                themeCoordinator.onHomeCardBlurred(mediaType: "series", tmdbId: series.id)
+            if !focused && autoPlayTrailersOnFocus {
+                isTrailerExpanded = false
+                AppThemeCoordinator.shared.onHomeCardBlurred(mediaType: "series", tmdbId: series.id)
             }
         }
         .modifier(MediaPosterContextMenuModifier(

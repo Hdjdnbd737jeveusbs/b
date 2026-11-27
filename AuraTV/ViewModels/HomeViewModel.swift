@@ -91,36 +91,41 @@ final class HomeViewModel {
         await task.value
     }
 
-    // MARK: - Spotlight Enrichment
+    // MARK: - Spotlight Enrichment (Off-MainActor + Single Batch Commit)
 
     @MainActor
     private func enrichSpotlightItems(_ items: [TMDBMovie]) async {
         let tmdbService = self.service
-        await withTaskGroup(of: (Int, String?, Int?, String?).self) { group in
-            for item in items {
-                group.addTask {
-                    async let logo = tmdbService.fetchBestLogoPath(mediaType: "movie", id: item.id)
-                    async let detail = try? tmdbService.fetchMovieDetails(id: item.id)
+        let batch = await Task.detached(priority: .utility) {
+            var logos: [Int: String] = [:]
+            var runtimes: [Int: Int] = [:]
+            var certs: [Int: String] = [:]
 
-                    let (resolvedLogo, resolvedDetail) = await (logo, detail)
-                    let runtime = resolvedDetail?.runtime
-                    let cert = Self.extractUSCertification(from: resolvedDetail)
-                    return (item.id, resolvedLogo, runtime, cert)
+            await withTaskGroup(of: (Int, String?, Int?, String?).self) { group in
+                for item in items {
+                    group.addTask {
+                        async let logo = tmdbService.fetchBestLogoPath(mediaType: "movie", id: item.id)
+                        async let detail = try? tmdbService.fetchMovieDetails(id: item.id)
+
+                        let (resolvedLogo, resolvedDetail) = await (logo, detail)
+                        let runtime = resolvedDetail?.runtime
+                        let cert = Self.extractUSCertification(from: resolvedDetail)
+                        return (item.id, resolvedLogo, runtime, cert)
+                    }
+                }
+
+                for await (id, logo, runtime, cert) in group {
+                    if let logo { logos[id] = logo }
+                    if let runtime, runtime > 0 { runtimes[id] = runtime }
+                    if let cert, !cert.isEmpty { certs[id] = cert }
                 }
             }
+            return (logos, runtimes, certs)
+        }.value
 
-            for await (id, logo, runtime, cert) in group {
-                if let logo {
-                    spotlightLogos[id] = logo
-                }
-                if let runtime, runtime > 0 {
-                    spotlightRuntimes[id] = runtime
-                }
-                if let cert, !cert.isEmpty {
-                    spotlightCertifications[id] = cert
-                }
-            }
-        }
+        if !batch.0.isEmpty { spotlightLogos.merge(batch.0) { _, new in new } }
+        if !batch.1.isEmpty { spotlightRuntimes.merge(batch.1) { _, new in new } }
+        if !batch.2.isEmpty { spotlightCertifications.merge(batch.2) { _, new in new } }
     }
 
     private nonisolated static func extractUSCertification(from detail: TMDBMovieDetail?) -> String? {
@@ -245,7 +250,9 @@ final class HomeViewModel {
             continueWatching: cwEntries,
             featured: featuredEntries
         )
-        TopShelfSharedStore.save(snapshot)
+        Task.detached(priority: .background) {
+            TopShelfSharedStore.save(snapshot)
+        }
     }
 
     @MainActor

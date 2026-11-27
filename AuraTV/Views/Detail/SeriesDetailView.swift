@@ -90,7 +90,7 @@ struct SeriesDetailView: View {
             ZStack(alignment: .topLeading) {
                 AuraDynamicBackgroundView(
                     styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow",
-                    fallbackBackdropURL: effectiveBackdropPath.flatMap { TMDBService.shared.imageURL(path: $0, size: "original") }
+                    fallbackBackdropURL: effectiveBackdropPath.flatMap { TMDBService.shared.imageURL(path: $0, size: "w780") }
                 )
 
                 // Full-bleed dark cinema backdrop + left & bottom vignettes
@@ -98,7 +98,7 @@ struct SeriesDetailView: View {
 
                 // Scrollable foreground content
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 34) {
+                    LazyVStack(alignment: .leading, spacing: 34) {
                         // Left hero metadata column
                         VStack(alignment: .leading, spacing: 18) {
                             Spacer().frame(height: geometry.size.height * 0.13)
@@ -661,6 +661,7 @@ struct SeriesDetailView: View {
                                 ) {
                                     playEpisode(episode: episode)
                                 }
+                                .equatable()
                             }
                         }
                         .padding(.horizontal, 80)
@@ -686,6 +687,7 @@ struct SeriesDetailView: View {
                     LazyHStack(spacing: 20) {
                         ForEach(viewModel.cast.prefix(20)) { member in
                             CastCardView(member: member)
+                                .equatable()
                         }
                     }
                     .padding(.horizontal, 80)

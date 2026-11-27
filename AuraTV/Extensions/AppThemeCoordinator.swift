@@ -40,15 +40,22 @@ struct HomeFocusedTrailerPreview: Equatable {
 
 @Observable
 @MainActor
+final class HeroTrailerPreviewStore {
+    static let shared = HeroTrailerPreviewStore()
+    var heroTrailerPreview: HomeFocusedTrailerPreview?
+    private init() {}
+}
+
+@Observable
+@MainActor
 final class AppThemeCoordinator {
     static let shared = AppThemeCoordinator()
 
     var focusedPosterURL: URL?
     var focusedBackdropURL: URL?
     var focusedGlowColor: Color = .clear
-    var expandedHomeCardKey: String?
-    var heroTrailerPreview: HomeFocusedTrailerPreview?
 
+    private var artworkDebounceTask: Task<Void, Never>?
     private var glowTask: Task<Void, Never>?
     private var homeFocusDebounceTask: Task<Void, Never>?
 
@@ -56,26 +63,33 @@ final class AppThemeCoordinator {
 
     func updateFocusedArtwork(posterPath: String?, backdropPath: String?) {
         let posterURL = TMDBService.shared.imageURL(path: posterPath, size: "w500")
-        let backdropURL = TMDBService.shared.imageURL(path: backdropPath ?? posterPath, size: "w1280")
+        let backdropURL = TMDBService.shared.imageURL(path: backdropPath ?? posterPath, size: "w780")
 
         if focusedPosterURL == posterURL && focusedBackdropURL == backdropURL {
             return
         }
 
-        focusedPosterURL = posterURL
-        focusedBackdropURL = backdropURL
-
-        glowTask?.cancel()
-        guard let colorSourceURL = posterURL ?? backdropURL else {
-            focusedGlowColor = .clear
-            return
-        }
-
-        glowTask = Task { @MainActor [weak self] in
-            let color = await AuraImageCache.shared.extractGlowColor(for: colorSourceURL)
+        artworkDebounceTask?.cancel()
+        artworkDebounceTask = Task { @MainActor [weak self] in
+            // Coalesce rapid D-pad scrolling so intermediate cards do not trigger glow/backdrop churn.
+            try? await Task.sleep(for: .milliseconds(120))
             guard let self, !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.45)) {
-                self.focusedGlowColor = color ?? Color.auraAccent
+
+            self.focusedPosterURL = posterURL
+            self.focusedBackdropURL = backdropURL
+
+            self.glowTask?.cancel()
+            guard let colorSourceURL = posterURL ?? backdropURL else {
+                self.focusedGlowColor = .clear
+                return
+            }
+
+            self.glowTask = Task { @MainActor [weak self] in
+                let color = await AuraImageCache.shared.extractGlowColor(for: colorSourceURL)
+                guard let self, !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    self.focusedGlowColor = color ?? Color.auraAccent
+                }
             }
         }
     }
@@ -93,25 +107,22 @@ final class AppThemeCoordinator {
     ) {
         updateFocusedArtwork(posterPath: posterPath, backdropPath: backdropPath)
 
-        let cardKey = "\(mediaType)_\(tmdbId)"
         homeFocusDebounceTask?.cancel()
-
-        guard autoPlayTrailers else {
-            expandedHomeCardKey = nil
-            heroTrailerPreview = nil
-            return
+        if HeroTrailerPreviewStore.shared.heroTrailerPreview != nil {
+            HeroTrailerPreviewStore.shared.heroTrailerPreview = nil
         }
 
-        homeFocusDebounceTask = Task { @MainActor [weak self] in
+        guard autoPlayTrailers else { return }
+
+        homeFocusDebounceTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.0))
-            guard let self, !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
 
             let trailer = await TrailerPreviewService.shared.fetchTrailer(mediaType: mediaType, tmdbId: tmdbId)
             guard !Task.isCancelled else { return }
 
             withAnimation(.easeInOut(duration: 0.35)) {
-                self.expandedHomeCardKey = cardKey
-                self.heroTrailerPreview = HomeFocusedTrailerPreview(
+                HeroTrailerPreviewStore.shared.heroTrailerPreview = HomeFocusedTrailerPreview(
                     mediaType: mediaType,
                     tmdbId: tmdbId,
                     title: title,
@@ -128,20 +139,19 @@ final class AppThemeCoordinator {
     }
 
     func onHomeCardBlurred(mediaType: String, tmdbId: Int) {
-        let cardKey = "\(mediaType)_\(tmdbId)"
         homeFocusDebounceTask?.cancel()
-        if expandedHomeCardKey == cardKey {
+        if let active = HeroTrailerPreviewStore.shared.heroTrailerPreview,
+           active.mediaType == mediaType && active.tmdbId == tmdbId {
             withAnimation(.easeOut(duration: 0.25)) {
-                expandedHomeCardKey = nil
-                heroTrailerPreview = nil
+                HeroTrailerPreviewStore.shared.heroTrailerPreview = nil
             }
         }
     }
 
     func clearHomePreview() {
+        artworkDebounceTask?.cancel()
         homeFocusDebounceTask?.cancel()
-        expandedHomeCardKey = nil
-        heroTrailerPreview = nil
+        HeroTrailerPreviewStore.shared.heroTrailerPreview = nil
     }
 }
 

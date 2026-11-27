@@ -119,7 +119,11 @@ final class AIOStreamsService {
         }
 
         do {
-            let manifest = try decoder.decode(StremioManifest.self, from: data)
+            let manifest = try await Task.detached(priority: .userInitiated) {
+                let bgDecoder = JSONDecoder()
+                bgDecoder.keyDecodingStrategy = .convertFromSnakeCase
+                return try bgDecoder.decode(StremioManifest.self, from: data)
+            }.value
             return (endpoint, manifest)
         } catch {
             throw AIOStreamsError.decodingError(error)

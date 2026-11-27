@@ -134,6 +134,7 @@ struct StreamPickerSheet: View {
                             isFocused: focusedControl == .stream("\(index)_\(stream.id)"),
                             onSelect: { onSelect(stream) }
                         )
+                        .equatable()
                         .focused($focusedControl, equals: .stream("\(index)_\(stream.id)"))
                     }
                 }
@@ -144,12 +145,19 @@ struct StreamPickerSheet: View {
 
 // MARK: - Stream Row View
 
-private struct StreamRowView: View {
+private struct StreamRowView: View, Equatable {
     let stream: StremioStream
     let parsed: ParsedStreamInfo
     let isActive: Bool
     let isFocused: Bool
     let onSelect: () -> Void
+
+    static func == (lhs: StreamRowView, rhs: StreamRowView) -> Bool {
+        lhs.stream.id == rhs.stream.id &&
+        lhs.parsed == rhs.parsed &&
+        lhs.isActive == rhs.isActive &&
+        lhs.isFocused == rhs.isFocused
+    }
 
     var body: some View {
         Button(action: onSelect) {

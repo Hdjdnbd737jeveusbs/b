@@ -121,17 +121,19 @@ struct ContentView: View {
                 }
             case .standard:
                 ZStack(alignment: .topLeading) {
-                    // Main Tab Content Zone (Prefers Initial Focus)
+                    // Main Tab Content Zone (Prefers Initial Focus; preserves scroll position across sidebar opens)
                     NavigationStack {
                         activeTabRootView
                     }
                     .id(selectedTab)
+                    .environment(\.auraOpenSidebar, openSidebar)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .focusSection()
                     .prefersDefaultFocus(true, in: rootFocusScope)
 
                     // Floating Rounded Left Sidebar (Collapsed Pill <-> Expanded Panel)
                     floatingSidebarOverlay
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
                         .focusSection()
                 }
                 .focusScope(rootFocusScope)
@@ -170,17 +172,9 @@ struct ContentView: View {
         }
         .onExitCommand {
             if isSidebarExpanded {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    isSidebarExpanded = false
-                }
-                focusedSidebarTab = nil
+                closeSidebarReturningFocus()
             } else if selectedTab == .settings {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    isSidebarExpanded = true
-                }
-                DispatchQueue.main.async {
-                    focusedSidebarTab = selectedTab
-                }
+                openSidebar()
             }
         }
         .onOpenURL { url in
@@ -200,6 +194,26 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Sidebar Focus Transitions
+
+    private func openSidebar() {
+        guard !isSidebarExpanded else { return }
+        withAnimation(.easeOut(duration: 0.14)) {
+            isSidebarExpanded = true
+        }
+        DispatchQueue.main.async {
+            focusedSidebarTab = selectedTab
+        }
+    }
+
+    private func closeSidebarReturningFocus() {
+        withAnimation(.easeOut(duration: 0.14)) {
+            isSidebarExpanded = false
+        }
+        focusedSidebarTab = nil
+        isCollapsedPillFocused = false
     }
 
     // MARK: - Active Tab View & Floating Rounded Left Sidebar
@@ -273,12 +287,7 @@ struct ContentView: View {
             }
         } else if selectedTab != .settings {
             Button {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    isSidebarExpanded = true
-                }
-                DispatchQueue.main.async {
-                    focusedSidebarTab = selectedTab
-                }
+                openSidebar()
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "chevron.left")
@@ -303,6 +312,7 @@ struct ContentView: View {
             .buttonStyle(AuraButtonStyle())
             .focusEffectDisabled()
             .focused($isCollapsedPillFocused)
+            .auraLeftEdgeSidebarTrigger()
             .padding(.top, 38)
             .padding(.leading, 52)
         }

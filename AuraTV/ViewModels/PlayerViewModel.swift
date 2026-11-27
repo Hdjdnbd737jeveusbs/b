@@ -791,10 +791,10 @@ final class PlayerViewModel {
             }
         }
 
-        // Update active subtitle cue based on current time & manual offset
+        // Update active subtitle cue based on current time & manual offset (O(log n) binary search)
         if !activeCues.isEmpty {
             let offset = subtitleSyncSettings.manualOffset
-            if let matchingCue = activeCues.first(where: { $0.isActive(at: effectiveTime, offset: offset) }) {
+            if let matchingCue = findActiveCue(in: activeCues, at: effectiveTime, offset: offset) {
                 currentSubtitleCue = externalASSContent == nil ? applyTranslationIfAvailable(to: matchingCue) : nil
             } else {
                 currentSubtitleCue = nil
@@ -824,6 +824,37 @@ final class PlayerViewModel {
            (totalDuration - currentTime) <= 2 {
             playNextEpisodeNow()
         }
+    }
+
+    // MARK: - O(log n) Cue Binary Search
+
+    private func findActiveCue(in cues: [AuraSubtitleCue], at playbackTime: Double, offset: Double) -> AuraSubtitleCue? {
+        let adjusted = playbackTime - offset
+        var low = 0
+        var high = cues.count - 1
+        var candidate = -1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            if cues[mid].startTime <= adjusted {
+                candidate = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        if candidate >= 0 {
+            // Check small window back in case overlapping cues share nearby startTimes
+            let floorIdx = max(0, candidate - 3)
+            for idx in stride(from: candidate, through: floorIdx, by: -1) {
+                let cue = cues[idx]
+                if adjusted >= cue.startTime && adjusted <= cue.endTime {
+                    return cue
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - Subtitle Operations
