@@ -280,7 +280,7 @@ struct SettingsView: View {
                     ("Player engine", viewModel.playerEngineName), ("Audio output", viewModel.audioOutputMode)]
         case .subtitles:
             return [("Mode", viewModel.subtitleAutoMode), ("Languages", [viewModel.subtitleLanguage, viewModel.secondarySubtitleLanguage].map { viewModel.displayLanguageName(for: $0) }.joined(separator: ", ")),
-                    ("Font", viewModel.subtitleFontName), ("Size", "\(Int(viewModel.subtitleFontSize)) pt")]
+                    ("Font", "\(viewModel.subtitleFontName) · \(viewModel.subtitleFontWeight)"), ("Size", "\(Int(viewModel.subtitleFontSize)) pt")]
         case .skipIntroCredits:
             return [("Intro", viewModel.skipIntroMode), ("Recap", viewModel.skipRecapMode),
                     ("Credits", viewModel.skipCreditsMode), ("Delay", "\(viewModel.skipDelaySeconds) s")]
@@ -438,6 +438,7 @@ struct SettingsView: View {
                 viewModel.saveSettings(context: modelContext)
             }
         case .fonts:
+            actionSettingRow(title: "Import from Phone", icon: "qrcode") { showPhoneQRSetup = true }
             ForEach(SettingsViewModel.fontNameOptions, id: \.self) { name in
                 actionSettingRow(title: name, icon: name == viewModel.subtitleFontName ? "checkmark.circle.fill" : "textformat") {
                     viewModel.subtitleFontName = name

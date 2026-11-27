@@ -18,7 +18,7 @@ struct SubtitleStyleSheet: View {
         case done
     }
 
-    private let sizeOptions: [Double] = [34, 44, 54, 64]
+    private let sizeOptions: [Double] = [34, 44, 54, 58, 64]
     private let weightOptions = ["Regular", "Medium", "Semibold", "Bold"]
     private let colorOptions = ["White", "Yellow", "Green", "Cyan"]
     private let opacityOptions: [Double] = [0.0, 0.25, 0.5, 0.75]

@@ -120,9 +120,9 @@ final class SettingsViewModel {
     static let rewindOnResumeOptions = [0, 3, 5, 10]
     static let externalPlayerOptions = ["Built-in AetherEngine", "Infuse", "VidHub", "VLC", "SenPlayer"]
     static let subtitleAutoOptions = ["Preferred Languages", "Always On", "Off"]
-    static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
+    static let subtitleSizeOptions: [Double] = [34, 44, 54, 58, 64]
     static let fontWeightOptions = ["Regular", "Medium", "Semibold", "Bold"]
-    static let fontNameOptions = SubtitleProcessor.availableFonts
+    static var fontNameOptions: [String] { SubtitleProcessor.availableFonts }
     static let aiTranslationProviderOptions = [
         "OpenAI",
         "Gemini",

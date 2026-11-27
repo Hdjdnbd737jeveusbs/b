@@ -112,6 +112,7 @@ struct SubtitleStyle: Codable, Hashable {
     }
 
     var font: Font {
+        ImportedSubtitleFonts.restore()
         let weight: Font.Weight = {
             switch fontWeight.lowercased() {
             case "regular": return .regular
