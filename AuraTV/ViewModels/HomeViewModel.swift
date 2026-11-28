@@ -12,6 +12,7 @@ final class HomeViewModel {
     var spotlightLogos: [Int: String] = [:]
     var spotlightRuntimes: [Int: Int] = [:]
     var spotlightCertifications: [Int: String] = [:]
+    var rowLogos: [String: String] = [:]
 
     var continueWatching: [WatchHistory] = []
     var trendingMovies: [TMDBMovie] = []
@@ -68,9 +69,9 @@ final class HomeViewModel {
                 self.trendingMovies = movies.results
                 self.trendingSeries = series.results
 
-                // Top 7 trending movies for the hero carousel
-                let topSeven = Array(movies.results.prefix(7))
-                self.spotlightItems = topSeven
+                // Top 6 trending movies for the hero carousel
+                let topSix = Array(movies.results.prefix(6))
+                self.spotlightItems = topSix
 
                 self.prefetchHomeImages()
                 self.syncTopShelfSnapshot()
@@ -78,8 +79,13 @@ final class HomeViewModel {
                 Self.logger.notice("Loaded \(movies.results.count) trending movies and \(series.results.count) trending series")
                 print("[HomeViewModel] Loaded \(movies.results.count) trending movies and \(series.results.count) trending series")
 
-                // Enrich top hero items with official TMDB logos, runtimes, and certifications in parallel
-                await self.enrichSpotlightItems(topSeven)
+                // Enrich top hero items & visible row logos off MainActor in parallel
+                async let spotlightTask: Void = self.enrichSpotlightItems(topSix)
+                async let rowLogoTask: Void = self.enrichRowLogos(
+                    movies: Array(movies.results.prefix(10)),
+                    series: Array(series.results.prefix(10))
+                )
+                _ = await (spotlightTask, rowLogoTask)
             } catch {
                 self.error = error.localizedDescription
                 Self.logger.error("TMDB fetch failed: \(error.localizedDescription, privacy: .public)")
@@ -128,6 +134,38 @@ final class HomeViewModel {
         if !batch.2.isEmpty { spotlightCertifications.merge(batch.2) { _, new in new } }
     }
 
+    @MainActor
+    private func enrichRowLogos(movies: [TMDBMovie], series: [TMDBSeries]) async {
+        let tmdbService = self.service
+        let movieIds = movies.map(\.id)
+        let seriesIds = series.map(\.id)
+        let resolved = await Task.detached(priority: .utility) {
+            var map: [String: String] = [:]
+            await withTaskGroup(of: (String, String?).self) { group in
+                for id in movieIds {
+                    group.addTask {
+                        let path = await tmdbService.fetchBestLogoPath(mediaType: "movie", id: id)
+                        return ("movie_\(id)", path)
+                    }
+                }
+                for id in seriesIds {
+                    group.addTask {
+                        let path = await tmdbService.fetchBestLogoPath(mediaType: "tv", id: id)
+                        return ("series_\(id)", path)
+                    }
+                }
+                for await (key, path) in group {
+                    if let path { map[key] = path }
+                }
+            }
+            return map
+        }.value
+
+        if !resolved.isEmpty {
+            rowLogos.merge(resolved) { _, new in new }
+        }
+    }
+
     private nonisolated static func extractUSCertification(from detail: TMDBMovieDetail?) -> String? {
         guard let results = detail?.releaseDates?.results else { return nil }
         if let usRelease = results.first(where: { $0.iso31661 == "US" }) {
@@ -168,7 +206,7 @@ final class HomeViewModel {
             let path = item.episodeStillPath ?? item.backdropPath ?? item.posterPath
             return service.imageURL(path: path, size: "w780")
         }
-        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 415, height: 234))
+        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 400, height: 225))
     }
 
     @MainActor
@@ -176,21 +214,21 @@ final class HomeViewModel {
         let heroURLs = spotlightItems.compactMap {
             service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w1280")
         }
-        AuraImageCache.shared.prefetch(urls: heroURLs, targetSize: CGSize(width: 1440, height: 550))
+        AuraImageCache.shared.prefetch(urls: heroURLs, targetSize: CGSize(width: 1920, height: 590))
 
-        var posterURLs: [URL] = []
-        posterURLs.reserveCapacity(40)
+        var cardURLs: [URL] = []
+        cardURLs.reserveCapacity(40)
         for movie in trendingMovies.prefix(20) {
-            if let url = service.imageURL(path: movie.posterPath, size: "w500") {
-                posterURLs.append(url)
+            if let url = service.imageURL(path: movie.backdropPath ?? movie.posterPath, size: "w780") {
+                cardURLs.append(url)
             }
         }
         for show in trendingSeries.prefix(20) {
-            if let url = service.imageURL(path: show.posterPath, size: "w500") {
-                posterURLs.append(url)
+            if let url = service.imageURL(path: show.backdropPath ?? show.posterPath, size: "w780") {
+                cardURLs.append(url)
             }
         }
-        AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 268, height: 402))
+        AuraImageCache.shared.prefetch(urls: cardURLs, targetSize: CGSize(width: 400, height: 225))
     }
 
     @MainActor

@@ -71,20 +71,17 @@ struct MovieDetailView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                AuraDynamicBackgroundView(
-                    styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow",
-                    fallbackBackdropURL: effectiveBackdropPath.flatMap { TMDBService.shared.imageURL(path: $0, size: "w780") }
-                )
+                Color.black.ignoresSafeArea()
 
-                // Full-bleed dark cinema backdrop + left & bottom vignettes
+                // Full-bleed dark cinema backdrop fading seamlessly into #000000 black
                 backdropLayer(geometry: geometry)
 
                 // Scrollable foreground content
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 36) {
-                        // Left hero metadata column
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        // Left hero metadata column (aligned at leading: 80pt)
                         VStack(alignment: .leading, spacing: 18) {
-                            Spacer().frame(height: geometry.size.height * 0.14)
+                            Spacer().frame(height: 120)
 
                             titleSection
 
@@ -99,13 +96,14 @@ struct MovieDetailView: View {
                             overviewSection
 
                             actionButtons
-                                .padding(.top, 6)
+                                .padding(.top, 8)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.56, minHeight: geometry.size.height * 0.84, alignment: .topLeading)
-                        .padding(.leading, 68)
+                        .frame(maxWidth: geometry.size.width * 0.56, minHeight: geometry.size.height * 0.85, alignment: .topLeading)
+                        .padding(.leading, 80)
 
-                        // Full-width circular Cast row below the fold
+                        // Cast section pinned near bottom of initial viewport
                         castSection
+                            .padding(.top, 16)
 
                         Spacer().frame(height: 60)
                     }
@@ -214,42 +212,42 @@ struct MovieDetailView: View {
 
     @ViewBuilder
     private func backdropLayer(geometry: GeometryProxy) -> some View {
-        let height = geometry.size.height * 0.78
-        ZStack(alignment: .topTrailing) {
+        let width = geometry.size.width
+        let height = geometry.size.height * 0.88
+        ZStack(alignment: .top) {
             if let path = effectiveBackdropPath,
                let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-                AuraCachedImage(url: url, targetSize: CGSize(width: 1440, height: 840)) { image in
+                AuraCachedImage(url: url, targetSize: CGSize(width: 1920, height: 950)) { image in
                     image
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geometry.size.width * 0.78, height: height)
+                        .scaledToFill()
+                        .frame(width: width, height: height)
                         .clipped()
                 } placeholder: {
-                    backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
+                    backdropPlaceholder(width: width, height: height)
                 }
             } else {
-                backdropPlaceholder(width: geometry.size.width * 0.78, height: height)
+                backdropPlaceholder(width: width, height: height)
             }
         }
-        .frame(width: geometry.size.width, height: height, alignment: .topTrailing)
-        .mask(
+        .frame(width: width, height: height, alignment: .top)
+        .overlay(
             LinearGradient(
                 stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .black.opacity(0.06), location: 0.24),
-                    .init(color: .black.opacity(0.34), location: 0.46),
-                    .init(color: .black, location: 0.85)
+                    .init(color: Color.black.opacity(0.84), location: 0.0),
+                    .init(color: Color.black.opacity(0.42), location: 0.44),
+                    .init(color: .clear, location: 0.82)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
             )
         )
-        .mask(
+        .overlay(
             LinearGradient(
                 stops: [
-                    .init(color: .black, location: 0.45),
-                    .init(color: .black.opacity(0.25), location: 0.80),
-                    .init(color: .clear, location: 1.0)
+                    .init(color: .clear, location: 0.45),
+                    .init(color: Color.black.opacity(0.55), location: 0.78),
+                    .init(color: Color.black, location: 1.0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -274,9 +272,9 @@ struct MovieDetailView: View {
                 mediaType: "movie",
                 tmdbId: detail.id,
                 preloadedLogoPath: effectiveLogoPath,
-                maxWidth: 560,
-                maxHeight: 145,
-                fallbackFontSize: 58,
+                maxWidth: 520,
+                maxHeight: 120,
+                fallbackFontSize: 54,
                 alignment: .leading
             )
         } else {
@@ -285,37 +283,26 @@ struct MovieDetailView: View {
         }
     }
 
-    // MARK: - Metadata Line (Year • Rating • Runtime • Genres)
+    // MARK: - Metadata Line (Year · Rating · Runtime · Genres)
 
     @ViewBuilder
     private var metadataLine: some View {
         if let detail = viewModel.movieDetail {
-            HStack(spacing: 10) {
-                if let date = detail.releaseDate, date.count >= 4 {
-                    Text(String(date.prefix(4)))
-                }
-
-                if let cert = viewModel.certification, !cert.isEmpty {
-                    Text("•")
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text(cert)
-                }
-
-                if let runtime = detail.runtime, runtime > 0 {
-                    Text("•")
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text(formatRuntime(runtime))
-                }
-
-                if let genres = detail.genres, !genres.isEmpty {
-                    Text("•")
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text(genres.map(\.name).prefix(2).joined(separator: ", "))
-                        .lineLimit(1)
-                }
+            let year = detail.releaseDate.flatMap { $0.count >= 4 ? String($0.prefix(4)) : nil }
+            let cert = viewModel.certification.flatMap { $0.isEmpty ? nil : $0 }
+            let runtime = detail.runtime.flatMap { $0 > 0 ? formatRuntime($0) : nil }
+            let genres = detail.genres.flatMap {
+                let joined = $0.map(\.name).prefix(2).joined(separator: ", ")
+                return joined.isEmpty ? nil : joined
             }
-            .font(.system(size: 21, weight: .medium))
-            .foregroundStyle(.white.opacity(0.76))
+            let text = [year, cert, runtime, genres].compactMap { $0 }.joined(separator: " · ")
+
+            if !text.isEmpty {
+                Text(text)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
+                    .lineLimit(1)
+            }
         }
     }
 
@@ -323,23 +310,36 @@ struct MovieDetailView: View {
 
     @ViewBuilder
     private var technicalBadgesRow: some View {
-        HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .filled, fontSize: 12)
+        HStack(spacing: 10) {
+            Text("4K")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255), in: RoundedRectangle(cornerRadius: 4))
+
             DolbyVisionBadgeView()
-            BadgeView(text: "5.1", style: .outlined, fontSize: 12)
-            BadgeView(text: "CC", style: .outlined, fontSize: 12)
-            BadgeView(text: "SDH", style: .outlined, fontSize: 12)
-            BadgeView(text: "AR", style: .outlined, fontSize: 12)
+
+            ForEach(["5.1", "CC", "SDH", "AR"], id: \.self) { label in
+                Text(label)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color(red: 229 / 255, green: 229 / 255, blue: 234 / 255))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color(red: 174 / 255, green: 174 / 255, blue: 178 / 255), lineWidth: 1)
+                    )
+            }
 
             if let vote = viewModel.movieDetail?.voteAverage, vote > 0 {
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Image(systemName: "star.fill")
-                        .foregroundStyle(.white.opacity(0.65))
-                        .font(.system(size: 13))
+                        .font(.system(size: 15))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
                 }
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
                 .padding(.leading, 4)
             }
         }
@@ -350,12 +350,13 @@ struct MovieDetailView: View {
     @ViewBuilder
     private var overviewSection: some View {
         if let overview = viewModel.movieDetail?.overview, !overview.isEmpty {
-                Text(overview)
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.80))
-                    .lineLimit(3)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text(overview)
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
+                .lineLimit(3)
+                .lineSpacing(4)
+                .frame(maxWidth: 680, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -363,12 +364,12 @@ struct MovieDetailView: View {
 
     @ViewBuilder
     private var actionButtons: some View {
-        HStack(spacing: 14) {
-            // Primary Solid White Pill Button with inline mini progress bar on resume
+        HStack(spacing: 16) {
+            // Primary Solid White Pill Button (height 64pt, horizontal padding 36pt)
             Button(action: { playMovie() }) {
                 HStack(spacing: 12) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 17))
+                        .font(.system(size: 20, weight: .bold))
 
                     if let progress = viewModel.watchProgress,
                        progress.progress > 0 && !progress.isCompleted,
@@ -383,14 +384,14 @@ struct MovieDetailView: View {
                         }
 
                         Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(size: 24, weight: .semibold))
                     } else {
                         Text("Play")
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(size: 24, weight: .semibold))
                     }
                 }
                 .padding(.horizontal, 36)
-                .padding(.vertical, 16)
+                .frame(height: 64)
                 .background(Color.white)
                 .foregroundStyle(.black)
                 .clipShape(Capsule())
@@ -404,19 +405,19 @@ struct MovieDetailView: View {
             .focusEffectDisabled()
             .focused($focusedButton, equals: .play)
             .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
-            .animation(.easeOut(duration: 0.18), value: focusedButton)
+            .animation(.easeOut(duration: 0.14), value: focusedButton)
 
             // Rewatch glass pill if currently resuming
             if let progress = viewModel.watchProgress, progress.progress > 0 && !progress.isCompleted {
                 Button(action: { rewatchMovie() }) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("Rewatch")
                             .font(.system(size: 18, weight: .semibold))
+                        Text("Rewatch")
+                            .font(.system(size: 20, weight: .semibold))
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, 26)
+                    .frame(height: 64)
                     .background(focusedButton == .rewatch ? Color.white : Color.white.opacity(0.14))
                     .foregroundStyle(focusedButton == .rewatch ? .black : .white)
                     .clipShape(Capsule())
@@ -429,12 +430,12 @@ struct MovieDetailView: View {
                 .focusEffectDisabled()
                 .focused($focusedButton, equals: .rewatch)
                 .scaleEffect(focusedButton == .rewatch ? 1.07 : 1.0)
-                .animation(.easeOut(duration: 0.18), value: focusedButton)
+                .animation(.easeOut(duration: 0.14), value: focusedButton)
             }
 
             // Watched Toggle Circular Glass Button
             circleGlassButton(
-                systemName: "checkmark",
+                systemName: viewModel.isWatched ? "checkmark.circle.fill" : "checkmark.circle",
                 isActive: viewModel.isWatched,
                 target: .watched
             ) {
@@ -478,43 +479,43 @@ struct MovieDetailView: View {
         let isFocused = focusedButton == target
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .bold))
-                .frame(width: 52, height: 52)
-                .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
+                .font(.system(size: 22, weight: .semibold))
+                .frame(width: 64, height: 64)
+                .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.24) : Color.white.opacity(0.14)))
                 .foregroundStyle(isFocused ? Color.black : Color.white)
                 .clipShape(Circle())
                 .overlay(
                     Circle()
-                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.22), lineWidth: 1)
                 )
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($focusedButton, equals: target)
-        .scaleEffect(isFocused ? 1.1 : 1.0)
-        .animation(.easeOut(duration: 0.18), value: focusedButton)
+        .scaleEffect(isFocused ? 1.08 : 1.0)
+        .animation(.easeOut(duration: 0.14), value: focusedButton)
     }
 
-    // MARK: - Cast Section (Full-Width Horizontal Row of Circular Portraits)
+    // MARK: - Cast Section (Full-Width Horizontal Row of 150x150 Circular Portraits)
 
     @ViewBuilder
     private var castSection: some View {
         if !viewModel.cast.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Cast")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 20) {
+                    LazyHStack(spacing: 32) {
                         ForEach(viewModel.cast.prefix(20)) { member in
-                            CastCardView(member: member)
+                            CastCardView(member: member, imageSize: 150)
                                 .equatable()
                         }
                     }
                     .padding(.horizontal, 80)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                 }
             }
         }

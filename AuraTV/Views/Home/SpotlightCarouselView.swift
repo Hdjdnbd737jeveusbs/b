@@ -71,68 +71,66 @@ struct SpotlightCarouselView: View {
     private var ambientHero: some View {
         NavigationLink(destination: activeHeroDestination) {
             ZStack(alignment: .bottomLeading) {
-                // Full-bleed background artwork or muted trailer preview, soft-masked at bottom into page background
-                heroBackdropLayer(width: nil, height: 550)
-                    .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
+                // Full-bleed edge-to-edge hero backdrop fading seamlessly into #000000 black
+                heroBackdropLayer(width: nil, height: 590)
+                    .frame(maxWidth: .infinity, minHeight: 590, maxHeight: 590)
                     .clipped()
-                    .mask(
+                    .overlay(
                         LinearGradient(
                             stops: [
-                                .init(color: .black, location: 0.0),
-                                .init(color: .black, location: 0.58),
-                                .init(color: .black.opacity(0.32), location: 0.84),
-                                .init(color: .clear, location: 1.0)
+                                .init(color: Color.black.opacity(0.82), location: 0.0),
+                                .init(color: Color.black.opacity(0.35), location: 0.48),
+                                .init(color: Color.black.opacity(0.0), location: 0.85)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .overlay(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0.45),
+                                .init(color: Color.black.opacity(0.55), location: 0.78),
+                                .init(color: Color.black, location: 1.0)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
 
-                // Left-side vignette for legible white text & logo
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.black.opacity(0.88), location: 0.0),
-                        .init(color: Color.black.opacity(0.62), location: 0.30),
-                        .init(color: Color.black.opacity(0.24), location: 0.58),
-                        .init(color: .clear, location: 0.85)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-
-                // Bottom content row: Left metadata/logo/synopsis + Right pagination pills
+                // Hero Metadata Block (leading: 80pt) + Right-aligned 6 pill dashes
                 HStack(alignment: .bottom, spacing: 40) {
                     VStack(alignment: .leading, spacing: 14) {
                         activeEyebrowView
 
-                        activeTitleView(maxWidth: 600, maxHeight: 135, fallbackSize: 54)
+                        activeTitleView(maxWidth: 520, maxHeight: 115, fallbackSize: 52)
 
                         activeMetadataRow
 
                         if let overview = activeOverview, !overview.isEmpty {
                             Text(overview)
-                                .font(.system(size: 21, weight: .regular))
-                                .foregroundStyle(.white.opacity(0.80))
+                                .font(.system(size: 22, weight: .regular))
+                                .foregroundStyle(Color(red: 199 / 255, green: 199 / 255, blue: 204 / 255))
                                 .lineLimit(3)
                                 .lineSpacing(4)
-                                .frame(maxWidth: 870, alignment: .leading)
+                                .frame(maxWidth: 680, alignment: .leading)
                         }
                     }
 
                     Spacer()
 
                     if trailerPreview == nil {
-                        // Bottom-right pagination pills
-                        paginationDots(activeWidth: 22, dotWidth: 10, height: 5)
-                            .padding(.bottom, 8)
+                        // 6 thin horizontal pill dashes (28x3pt) aligned bottom-right
+                        paginationDots(activeWidth: 28, dotWidth: 28, height: 3, maxDots: 6)
+                            .padding(.bottom, 6)
                     }
                 }
-                .padding(.horizontal, 156)
-                .padding(.bottom, 22)
+                .padding(.horizontal, 80)
+                .padding(.bottom, 26)
             }
-            .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)
+            .frame(maxWidth: .infinity, minHeight: 590, maxHeight: 590)
             .clipped()
-            .scaleEffect(isHeroFocused ? 1.008 : 1.0)
+            .scaleEffect(isHeroFocused ? 1.006 : 1.0)
             .animation(.easeOut(duration: 0.14), value: isHeroFocused)
         }
         .buttonStyle(AuraButtonStyle())
@@ -277,9 +275,9 @@ struct SpotlightCarouselView: View {
             .foregroundStyle(Color.auraAccent)
         } else {
             Text("RECENTLY ADDED")
-                .font(.system(size: 13, weight: .bold))
-                .tracking(2.8)
-                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 16, weight: .semibold))
+                .tracking(2.5)
+                .foregroundStyle(Color(red: 229 / 255, green: 229 / 255, blue: 234 / 255))
         }
     }
 
@@ -366,43 +364,40 @@ struct SpotlightCarouselView: View {
 
     @ViewBuilder
     private func metadataRow(for item: TMDBMovie) -> some View {
+        let cert = certifications[item.id] ?? (item.adult == true ? "R" : "PG-13")
+        let year = item.releaseDate.flatMap { $0.count >= 4 ? String($0.prefix(4)) : nil }
+        let runtime = runtimes[item.id].flatMap { $0 > 0 ? formatRuntime($0) : nil }
+        let genres = item.genreIds.flatMap {
+            let names = TMDBGenres.movieGenreNames(for: $0).prefix(2).joined(separator: ", ")
+            return names.isEmpty ? nil : names
+        }
+        let metaText = [year, runtime, genres].compactMap { $0 }.joined(separator: " · ")
+
         HStack(spacing: 10) {
-            let cert = certifications[item.id] ?? (item.adult == true ? "R" : "PG-13")
-            BadgeView(text: cert, style: .outlined, fontSize: 12)
+            Text(cert)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(red: 58 / 255, green: 58 / 255, blue: 60 / 255), in: RoundedRectangle(cornerRadius: 4))
 
-            if let date = item.releaseDate, date.count >= 4 {
-                Text("•")
-                    .foregroundStyle(.white.opacity(0.5))
-                Text(String(date.prefix(4)))
-            }
-
-            if let runtime = runtimes[item.id], runtime > 0 {
-                Text("•")
-                    .foregroundStyle(.white.opacity(0.5))
-                Text(formatRuntime(runtime))
-            }
-
-            if let genres = item.genreIds, !genres.isEmpty {
-                Text("•")
-                    .foregroundStyle(.white.opacity(0.5))
-                Text(TMDBGenres.movieGenreNames(for: genres).prefix(2).joined(separator: ", "))
-                    .lineLimit(1)
+            if !metaText.isEmpty {
+                Text(metaText)
             }
 
             if let vote = item.voteAverage, vote > 0 {
-                Text("•")
-                    .foregroundStyle(.white.opacity(0.5))
-                HStack(spacing: 4) {
+                if !metaText.isEmpty {
+                    Text("·")
+                }
+                HStack(spacing: 5) {
                     Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.system(size: 14))
+                        .font(.system(size: 15))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 16, weight: .semibold))
                 }
             }
         }
-        .font(.system(size: 20, weight: .medium))
-        .foregroundStyle(.white.opacity(0.88))
+        .font(.system(size: 21, weight: .medium))
+        .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
     }
 
     @ViewBuilder
@@ -414,10 +409,10 @@ struct SpotlightCarouselView: View {
     private func backdropPathImage(path: String?, width: CGFloat?, height: CGFloat) -> some View {
         if let path,
            let url = TMDBService.shared.imageURL(path: path, size: "w1280") {
-            AuraCachedImage(url: url, targetSize: CGSize(width: width ?? 1440, height: height)) { image in
+            AuraCachedImage(url: url, targetSize: CGSize(width: width ?? 1920, height: height)) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
                     .frame(maxWidth: width ?? .infinity, minHeight: height, maxHeight: height)
                     .clipped()
             } placeholder: {
@@ -440,22 +435,23 @@ struct SpotlightCarouselView: View {
             }
     }
 
-    private func paginationDots(activeWidth: CGFloat, dotWidth: CGFloat, height: CGFloat) -> some View {
-        HStack(spacing: 7) {
-            ForEach(0..<items.count, id: \.self) { index in
+    private func paginationDots(activeWidth: CGFloat, dotWidth: CGFloat, height: CGFloat, maxDots: Int = 6) -> some View {
+        let count = min(max(items.count, 1), maxDots)
+        let activeIdx = currentIndex % count
+        return HStack(spacing: 8) {
+            ForEach(0..<count, id: \.self) { index in
                 Capsule()
-                    .fill(index == currentIndex ? Color.white : Color.white.opacity(0.28))
-                    .frame(width: index == currentIndex ? activeWidth : dotWidth, height: height)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentIndex)
+                    .fill(index == activeIdx ? Color.white : Color.white.opacity(0.30))
+                    .frame(width: index == activeIdx ? activeWidth : dotWidth, height: height)
             }
         }
     }
 
     private var heroPlaceholder: some View {
         Rectangle()
-            .fill(Color.auraSurface)
+            .fill(Color.black)
             .frame(maxWidth: .infinity)
-            .frame(height: style == .ambient ? 640 : 500)
+            .frame(height: style == .ambient ? 590 : 500)
             .overlay {
                 ProgressView()
                     .tint(.white.opacity(0.5))

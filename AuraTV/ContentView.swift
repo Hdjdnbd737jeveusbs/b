@@ -289,32 +289,39 @@ struct ContentView: View {
             Button {
                 openSidebar()
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(isCollapsedPillFocused ? Color.black.opacity(0.7) : Color.white.opacity(0.65))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(isCollapsedPillFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.8))
 
-                    Image(systemName: selectedTab.iconName)
-                        .font(.system(size: 22, weight: .semibold))
+                    ZStack {
+                        Circle()
+                            .fill(isCollapsedPillFocused ? Color.black : Color.white)
+                            .frame(width: 28, height: 28)
+
+                        Image(systemName: selectedTab.iconName)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(isCollapsedPillFocused ? Color.white : Color.black)
+                    }
 
                     Text(selectedTab.rawValue)
-                        .font(.system(size: 25, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(isCollapsedPillFocused ? Color.black : Color.white)
                 }
-                .foregroundStyle(isCollapsedPillFocused ? Color.black : Color.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 13)
-                .background(isCollapsedPillFocused ? Color.white : Color.auraCardSurface, in: Capsule())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(isCollapsedPillFocused ? Color.white : Color.black.opacity(0.45), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(isCollapsedPillFocused ? 1.0 : 0.14), lineWidth: isCollapsedPillFocused ? 2 : 1)
+                        .stroke(Color.white.opacity(isCollapsedPillFocused ? 1.0 : 0.16), lineWidth: isCollapsedPillFocused ? 2 : 0.8)
                 )
             }
             .buttonStyle(AuraButtonStyle())
             .focusEffectDisabled()
             .focused($isCollapsedPillFocused)
             .auraLeftEdgeSidebarTrigger()
-            .padding(.top, 38)
-            .padding(.leading, 52)
+            .padding(.top, 44)
+            .padding(.leading, 64)
         }
     }
 
