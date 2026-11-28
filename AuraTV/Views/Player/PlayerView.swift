@@ -64,7 +64,7 @@ struct PlayerView: View {
             )
 
             // Loading Overlay (shown while buffering & no playback yet)
-            if viewModel.isBuffering && !viewModel.hasStartedPlayback {
+            if viewModel.isBuffering && !viewModel.hasStartedPlayback && viewModel.playbackError == nil {
                 LoadingOverlayView(
                     title: viewModel.title,
                     backdropPath: viewModel.backdropPath,
@@ -77,6 +77,7 @@ struct PlayerView: View {
             // Player HUD (Title top-left, 5 icons + scrubber bottom; only mounted while visible so hidden buttons never trap remote focus)
             if viewModel.hasStartedPlayback
                 && viewModel.isHUDVisible
+                && viewModel.playbackError == nil
                 && !viewModel.showSubtitleSyncSheet
                 && !viewModel.showSubtitleStyleSheet
                 && !viewModel.showSyncToLineSheet {
@@ -266,9 +267,6 @@ struct PlayerView: View {
             viewModel.togglePlayPause()
             viewModel.showHUD()
         }
-        .onMoveCommand { direction in
-            handleRemoteDirection(direction)
-        }
         .onExitCommand {
             handleExit()
         }
@@ -382,23 +380,6 @@ struct PlayerView: View {
     }
 
     // MARK: - Remote Handling
-
-    private func handleRemoteDirection(_ direction: MoveCommandDirection) {
-        guard !viewModel.hasActiveModalOverlay else { return }
-
-        if !viewModel.isHUDVisible {
-            switch direction {
-            case .left:
-                viewModel.seekBackward(seconds: 15)
-            case .right:
-                viewModel.seekForward(seconds: 15)
-            case .up, .down:
-                viewModel.showHUD()
-            @unknown default:
-                viewModel.showHUD()
-            }
-        }
-    }
 
     private func handleExit() {
         if viewModel.showSubtitleSyncSheet {
@@ -1316,7 +1297,7 @@ final class AVPlayerCoordinator: ObservableObject {
                 guard let self, let vm = self.boundViewModel else { return }
                 let current = CMTimeGetSeconds(time)
                 let total = CMTimeGetSeconds(self.player.currentItem?.duration ?? .zero)
-                guard !current.isNaN && !total.isNaN else { return }
+                guard current.isFinite else { return }
 
                 let loadedRanges = self.player.currentItem?.loadedTimeRanges.compactMap { $0.timeRangeValue } ?? []
                 let bufferedAhead = loadedRanges
@@ -1348,18 +1329,27 @@ final class AVPlayerCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                MainActor.assumeIsolated {
+                    guard let self, self.player.currentItem === playerItem, let vm = self.boundViewModel else { return }
+                    switch status {
+                    case .readyToPlay: vm.onPlaybackReady(duration: CMTimeGetSeconds(playerItem.duration))
+                    case .failed:
+                        vm.onBufferingEnded()
+                        vm.playbackError = playerItem.error?.localizedDescription ?? "Unable to load this stream."
+                    default: break
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
         playerItem.publisher(for: \.isPlaybackLikelyToKeepUp)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] ready in
                 MainActor.assumeIsolated {
-                    guard ready, let self, let vm = self.boundViewModel else { return }
-                    let total = CMTimeGetSeconds(playerItem.duration)
-                    if !total.isNaN && total > 0 {
-                        vm.onPlaybackReady(duration: total)
-                    } else {
-                        vm.onBufferingEnded()
-                        vm.play()
-                    }
+                    if ready { self?.boundViewModel?.onBufferingEnded() }
                 }
             }
             .store(in: &cancellables)

@@ -13,7 +13,7 @@ struct ContinueWatchingRow: View {
                 Text("Continue Watching")
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 68)
+                    .padding(.horizontal, 156)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 26) {
@@ -29,7 +29,7 @@ struct ContinueWatchingRow: View {
                             .equatable()
                         }
                     }
-                    .padding(.horizontal, 68)
+                    .padding(.horizontal, 156)
                     .padding(.vertical, 16)
                 }
             }

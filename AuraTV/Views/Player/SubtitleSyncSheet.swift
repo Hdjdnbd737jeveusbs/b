@@ -28,24 +28,24 @@ struct SubtitleSyncSheet: View {
         VStack(alignment: .trailing) {
             Spacer()
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 // Top Header Title
                 Text("Subtitle Sync")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(.white)
 
                 // Large Offset on Left + 2-Line Muted Note on Right
                 HStack(alignment: .center, spacing: 18) {
                     Text(SubtitleSyncEngine.formatOffset(settings.manualOffset))
-                        .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                        .font(.system(size: 52, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Subtitles are shown at their original times.")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.white.opacity(0.7))
                         Text("Saved for this file and subtitle. Playback keeps going.")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(.white.opacity(0.45))
                     }
                     .lineLimit(1)
@@ -94,7 +94,7 @@ struct SubtitleSyncSheet: View {
                     )
 
                     Text("Matches the video's English subtitle: offset, frame rate and cuts")
-                        .font(.system(size: 11.5, weight: .regular))
+                        .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(.white.opacity(0.44))
                         .padding(.leading, 40)
                         .padding(.bottom, 4)
@@ -103,7 +103,7 @@ struct SubtitleSyncSheet: View {
 
                     compactToggleRow(
                         title: "Fix RTL",
-                        subtitle: "For this title only: punctuation at the end of Arabic lines, as Subtitle Edit fo...",
+                        subtitle: "For this title only: punctuation at the end of Arabic lines, as in Subtitle Edit.",
                         icon: "text.alignright",
                         isOn: $settings.fixRTL,
                         control: .fixRTL
@@ -111,7 +111,7 @@ struct SubtitleSyncSheet: View {
 
                     compactToggleRow(
                         title: "Fix Reversed Punctuation",
-                        subtitle: "For this title only: punctuation fixed at the wrong end of Arabic lines move...",
+                        subtitle: "For this title only: punctuation fixed at the wrong end of Arabic lines.",
                         icon: "arrow.left.arrow.right",
                         isOn: $settings.fixReversedPunctuation,
                         control: .fixPunctuation
@@ -122,7 +122,7 @@ struct SubtitleSyncSheet: View {
                 HStack {
                     Button(action: onDismiss) {
                         Text("Done")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 23, weight: .semibold))
                             .foregroundStyle(focusedItem == .done ? Color.black : Color.white.opacity(0.75))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 7)
@@ -142,15 +142,15 @@ struct SubtitleSyncSheet: View {
                 .padding(.top, 2)
             }
             .padding(24)
-            .frame(width: 540)
+            .frame(width: 820)
             .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.75), radius: 28, y: 12)
-            .padding(.trailing, 70)
-            .padding(.bottom, 64)
+            .padding(.trailing, 90)
+            .padding(.bottom, 44)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .defaultFocus($focusedItem, .earlierSmall)
@@ -169,12 +169,12 @@ struct SubtitleSyncSheet: View {
 
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.9))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 13)
                 .background(isFocused ? Color.white : Color.white.opacity(0.08), in: Capsule())
                 .scaleEffect(isFocused ? 1.04 : 1.0)
                 .animation(.easeOut(duration: 0.14), value: isFocused)
@@ -199,16 +199,16 @@ struct SubtitleSyncSheet: View {
         Button { isOn.wrappedValue.toggle() } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 23, weight: .medium))
                     .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.85))
                     .frame(width: 22)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 23, weight: .semibold))
                         .foregroundStyle(isFocused ? Color.black : Color.white)
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 18))
                         .foregroundStyle(isFocused ? Color.black.opacity(0.68) : Color.white.opacity(0.5))
                         .lineLimit(1)
                 }
@@ -216,7 +216,7 @@ struct SubtitleSyncSheet: View {
                 Spacer(minLength: 10)
 
                 Text(isOn.wrappedValue ? "On" : "Off")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(isFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.6))
             }
             .padding(.horizontal, 12)
@@ -255,17 +255,17 @@ struct SubtitleSyncSheet: View {
                         .frame(width: 22)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 23, weight: .medium))
                         .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.85))
                         .frame(width: 22)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 23, weight: .semibold))
                         .foregroundStyle(isFocused ? Color.black : Color.white)
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 18))
                         .foregroundStyle(isFocused ? Color.black.opacity(0.68) : Color.white.opacity(0.5))
                         .lineLimit(1)
                 }
@@ -273,7 +273,7 @@ struct SubtitleSyncSheet: View {
                 Spacer(minLength: 10)
 
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(isFocused ? Color.black.opacity(0.7) : Color.white.opacity(0.55))
             }
             .padding(.horizontal, 12)

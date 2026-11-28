@@ -25,7 +25,7 @@ final class SettingsViewModel {
 
     // MARK: - Published State
 
-    var tmdbApiKey: String = "d767cb12181edaa01840442c704329be"
+    var tmdbApiKey: String = ""
     var aioStreamsUrl: String = ""
     var aioStreamsAdditionalUrls: String = ""
     var quickManifestInput: String = ""
@@ -38,9 +38,9 @@ final class SettingsViewModel {
 
     var subdlApiKey: String = ""
     var openSubtitlesApiKey: String = ""
-    var subtitleFontSize: Double = 44.0
-    var subtitleFontWeight: String = "Bold"
-    var subtitleFontName: String = "System"
+    var subtitleFontSize: Double = 58.0
+    var subtitleFontWeight: String = "Medium"
+    var subtitleFontName: String = "The Year of The Camel"
     var subtitleTextColor: String = "Light Gray"
     var subtitleTextOpacity: Double = 0.80
     var subtitleBackgroundOpacity: Double = 0.0
@@ -121,9 +121,9 @@ final class SettingsViewModel {
     static let rewindOnResumeOptions = [0, 3, 5, 10]
     static let externalPlayerOptions = ["Built-in AetherEngine", "Infuse", "VidHub", "VLC", "SenPlayer"]
     static let subtitleAutoOptions = ["Preferred Languages", "Always On", "Off"]
-    static let subtitleSizeOptions: [Double] = [34, 44, 54, 64]
+    static let subtitleSizeOptions: [Double] = [34, 44, 54, 58, 64]
     static let fontWeightOptions = ["Regular", "Medium", "Semibold", "Bold"]
-    static let fontNameOptions = SubtitleProcessor.availableFonts
+    static var fontNameOptions: [String] { SubtitleProcessor.availableFonts }
     static let subtitleColorOptions = SubtitleStyle.allColorNames
     static let subtitleBackgroundOpacityOptions: [Double] = [0.0, 0.25, 0.5, 0.75]
     static let subtitleBottomOffsetOptions: [Double] = [40, 56, 80, 110, 140]
@@ -369,7 +369,7 @@ final class SettingsViewModel {
 
             try context.save()
 
-            TMDBService.shared.apiKey = tmdbApiKey.isEmpty ? "d767cb12181edaa01840442c704329be" : tmdbApiKey
+            TMDBService.shared.apiKey = settings.tmdbApiKey
             AIOStreamsService.shared.manifestURL = aioStreamsUrl
             AIOStreamsService.shared.additionalManifestURLs = aioStreamsAdditionalUrls
             MDBListService.shared.apiKey = mdblistApiKey.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -101,7 +101,7 @@ struct MovieDetailView: View {
                             actionButtons
                                 .padding(.top, 6)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.56, alignment: .leading)
+                        .frame(maxWidth: geometry.size.width * 0.56, minHeight: geometry.size.height * 0.84, alignment: .topLeading)
                         .padding(.leading, 68)
 
                         // Full-width circular Cast row below the fold
@@ -143,7 +143,7 @@ struct MovieDetailView: View {
                 }
             )
         }
-        .sheet(isPresented: $showChangeArtwork) {
+        .fullScreenCover(isPresented: $showChangeArtwork) {
             ChangeArtworkView(
                 tmdbId: tmdbId,
                 mediaType: "movie",

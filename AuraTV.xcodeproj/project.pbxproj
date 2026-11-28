@@ -6,6 +6,15 @@
 	objectVersion = 56;
 	objects = {
 
+/* Player remote regression test target */
+        D901 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PlayerRemoteTests.swift; sourceTree = SOURCE_ROOT; };
+        D902 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PlayerRemoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        D903 = {isa = PBXBuildFile; fileRef = D901; };
+        D904 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D903,); runOnlyForDeploymentPostprocessing = 0; };
+        D905 = {isa = PBXNativeTarget; buildConfigurationList = D906; buildPhases = (D904,); buildRules = (); dependencies = (); name = PlayerRemoteTests; productName = PlayerRemoteTests; productReference = D902; productType = "com.apple.product-type.bundle.ui-testing"; };
+        D906 = {isa = XCConfigurationList; buildConfigurations = (D907,D908,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        D907 = {isa = XCBuildConfiguration; buildSettings = { SDKROOT = appletvos; TARGETED_DEVICE_FAMILY = 3; TVOS_DEPLOYMENT_TARGET = 18.0; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.auratv.RemoteTests; SWIFT_VERSION = 5.0; TEST_TARGET_NAME = AuraTV; PRODUCT_NAME = "$(TARGET_NAME)"; }; name = Debug; };
+        D908 = {isa = XCBuildConfiguration; buildSettings = { SDKROOT = appletvos; TARGETED_DEVICE_FAMILY = 3; TVOS_DEPLOYMENT_TARGET = 18.0; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.auratv.RemoteTests; SWIFT_VERSION = 5.0; TEST_TARGET_NAME = AuraTV; PRODUCT_NAME = "$(TARGET_NAME)"; }; name = Release; };
 /* Begin PBXBuildFile section */
 		1001 /* AuraTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001 /* AuraTVApp.swift */; };
 		1002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002 /* ContentView.swift */; };
@@ -64,6 +73,7 @@
 		1055 /* IBMPlexSansArabic-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2056 /* IBMPlexSansArabic-Bold.ttf */; };
 		1056 /* Tajawal-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2057 /* Tajawal-Regular.ttf */; };
 		1057 /* Tajawal-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2058 /* Tajawal-Medium.ttf */; };
+		C95A /* TheYearofTheCamel-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = C95B /* TheYearofTheCamel-Medium.otf */; };
 		1058 /* Tajawal-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2059 /* Tajawal-Bold.ttf */; };
 		1059 /* AITranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2060 /* AITranslationService.swift */; };
 		1060 /* ASSRenderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2061 /* ASSRenderCoordinator.swift */; };
@@ -169,6 +179,7 @@
 		2056 /* IBMPlexSansArabic-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexSansArabic-Bold.ttf"; sourceTree = "<group>"; };
 		2057 /* Tajawal-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tajawal-Regular.ttf"; sourceTree = "<group>"; };
 		2058 /* Tajawal-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tajawal-Medium.ttf"; sourceTree = "<group>"; };
+		C95B /* TheYearofTheCamel-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "TheYearofTheCamel-Medium.otf"; sourceTree = "<group>"; };
 		2059 /* Tajawal-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Tajawal-Bold.ttf"; sourceTree = "<group>"; };
 		2060 /* AITranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITranslationService.swift; sourceTree = "<group>"; };
 		2061 /* ASSRenderCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASSRenderCoordinator.swift; sourceTree = "<group>"; };
@@ -211,6 +222,7 @@
 		4000 /* Main Group */ = {
 			isa = PBXGroup;
 			children = (
+				D901,
 				4001 /* AuraTV */,
 				4019 /* Shared */,
 				4020 /* AuraTVTopShelf */,
@@ -427,6 +439,7 @@
 				2056 /* IBMPlexSansArabic-Bold.ttf */,
 				2057 /* Tajawal-Regular.ttf */,
 				2058 /* Tajawal-Medium.ttf */,
+				C95B /* TheYearofTheCamel-Medium.otf */,
 				2059 /* Tajawal-Bold.ttf */,
 			);
 			path = Fonts;
@@ -530,6 +543,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				D905,
 				5001 /* AuraTV */,
 				5002 /* AuraTVTopShelf */,
 			);
@@ -547,6 +561,7 @@
 				1055 /* IBMPlexSansArabic-Bold.ttf in Resources */,
 				1056 /* Tajawal-Regular.ttf in Resources */,
 				1057 /* Tajawal-Medium.ttf in Resources */,
+				C95A /* TheYearofTheCamel-Medium.otf in Resources */,
 				1058 /* Tajawal-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

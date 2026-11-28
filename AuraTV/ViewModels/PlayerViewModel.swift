@@ -286,7 +286,7 @@ final class PlayerViewModel {
     }
 
     var hasStartedPlayback: Bool {
-        hasPlaybackEverStarted || isPreviewMode
+        hasPlaybackEverStarted || (isPreviewMode && !isBuffering)
     }
 
     // MARK: - Setup
@@ -509,6 +509,7 @@ final class PlayerViewModel {
 
     func switchStream(_ stream: StremioStream) {
         guard let urlStr = stream.url, let url = URL(string: urlStr) else { return }
+        guard url != streamURL else { showStreamPicker = false; return }
         playbackError = nil
         hasPlaybackEverStarted = false
         isSeekingActive = false
@@ -755,7 +756,7 @@ final class PlayerViewModel {
     }
 
     func onPlaybackReady(duration: Double) {
-        if duration > 0 {
+        if duration.isFinite, duration > 0, duration < Double(Int.max) {
             totalDuration = duration
         }
         hasPlaybackEverStarted = true
@@ -773,7 +774,8 @@ final class PlayerViewModel {
 
     @MainActor
     func onTimeUpdate(current: Double, total: Double) {
-        if total > 0 { totalDuration = total }
+        guard current.isFinite, current >= 0, current < Double(Int.max) else { return }
+        if total.isFinite, total > 0, total < Double(Int.max) { totalDuration = total }
         if current > 0.25 && totalDuration > 0 {
             hasPlaybackEverStarted = true
         }

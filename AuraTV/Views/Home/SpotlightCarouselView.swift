@@ -115,7 +115,7 @@ struct SpotlightCarouselView: View {
                                 .foregroundStyle(.white.opacity(0.80))
                                 .lineLimit(3)
                                 .lineSpacing(4)
-                                .frame(maxWidth: 680, alignment: .leading)
+                                .frame(maxWidth: 870, alignment: .leading)
                         }
                     }
 
@@ -127,7 +127,7 @@ struct SpotlightCarouselView: View {
                             .padding(.bottom, 8)
                     }
                 }
-                .padding(.horizontal, 68)
+                .padding(.horizontal, 156)
                 .padding(.bottom, 22)
             }
             .frame(maxWidth: .infinity, minHeight: 550, maxHeight: 550)

@@ -19,7 +19,7 @@ struct SubtitleStyleSheet: View {
         case done
     }
 
-    private let sizeOptions: [Double] = [34, 44, 54, 64]
+    private let sizeOptions: [Double] = [34, 44, 54, 58, 64]
     private let weightOptions = ["Regular", "Medium", "Semibold", "Bold"]
     private let colorOptions = SubtitleStyle.allColorNames
     private let textOpacityOptions: [Double] = [0.60, 0.70, 0.75, 0.80, 0.85, 0.90, 1.0]

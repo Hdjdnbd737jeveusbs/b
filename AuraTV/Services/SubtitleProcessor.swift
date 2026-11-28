@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import CoreText
+import CryptoKit
 
 // MARK: - Subtitle Processor (Arabic RTL & Punctuation Fixes)
 
@@ -147,7 +149,10 @@ final class SubtitleProcessor {
 
     // MARK: - Supported Arabic & System Fonts (Bundled OFL + Native tvOS Fonts)
 
-    static let availableFonts: [String] = [
+    static var availableFonts: [String] { bundledFonts + ImportedSubtitleFonts.names }
+
+    private static let bundledFonts: [String] = [
+        "The Year of The Camel",
         "System",
         "IBM Plex Sans Arabic",
         "Tajawal",
@@ -159,4 +164,69 @@ final class SubtitleProcessor {
         "Farah",
         "KufiStandardGK"
     ]
+}
+
+enum ImportedSubtitleFonts {
+    static let maximumBytes = 6 * 1024 * 1024
+    private static let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("SubtitleFonts", isDirectory: true)
+    private static let lock = NSLock()
+    private static var registered = [String: String]()
+    private static let restored: Void = {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for file in files where file.pathExtension == "font" {
+            guard let data = try? Data(contentsOf: file), data.count <= maximumBytes,
+                  let font = makeFont(data), let name = font.postScriptName as String? else { continue }
+            if CTFontManagerRegisterGraphicsFont(font, nil) {
+                registered[name] = file.lastPathComponent
+            }
+        }
+    }()
+
+    static func restore() { _ = restored }
+
+    static var names: [String] {
+        restore()
+        lock.lock()
+        defer { lock.unlock() }
+        return registered.keys.sorted()
+    }
+
+    static func install(_ data: Data) throws -> String {
+        restore()
+        guard !data.isEmpty, data.count <= maximumBytes, let font = makeFont(data),
+              let name = font.postScriptName as String? else {
+            throw FontImportError.invalidFont
+        }
+        let filename = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() + ".font"
+        lock.lock()
+        defer { lock.unlock() }
+        if registered[name] == filename { return name }
+        guard registered.count < 24 else { throw FontImportError.limit }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent(filename)
+        try data.write(to: file, options: .atomic)
+        guard CTFontManagerRegisterGraphicsFont(font, nil) else {
+            try? FileManager.default.removeItem(at: file)
+            throw FontImportError.conflict
+        }
+        registered[name] = filename
+        return name
+    }
+
+    private static func makeFont(_ data: Data) -> CGFont? {
+        guard let provider = CGDataProvider(data: data as CFData) else { return nil }
+        return CGFont(provider)
+    }
+
+    private enum FontImportError: LocalizedError {
+        case invalidFont, limit, conflict
+        var errorDescription: String? {
+            switch self {
+            case .invalidFont: return "Choose a valid TTF or OTF file up to 6 MB."
+            case .limit: return "The imported font limit has been reached."
+            case .conflict: return "A different font with that name is already registered."
+            }
+        }
+    }
 }

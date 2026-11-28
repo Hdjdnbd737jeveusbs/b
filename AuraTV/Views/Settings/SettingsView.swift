@@ -126,10 +126,10 @@ struct SettingsView: View {
                 }
             )
 
-            HStack(alignment: .top, spacing: 48) {
+            HStack(alignment: .top, spacing: 54) {
                 // LEFT COLUMN: 52pt Bold Settings Title + 28-29pt Pill Sidebar
                 leftSidebarColumn
-                    .frame(width: 500, alignment: .leading)
+                    .frame(width: 566, alignment: .leading)
                     .focusSection()
 
                 // RIGHT COLUMN: Reference Summary Container -> Clean Sub-Screens
@@ -137,10 +137,11 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .focusSection()
             }
-            .padding(.horizontal, 68)
-            .padding(.top, 58)
-            .padding(.bottom, 50)
+            .padding(.horizontal, 96)
+            .padding(.top, 120)
+            .padding(.bottom, 90)
         }
+        .ignoresSafeArea()
         .defaultFocus($focusedCategory, .playback)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -187,7 +188,7 @@ struct SettingsView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
-                    ForEach(SettingsCategory.allCases) { category in
+                    ForEach(SettingsCategory.allCases.filter { $0 != .quickSetup }) { category in
                         let isHighlighted = focusedCategory == category || (focusedCategory == nil && selectedCategory == category)
 
                         Button {
@@ -291,12 +292,20 @@ struct SettingsView: View {
         }
     }
 
+    private var settingsArtworkURL: URL? {
+        if let recent = artworkOverrides.filter({ $0.customBackdropPath != nil }).max(by: { $0.updatedAt < $1.updatedAt }),
+           let url = TMDBService.shared.imageURL(path: recent.customBackdropPath, size: "w1280") {
+            return url
+        }
+        return AppThemeCoordinator.shared.focusedBackdropURL
+            ?? TMDBService.shared.imageURL(path: viewModel.ambientBannerBackdropPath, size: "w1280")
+    }
+
     @ViewBuilder
     private var ambientBannerHeader: some View {
         GeometryReader { geo in
             ZStack {
-                if let path = viewModel.ambientBannerBackdropPath,
-                   let url = TMDBService.shared.imageURL(path: path, size: "w780") {
+                if let url = settingsArtworkURL {
                     AuraCachedImage(url: url, targetSize: CGSize(width: 960, height: 260)) { image in
                         image
                             .resizable()
@@ -480,7 +489,7 @@ struct SettingsView: View {
                     value: "\(viewModel.displayLanguageName(for: viewModel.subtitleLanguage)), \(viewModel.displayLanguageName(for: viewModel.secondarySubtitleLanguage))",
                     targetRoute: .subtitlesFirstLanguage
                 ),
-                SummaryCardDescriptor(index: 2, label: "Font", value: viewModel.subtitleFontName, targetRoute: .subtitlesCustomFonts),
+                SummaryCardDescriptor(index: 2, label: "Font", value: "\(viewModel.subtitleFontName) · \(viewModel.subtitleFontWeight)", targetRoute: .subtitlesCustomFonts),
                 SummaryCardDescriptor(index: 3, label: "Size", value: "\(Int(viewModel.subtitleFontSize)) pt", targetRoute: .subtitlesSizePosition)
             ]
         case .skipIntroCredits:
@@ -838,7 +847,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             detailHeaderBar(
                 title: "Custom Fonts",
-                subtitle: "Bundled OFL Arabic & Latin typefaces rendered cleanly on tvOS.",
+                subtitle: "Choose a bundled font or import a TTF or OTF from your phone.",
                 backTitle: "Subtitles",
                 backAction: {
                     viewModel.saveSettings(context: modelContext)
@@ -849,6 +858,7 @@ struct SettingsView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 14) {
+                    actionSettingRow(title: "Import from Phone", icon: "qrcode") { showPhoneQRSetup = true }
                     ForEach(Array(SettingsViewModel.fontNameOptions.enumerated()), id: \.element) { idx, fontName in
                         let isSelected = viewModel.subtitleFontName == fontName
                         let sampleStyle = SubtitleStyle(
@@ -866,6 +876,10 @@ struct SettingsView: View {
                             isSelected: isSelected
                         ) {
                             viewModel.subtitleFontName = fontName
+                            if fontName == "The Year of The Camel" {
+                                viewModel.subtitleFontWeight = "Medium"
+                                viewModel.subtitleFontSize = 58
+                            }
                             viewModel.saveSettings(context: modelContext)
                         }
 

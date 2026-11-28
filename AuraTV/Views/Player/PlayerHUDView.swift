@@ -63,6 +63,7 @@ struct PlayerHUDView: View {
             VStack {
                 Spacer()
                 bottomBar
+                    .disabled(viewModel.hasActiveModalOverlay)
             }
 
             // Right-anchored Subtitles popover
@@ -90,11 +91,11 @@ struct PlayerHUDView: View {
             }
         }
         .ignoresSafeArea()
-        .defaultFocus($focusedControl, .timeline)
+        .defaultFocus($focusedControl, .subtitles)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 if viewModel.showSubtitlePicker {
-                    focusedTrackId = viewModel.selectedExternalSubtitle?.id ?? "off"
+                    focusedTrackId = "search_subs"
                 } else if viewModel.showAudioPicker {
                     focusedTrackId = "audio_\(viewModel.selectedAudioTrackId)"
                 } else if viewModel.showOptionsMenu {
@@ -102,14 +103,17 @@ struct PlayerHUDView: View {
                 } else if viewModel.showInfoPanel {
                     focusedTrackId = "info_toggle_stats"
                 } else if focusedControl == nil {
-                    focusedControl = .timeline
+                    focusedControl = .subtitles
                 }
             }
+        }
+        .onChange(of: focusedControl) { _, control in
+            if control != nil { viewModel.showHUD() }
         }
         .onChange(of: viewModel.showSubtitlePicker) { _, isOpen in
             if isOpen {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    focusedTrackId = viewModel.selectedExternalSubtitle?.id ?? "off"
+                    focusedTrackId = "search_subs"
                 }
             } else {
                 isSearchFieldActive = false
@@ -308,7 +312,7 @@ struct PlayerHUDView: View {
                 .padding(.top, 10)
             }
             .padding(.horizontal, 70)
-            .padding(.bottom, 42)
+            .padding(.bottom, 100)
         }
     }
 
@@ -383,7 +387,7 @@ struct PlayerHUDView: View {
         action: @escaping () -> Void
     ) -> some View {
         let isFocused = focusedControl == control
-        let size: CGFloat = 52
+        let size: CGFloat = 68
 
         Button(action: action) {
             Group {
@@ -406,6 +410,7 @@ struct PlayerHUDView: View {
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
+        .accessibilityIdentifier("hud-\(control)")
         .focused($focusedControl, equals: control)
     }
 
@@ -530,14 +535,14 @@ struct PlayerHUDView: View {
                         if isSearchFieldActive {
                             HStack(spacing: 10) {
                                 Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 22, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.85))
                                 TextField("Search Subtitles...", text: $viewModel.subtitleSearchText)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 22, weight: .medium))
                                     .foregroundStyle(.white)
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 15)
                         } else {
                             let isSearchFocused = focusedTrackId == "search_subs"
                             Button {
@@ -545,18 +550,18 @@ struct PlayerHUDView: View {
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 22, weight: .semibold))
                                         .foregroundStyle(isSearchFocused ? Color.black : Color.white.opacity(0.9))
                                         .frame(width: 18)
 
                                     Text("Search Subtitles...")
-                                        .font(.system(size: 16, weight: .medium))
+                                        .font(.system(size: 23, weight: .medium))
                                         .foregroundStyle(isSearchFocused ? Color.black : Color.white)
 
                                     Spacer()
                                 }
                                 .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, 15)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
                                         .fill(isSearchFocused ? Color.white : Color.clear)
@@ -564,6 +569,7 @@ struct PlayerHUDView: View {
                             }
                             .buttonStyle(AuraButtonStyle())
                             .focusEffectDisabled()
+                            .accessibilityIdentifier("search-subtitles")
                             .focused($focusedTrackId, equals: "search_subs")
                         }
 
@@ -583,7 +589,7 @@ struct PlayerHUDView: View {
                             HStack(spacing: 10) {
                                 ProgressView().scaleEffect(0.8).tint(.white)
                                 Text("Searching subtitles...")
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 20))
                                     .foregroundStyle(Color.auraSecondaryText)
                             }
                             .padding(14)
@@ -624,18 +630,18 @@ struct PlayerHUDView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 22, weight: .medium))
                                     .foregroundStyle(syncFocused ? Color.black : Color.white.opacity(0.9))
                                     .frame(width: 18)
 
                                 Text("Subtitle Sync...")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 23, weight: .medium))
                                     .foregroundStyle(syncFocused ? Color.black : Color.white)
 
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 15)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(syncFocused ? Color.white : Color.clear)
@@ -652,18 +658,18 @@ struct PlayerHUDView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "text.line.first.and.arrowtriangle.forward")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 22, weight: .medium))
                                     .foregroundStyle(syncLineFocused ? Color.black : Color.white.opacity(0.9))
                                     .frame(width: 18)
 
                                 Text("Sync to a Line...")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 23, weight: .medium))
                                     .foregroundStyle(syncLineFocused ? Color.black : Color.white)
 
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 15)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(syncLineFocused ? Color.white : Color.clear)
@@ -680,22 +686,22 @@ struct PlayerHUDView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "doc.text")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 22, weight: .medium))
                                     .foregroundStyle(encodingFocused ? Color.black : Color.white.opacity(0.9))
                                     .frame(width: 18)
 
                                 Text("Text Encoding")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 23, weight: .medium))
                                     .foregroundStyle(encodingFocused ? Color.black : Color.white)
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: 19, weight: .semibold))
                                     .foregroundStyle(encodingFocused ? Color.black.opacity(0.65) : Color.white.opacity(0.55))
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 15)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(encodingFocused ? Color.white : Color.clear)
@@ -707,9 +713,9 @@ struct PlayerHUDView: View {
                     }
                     .padding(10)
                 }
-                .frame(maxHeight: 520)
+                .frame(maxHeight: 620)
             }
-            .frame(width: 440)
+            .frame(width: 596)
             .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.92), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -717,7 +723,7 @@ struct PlayerHUDView: View {
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 145)
+            .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
@@ -759,7 +765,7 @@ struct PlayerHUDView: View {
 
                         if viewModel.availableAudioTracks.isEmpty {
                             Text("No alternate audio tracks detected")
-                                .font(.system(size: 15))
+                                .font(.system(size: 22))
                                 .foregroundStyle(.white.opacity(0.5))
                                 .padding(20)
                         }
@@ -768,7 +774,7 @@ struct PlayerHUDView: View {
                 }
                 .frame(maxHeight: 280)
             }
-            .frame(width: 420)
+            .frame(width: 580)
             .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -776,7 +782,7 @@ struct PlayerHUDView: View {
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 145)
+            .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
@@ -848,7 +854,7 @@ struct PlayerHUDView: View {
                 }
                 .padding(10)
             }
-            .frame(width: 420)
+            .frame(width: 580)
             .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -856,7 +862,7 @@ struct PlayerHUDView: View {
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 145)
+            .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
@@ -874,22 +880,22 @@ struct PlayerHUDView: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.85))
                     .frame(width: 18)
 
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 23, weight: .medium))
                     .foregroundStyle(isFocused ? Color.black : Color.white)
 
                 Spacer()
 
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(isFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.65))
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 15)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(isFocused ? Color.white : Color.clear)
@@ -938,7 +944,7 @@ struct PlayerHUDView: View {
                 }
                 if !viewModel.overview.isEmpty {
                     Text(viewModel.overview)
-                        .font(.system(size: 14))
+                        .font(.system(size: 20))
                         .foregroundStyle(.white.opacity(0.72))
                         .lineLimit(3)
                         .padding(.top, 4)
@@ -956,7 +962,7 @@ struct PlayerHUDView: View {
                 }
             }
             .padding(22)
-            .frame(width: 440)
+            .frame(width: 596)
             .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -964,7 +970,7 @@ struct PlayerHUDView: View {
             )
             .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
-            .padding(.bottom, 145)
+            .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
@@ -972,11 +978,11 @@ struct PlayerHUDView: View {
     private func infoItem(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
@@ -992,7 +998,7 @@ struct PlayerHUDView: View {
             HStack(spacing: 12) {
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(isFocused ? Color.black : Color.white)
                         .frame(width: 18)
                 } else {
@@ -1000,14 +1006,14 @@ struct PlayerHUDView: View {
                 }
 
                 Text(name)
-                    .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 23, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isFocused ? Color.black : Color.white.opacity(0.92))
                     .lineLimit(1)
 
                 Spacer()
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 15)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(isFocused ? Color.white : Color.clear)

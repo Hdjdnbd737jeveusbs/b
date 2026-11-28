@@ -67,7 +67,7 @@ struct AuraTVApp: App {
             } else {
                 // First launch – no AppSettings row yet.
                 // Insert one carrying the built-in default key so Settings shows it.
-                let defaults = AppSettings()
+                let defaults = AppSettings(subtitleFontSize: 58, subtitleFontWeight: "Medium", subtitleFontName: "The Year of The Camel")
                 // AppSettings.init() already sets tmdbApiKey = default key.
                 context.insert(defaults)
                 try? context.save()

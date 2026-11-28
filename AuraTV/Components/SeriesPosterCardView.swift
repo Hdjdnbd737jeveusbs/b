@@ -9,6 +9,7 @@ struct SeriesPosterCardView: View, Equatable {
     var showWatchedBadge: Bool = true
     var autoPlayTrailersOnFocus: Bool = false
     var isFirstInRow: Bool = false
+    var posterWidth: CGFloat = 268
 
     @FocusState private var isFocused: Bool
     @State private var isTrailerExpanded: Bool = false
@@ -19,7 +20,7 @@ struct SeriesPosterCardView: View, Equatable {
         lhs.isWatched == rhs.isWatched &&
         lhs.showWatchedBadge == rhs.showWatchedBadge &&
         lhs.autoPlayTrailersOnFocus == rhs.autoPlayTrailersOnFocus &&
-        lhs.isFirstInRow == rhs.isFirstInRow
+        lhs.isFirstInRow == rhs.isFirstInRow && lhs.posterWidth == rhs.posterWidth
     }
 
     var body: some View {
@@ -27,11 +28,11 @@ struct SeriesPosterCardView: View, Equatable {
             ZStack(alignment: .topTrailing) {
                 if let path = overridePosterPath ?? series.posterPath ?? series.backdropPath,
                    let url = TMDBService.shared.imageURL(path: path, size: "w500") {
-                    AuraCachedImage(url: url, targetSize: CGSize(width: 268, height: 402)) { image in
+                    AuraCachedImage(url: url, targetSize: CGSize(width: posterWidth, height: posterWidth * 1.5)) { image in
                         image
                             .resizable()
                             .aspectRatio(2 / 3, contentMode: .fill)
-                            .frame(width: 268, height: 402)
+                            .frame(width: posterWidth, height: posterWidth * 1.5)
                             .clipped()
                     } placeholder: {
                         posterPlaceholder
@@ -71,7 +72,7 @@ struct SeriesPosterCardView: View, Equatable {
                         .padding(10)
                 }
             }
-            .frame(width: 268, height: 402)
+            .frame(width: posterWidth, height: posterWidth * 1.5)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
@@ -127,7 +128,7 @@ struct SeriesPosterCardView: View, Equatable {
     private var posterPlaceholder: some View {
         RoundedRectangle(cornerRadius: 14)
             .fill(Color.auraSurface)
-            .frame(width: 268, height: 402)
+            .frame(width: posterWidth, height: posterWidth * 1.5)
             .overlay {
                 VStack(spacing: 10) {
                     Image(systemName: "tv")

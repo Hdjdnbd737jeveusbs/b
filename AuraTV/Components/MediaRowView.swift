@@ -21,14 +21,14 @@ struct MediaRowView<Content: View>: View {
                         .foregroundStyle(Color.white.opacity(0.42))
                 }
             }
-            .padding(.horizontal, 68)
+            .padding(.horizontal, 156)
 
             // Horizontal Scrollable Cards
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 28) {
                     content()
                 }
-                .padding(.horizontal, 68)
+                .padding(.horizontal, 156)
                 .padding(.vertical, 20)
             }
         }

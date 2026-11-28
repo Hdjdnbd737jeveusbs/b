@@ -102,3 +102,217 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  screenshots:
+    if: github.event_name == 'pull_request'
+    name: Simulator Screenshots (tvOS)
+    runs-on: macos-15
+    timeout-minutes: 45
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode 26
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          XCODE_APP=$(ls -d /Applications/Xcode*26*.app 2>/dev/null | sort | tail -n 1 || true)
+          if [ -z "$XCODE_APP" ]; then
+            echo "::error::Xcode 26 is required by AetherEngine 7.47.0 (tvOS 26.0 SDK), but no Xcode 26 app was found in /Applications."
+            exit 1
+          fi
+          echo "Selecting Xcode: $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks
+
+      - name: Find simulator runtime & select Apple TV simulator
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+
+          DEVICE_UDID=$(xcrun simctl list devices available -j \
+            | python3 -c "
+          import json, sys, re
+          d = json.load(sys.stdin)
+          def runtime_ver(rt):
+              m = re.search(r'tvOS[- ](\d+)(?:[-.](\d+))?', rt)
+              return (int(m.group(1)), int(m.group(2) or 0)) if m else (0, 0)
+
+          candidates = []
+          for runtime, devices in d.get('devices', {}).items():
+              if 'tvOS' not in runtime:
+                  continue
+              ver = runtime_ver(runtime)
+              for dev in devices:
+                  if dev.get('isAvailable'):
+                      name = dev.get('name', '')
+                      score = (ver[0], ver[1], 1 if 'Apple TV 4K' in name else 0)
+                      candidates.append((score, dev['udid'], name, runtime))
+          candidates.sort(reverse=True)
+          if candidates:
+              print(candidates[0][1])
+          " 2>/dev/null || echo "")
+
+          if [ -z "$DEVICE_UDID" ]; then
+            RUNTIME=$(xcrun simctl list runtimes -j \
+              | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          tv = [r for r in d.get('runtimes', []) if 'tvOS' in r.get('name', '') and r.get('isAvailable', False)]
+          if tv:
+              print(tv[-1]['identifier'])
+          ")
+            DEVTYPE=$(xcrun simctl list devicetypes -j \
+              | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          types = [t['identifier'] for t in d.get('devicetypes', []) if 'Apple-TV' in t.get('identifier', '')]
+          preferred = [t for t in types if 'Apple-TV-4K-3rd-generation' in t]
+          print((preferred or types)[0])
+          ")
+            if [ -n "$RUNTIME" ] && [ -n "$DEVTYPE" ]; then
+              echo "Creating Apple TV simulator ($DEVTYPE on $RUNTIME)"
+              DEVICE_UDID=$(xcrun simctl create 'AuraTV-CI-TV' "$DEVTYPE" "$RUNTIME")
+            fi
+          fi
+
+          if [ -z "$DEVICE_UDID" ]; then
+            echo "::error::No available tvOS Simulator runtime or device found under Xcode 26."
+            exit 1
+          fi
+
+          echo "Using simulator UDID: $DEVICE_UDID"
+          echo "DEVICE_UDID=$DEVICE_UDID" >> $GITHUB_ENV
+
+      - name: Resolve Swift Package Manager dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project AuraTV.xcodeproj \
+            -scheme AuraTV \
+            -destination "platform=tvOS Simulator,id=$DEVICE_UDID"
+
+      - name: Build AuraTV for tvOS Simulator
+        run: |
+          xcodebuild build \
+            -project AuraTV.xcodeproj \
+            -scheme AuraTV \
+            -destination "platform=tvOS Simulator,id=$DEVICE_UDID" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Boot Apple TV 4K simulator
+        run: |
+          # Boot the simulator and wait until PineBoard/FrontBoard/installd are fully ready
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+          echo "Simulator booted and ready."
+
+      - name: Locate built .app bundle
+        run: |
+          APP_PATH=$(find build/DerivedData -name 'AuraTV.app' \
+            -path '*iphonesimulator*' -o \
+            -name 'AuraTV.app' -path '*appletvsimulator*' \
+            | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find build/DerivedData -name 'AuraTV.app' | head -n 1)
+          fi
+          echo "App bundle: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+      - name: Install AuraTV on simulator
+        run: |
+          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+          sleep 3
+
+      - name: Verify subtitle controls with the Apple TV remote
+        run: |
+          xcodebuild test -project AuraTV.xcodeproj -scheme AuraTV \
+            -destination "platform=tvOS Simulator,id=$DEVICE_UDID" \
+            -derivedDataPath build/DerivedData -parallel-testing-enabled NO \
+            -only-testing:PlayerRemoteTests CODE_SIGNING_ALLOWED=NO
+
+      - name: Launch AuraTV and capture screenshots
+        run: |
+          mkdir -p screenshots
+
+          # Get the app's bundle ID from Info.plist
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
+          echo "Bundle ID: $BUNDLE_ID"
+
+          # ----------------------------------------------------------------
+          # Deterministic tab-by-tab screenshot strategy
+          #
+          # We terminate and relaunch the app for each tab using the
+          # `-screenshotTab <name>` launch argument, which ContentView reads
+          # from ProcessInfo.processInfo.arguments and sets as the initial tab.
+          #
+          # Using plain `xcrun simctl launch booted <bundle_id>` (no --console-pty)
+          # returns immediately and never hangs the CI job.
+          # ----------------------------------------------------------------
+
+          capture_tab() {
+            local tab_name="$1"     # matches AppTab.rawValue (e.g. "Home")
+            local out_file="$2"
+            local wait_secs="${3:-10}"
+
+            echo ""
+            echo "=== Capturing tab: $tab_name ==="
+
+            # Terminate existing instance (ignore error if not running)
+            xcrun simctl terminate booted "$BUNDLE_ID" 2>/dev/null || true
+            sleep 1
+
+            # Plain simctl launch returns immediately with PID (retry briefly if FrontBoard is still indexing)
+            for attempt in 1 2 3; do
+              if xcrun simctl launch booted "$BUNDLE_ID" -screenshotTab "$tab_name"; then
+                break
+              fi
+              echo "Launch attempt $attempt failed, retrying in 3s..."
+              sleep 3
+            done
+
+            # Wait for SwiftData bootstrap + TMDB fetch + AsyncImage rendering
+            sleep "$wait_secs"
+
+            # Grab the screenshot
+            xcrun simctl io booted screenshot "$out_file"
+            echo "Wrote screenshot: $out_file ($(du -h "$out_file" | cut -f1))"
+
+            # Tail AuraTV OSLog entries to verify tab + TMDB item counts
+            echo "--- AuraTV log tail ($tab_name) ---"
+            xcrun simctl spawn booted log show \
+              --predicate 'subsystem == "com.auratv.AuraTV" OR process == "AuraTV"' \
+              --info \
+              --style compact \
+              --last 30s \
+              2>/dev/null | tail -40 || true
+            echo "--- end log tail ---"
+          }
+
+          # Capture all 6 tabs + detail, HUD, menus, sync, loading, and Change Artwork preview screens
+          capture_tab "Home"            screenshots/01_Home.png            12
+          capture_tab "Search"          screenshots/02_Search.png          6
+          capture_tab "Series"          screenshots/03_Series.png          10
+          capture_tab "Movies"          screenshots/04_Movies.png          10
+          capture_tab "Collections"     screenshots/05_Collections.png     6
+          capture_tab "Settings"        screenshots/06_Settings.png        6
+          capture_tab "MovieDetail"     screenshots/07_MovieDetail.png     10
+          capture_tab "PlayerHUD"       screenshots/08_PlayerHUD.png       8
+          capture_tab "SubtitlesMenu"   screenshots/09_SubtitlesMenu.png   6
+          capture_tab "SubtitleSync"    screenshots/10_SubtitleSync.png    6
+          capture_tab "PlaybackLoading" screenshots/11_PlaybackLoading.png 6
+          capture_tab "ChangeArtwork"   screenshots/12_ChangeArtwork.png   10
+
+          echo ""
+          echo "=== All screenshots ==="
+          ls -lh screenshots/
+
+      - name: Upload screenshots as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AuraTV-Screenshots
+          path: screenshots/
+          if-no-files-found: error
+          retention-days: 30

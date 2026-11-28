@@ -100,9 +100,9 @@ struct SubtitleColorPreset: Identifiable, Hashable {
 }
 
 struct SubtitleStyle: Codable, Hashable {
-    var fontSize: Double = 44.0
-    var fontWeight: String = "Bold"
-    var fontName: String = "System"
+    var fontSize: Double = 58.0
+    var fontWeight: String = "Medium"
+    var fontName: String = "The Year of The Camel"
     var textColor: String = "Light Gray"
     var textOpacity: Double = 0.80
     var backgroundOpacity: Double = 0.0
@@ -200,6 +200,7 @@ struct SubtitleStyle: Codable, Hashable {
     }
 
     var font: Font {
+        ImportedSubtitleFonts.restore()
         let weight: Font.Weight = {
             switch fontWeight.lowercased() {
             case "regular": return .regular
@@ -210,6 +211,9 @@ struct SubtitleStyle: Codable, Hashable {
             }
         }()
 
+        if fontName == "The Year of The Camel" {
+            return .custom("TheYearofTheCamel-Medium", fixedSize: fontSize)
+        }
         if fontName == "System" || fontName.isEmpty {
             return .system(size: fontSize, weight: weight)
         } else if fontName == "IBM Plex Sans Arabic" {

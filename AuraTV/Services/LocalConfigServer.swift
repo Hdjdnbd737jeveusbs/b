@@ -26,6 +26,7 @@ final class LocalConfigServer {
     var savedSubmissionsCount: Int = 0
     var lastSavedSummary: String? = nil
 
+    private var fontUploadPath = ""
     private var listener: NWListener?
     private let networkQueue = DispatchQueue(label: "com.auratv.localconfigserver", qos: .userInitiated)
     private var activeConnections: [UUID: HTTPClientConnection] = [:]
@@ -34,6 +35,7 @@ final class LocalConfigServer {
 
     func start(context: ModelContext, onConfigSaved: @escaping () -> Void) {
         stop()
+        fontUploadPath = "/fonts/" + UUID().uuidString
         self.modelContext = context
         self.onConfigSaved = onConfigSaved
         self.errorMessage = nil
@@ -129,6 +131,16 @@ final class LocalConfigServer {
     // MARK: - HTTP Request Handling
 
     private func handleHTTPRequest(method: String, path: String, body: Data) async -> (Int, String, Data) {
+        if method == "POST", path == fontUploadPath {
+            do {
+                let name = try ImportedSubtitleFonts.install(body)
+                let message = "Font installed: " + name
+                lastSavedSummary = message
+                return (200, "text/plain; charset=utf-8", Data(message.utf8))
+            } catch {
+                return (400, "text/plain; charset=utf-8", Data(error.localizedDescription.utf8))
+            }
+        }
         if method == "POST" && (path == "/save" || path.hasPrefix("/save?")) {
             let fields = Self.parseFormURLEncoded(body)
             let rawManifests = fields["aio_urls"] ?? ""
@@ -149,7 +161,7 @@ final class LocalConfigServer {
             return (200, "text/html; charset=utf-8", Data(html.utf8))
         }
 
-        let html = Self.onboardingFormHTML(snapshot: currentSnapshot())
+        let html = Self.onboardingFormHTML(snapshot: currentSnapshot(), fontUploadPath: fontUploadPath)
         return (200, "text/html; charset=utf-8", Data(html.utf8))
     }
 
@@ -225,7 +237,7 @@ final class LocalConfigServer {
 
         try? context.save()
 
-        TMDBService.shared.apiKey = settings.tmdbApiKey.isEmpty ? "d767cb12181edaa01840442c704329be" : settings.tmdbApiKey
+        if !settings.tmdbApiKey.isEmpty { TMDBService.shared.apiKey = settings.tmdbApiKey }
         AIOStreamsService.shared.manifestURL = settings.aioStreamsUrl
         AIOStreamsService.shared.additionalManifestURLs = settings.aioStreamsAdditionalUrls
         MDBListService.shared.apiKey = settings.mdblistApiKey
@@ -306,7 +318,7 @@ final class LocalConfigServer {
             .replacingOccurrences(of: ">", with: "&gt;")
     }
 
-    private static func onboardingFormHTML(snapshot: SetupFormSnapshot) -> String {
+    private static func onboardingFormHTML(snapshot: SetupFormSnapshot, fontUploadPath: String) -> String {
         let providers = SettingsViewModel.aiTranslationProviderOptions.map { provider in
             let selected = provider == snapshot.aiProvider ? " selected" : ""
             return "<option value=\"\(escapeHTML(provider))\"\(selected)>\(escapeHTML(provider))</option>"
@@ -358,6 +370,27 @@ final class LocalConfigServer {
 
               <button type="submit">Save to Apple TV</button>
             </form>
+            <section>
+              <h2>Custom subtitle fonts</h2>
+              <label for="font-file">Choose a TTF or OTF file (up to 6 MB)</label>
+              <input type="file" id="font-file" accept=".ttf,.otf">
+              <p id="font-result" role="status"></p>
+            </section>
+            <script>
+              document.getElementById('font-file').onchange = async function () {
+                const file = this.files[0];
+                if (!file) return;
+                const result = document.getElementById('font-result');
+                if (file.size > 6 * 1024 * 1024) { result.textContent = 'File exceeds 6 MB.'; return; }
+                result.textContent = 'Uploading…';
+                try {
+                  const response = await fetch('\(fontUploadPath)', { method: 'POST', body: file });
+                  result.textContent = await response.text();
+                } catch {
+                  result.textContent = 'Upload failed. Check that Apple TV setup is still open.';
+                }
+              };
+            </script>
           </div>
         </body>
         </html>
@@ -442,6 +475,10 @@ private final class HTTPClientConnection: @unchecked Sendable {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
             guard let self else { return }
             if let content, !content.isEmpty {
+                guard self.buffer.count + content.count <= ImportedSubtitleFonts.maximumBytes + 16384 else {
+                    self.sendResponse(status: 413, contentType: "text/plain", body: Data("File too large".utf8))
+                    return
+                }
                 self.buffer.append(content)
             }
             if error != nil {
@@ -486,6 +523,7 @@ private final class HTTPClientConnection: @unchecked Sendable {
             }
         }
 
+        guard (0...ImportedSubtitleFonts.maximumBytes).contains(contentLength) else { return nil }
         let bodyStart = headerEndRange.upperBound
         let availableBody = buffer.count - bodyStart
         if availableBody < contentLength && !isEOF {
