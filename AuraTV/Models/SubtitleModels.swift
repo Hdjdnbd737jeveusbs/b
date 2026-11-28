@@ -146,9 +146,9 @@ struct SubtitleStyle: Codable, Hashable {
     }
 
     init(
-        fontSize: Double = 44.0,
-        fontWeight: String = "Bold",
-        fontName: String = "System",
+        fontSize: Double = 58.0,
+        fontWeight: String = "Medium",
+        fontName: String = "The Year of The Camel",
         textColor: String = "Light Gray",
         textOpacity: Double = 0.80,
         backgroundOpacity: Double = 0.0,
@@ -165,9 +165,9 @@ struct SubtitleStyle: Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 44.0
-        self.fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight) ?? "Bold"
-        self.fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? "System"
+        self.fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 58.0
+        self.fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight) ?? "Medium"
+        self.fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? "The Year of The Camel"
         self.textColor = try c.decodeIfPresent(String.self, forKey: .textColor) ?? "Light Gray"
         self.textOpacity = try c.decodeIfPresent(Double.self, forKey: .textOpacity) ?? 0.80
         self.backgroundOpacity = try c.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? 0.0
@@ -235,6 +235,67 @@ struct SubtitleStyle: Codable, Hashable {
         } else {
             return .custom(fontName, size: fontSize)
         }
+    }
+}
+
+// MARK: - Language Matching Helper (ISO 639-1 & 639-2 + Display Names)
+
+enum SubtitleLanguageMatcher {
+    private static let aliases: [String: Set<String>] = [
+        "ar": ["ar", "ara", "arb", "arabic", "العربية"],
+        "en": ["en", "eng", "english"],
+        "es": ["es", "spa", "spanish", "español", "espanol"],
+        "fr": ["fr", "fra", "fre", "french", "français", "francais"],
+        "de": ["de", "deu", "ger", "german", "deutsch"],
+        "it": ["it", "ita", "italian", "italiano"],
+        "ja": ["ja", "jpn", "japanese", "日本語"],
+        "ko": ["ko", "kor", "korean", "한국어"],
+        "pt": ["pt", "por", "portuguese", "português", "portugues"],
+        "tr": ["tr", "tur", "turkish", "türkçe", "turkce"]
+    ]
+
+    static func canonicalCode(from code: String?, fallbackName: String? = nil) -> String? {
+        let rawValues = [code, fallbackName].compactMap { $0?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        for raw in rawValues {
+            let prefix = raw.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? raw
+            for (canonical, set) in aliases {
+                if set.contains(raw) || set.contains(prefix) {
+                    return canonical
+                }
+            }
+            if raw.contains("arab") || raw.contains("عرب") { return "ar" }
+            if raw.contains("engl") { return "en" }
+            if raw.contains("japan") { return "ja" }
+            if raw.contains("kore") { return "ko" }
+        }
+        return code?.lowercased()
+    }
+
+    static func matches(code: String?, name: String? = nil, preferred: String) -> Bool {
+        let target = canonicalCode(from: preferred) ?? preferred.lowercased()
+        let rawCode = code?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let rawName = name?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if rawCode == target || rawCode.hasPrefix("\(target)-") || rawCode.hasPrefix("\(target)_") {
+            return true
+        }
+        if let tokens = aliases[target] {
+            if tokens.contains(rawCode) || tokens.contains(rawName) {
+                return true
+            }
+            let codePrefix = rawCode.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? ""
+            if tokens.contains(codePrefix) {
+                return true
+            }
+            for token in tokens where token.count >= 3 && rawName.contains(token) {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func isArabic(code: String?, name: String? = nil) -> Bool {
+        matches(code: code, name: name, preferred: "ar")
     }
 }
 

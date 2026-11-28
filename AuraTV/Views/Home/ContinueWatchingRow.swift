@@ -11,7 +11,7 @@ struct ContinueWatchingRow: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Continue Watching")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
@@ -27,11 +27,13 @@ struct ContinueWatchingRow: View {
                                 isFirstInRow: item.id == firstItemId
                             )
                             .equatable()
+                            .id("cw_\(item.mediaType)_\(item.tmdbId)")
                         }
                     }
                     .padding(.horizontal, 80)
                     .padding(.vertical, 14)
                 }
+                .focusSection()
             }
         }
     }
@@ -46,6 +48,9 @@ private struct ContinueWatchingCard: View, Equatable {
     var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    private var focusId: String { "cw_\(item.mediaType)_\(item.tmdbId)" }
 
     static func == (lhs: ContinueWatchingCard, rhs: ContinueWatchingCard) -> Bool {
         lhs.item.tmdbId == rhs.item.tmdbId &&
@@ -66,39 +71,41 @@ private struct ContinueWatchingCard: View, Equatable {
                 ZStack(alignment: .bottom) {
                     imageContent
 
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.28))
-                            .frame(height: 4)
+                    if item.progress > 0 {
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.28))
+                                .frame(height: 4)
 
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(width: 400 * max(min(item.progress, 1.0), 0.04), height: 3.5)
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: 400 * max(min(item.progress, 1.0), 0.04), height: 3.5)
+                        }
                     }
                 }
                 .frame(width: 400, height: 225)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
                 )
 
-                // Title & remaining time underneath
-                VStack(alignment: .leading, spacing: 3) {
+                // Title & remaining time underneath (22pt Semibold / 18pt Regular)
+                VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 21, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
                     Text(subtitleText)
-                        .font(.system(size: 17, weight: .regular))
+                        .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
                         .lineLimit(1)
                 }
                 .frame(width: 400, alignment: .leading)
             }
             .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -106,6 +113,8 @@ private struct ContinueWatchingCard: View, Equatable {
         .auraLeftEdgeSidebarTrigger(isFirstInRow)
         .onChange(of: isFocused) { _, focused in
             if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: focusId)
+                AuraNavigationMemory.shared.setHomeScrolledPastHero(true)
                 AppThemeCoordinator.shared.onHomeCardFocused(
                     mediaType: item.mediaType,
                     tmdbId: item.tmdbId,
@@ -121,11 +130,26 @@ private struct ContinueWatchingCard: View, Equatable {
                 AppThemeCoordinator.shared.onHomeCardBlurred(mediaType: item.mediaType, tmdbId: item.tmdbId)
             }
         }
+        .onChange(of: navMemory.restoreTick(for: "Home")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Home") == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
+            }
+        }
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: item.tmdbId,
+            mediaType: item.mediaType,
+            title: item.title,
+            posterPath: item.posterPath,
+            backdropPath: overrideBackdropPath ?? item.backdropPath ?? item.episodeStillPath,
+            initialWatched: item.isCompleted
+        ))
     }
 
     private var subtitleText: String {
         if item.mediaType == "series", let s = item.seasonNumber, let e = item.episodeNumber {
-            if !item.remainingTimeFormatted.isEmpty {
+            if item.currentTime > 0, !item.remainingTimeFormatted.isEmpty {
                 return "S\(s) · E\(e) · \(item.remainingTimeFormatted) left"
             } else if let epTitle = item.episodeTitle, !epTitle.isEmpty {
                 return "S\(s) · E\(e) · \(epTitle)"
@@ -167,7 +191,7 @@ private struct ContinueWatchingCard: View, Equatable {
 
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.auraSurface)
+            .fill(Color.auraCardSurface)
             .frame(width: 400, height: 225)
             .overlay {
                 Image(systemName: "play.rectangle")

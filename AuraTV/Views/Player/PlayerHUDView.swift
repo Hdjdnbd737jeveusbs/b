@@ -512,13 +512,12 @@ struct PlayerHUDView: View {
             }
         }
         .padding(22)
-        .frame(width: 430)
-        .background(Color.auraSurface.opacity(0.92), in: RoundedRectangle(cornerRadius: 20))
+        .frame(width: 440)
+        .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 20))
         .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.65), radius: 22, y: 8)
     }
 
     // MARK: - Subtitle Picker Popover (Right-Anchored)
@@ -716,16 +715,16 @@ struct PlayerHUDView: View {
                 .frame(maxHeight: 620)
             }
             .frame(width: 596)
-            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.92), in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .focusSection()
     }
 
     private func subtitleRowLabel(for track: SubtitleTrackItem) -> String {
@@ -775,16 +774,16 @@ struct PlayerHUDView: View {
                 .frame(maxHeight: 280)
             }
             .frame(width: 580)
-            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .focusSection()
     }
 
     // MARK: - Playback Options Popover (Right-Anchored)
@@ -855,16 +854,16 @@ struct PlayerHUDView: View {
                 .padding(10)
             }
             .frame(width: 580)
-            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .focusSection()
     }
 
     @ViewBuilder
@@ -963,16 +962,16 @@ struct PlayerHUDView: View {
             }
             .padding(22)
             .frame(width: 596)
-            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.65), radius: 24, y: 10)
             .padding(.trailing, 70)
             .padding(.bottom, 248)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .focusSection()
     }
 
     private func infoItem(label: String, value: String) -> some View {

@@ -6,16 +6,16 @@ import SwiftData
 struct SeriesView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
-    @State private var viewModel = SeriesViewModel()
-    @FocusState private var focusedCategory: SeriesCategory?
+    @Bindable var viewModel: SeriesViewModel
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    init(viewModel: SeriesViewModel = SeriesViewModel()) {
+        self.viewModel = viewModel
+    }
 
     private var backgroundStyle: String {
         settingsList.first?.backgroundStyle ?? "Soft Glow"
     }
-
-    private let columns = [
-        GridItem(.adaptive(minimum: 360, maximum: 400), spacing: 28)
-    ]
 
     private var customBackdrops: [Int: String] {
         Dictionary(
@@ -28,34 +28,49 @@ struct SeriesView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let availableWidth = max(geometry.size.width - 136, 360)
-            let columnCount = max(1, Int((availableWidth + 28) / (360 + 28)))
+            let horizontalInset: CGFloat = 80
+            let cardWidth: CGFloat = 400
+            let spacing: CGFloat = 32
+            let availableWidth = max(geometry.size.width - (horizontalInset * 2), cardWidth)
+            let columnCount = max(1, Int((availableWidth + spacing) / (cardWidth + spacing)))
+            let gridColumns = Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: columnCount)
             let currentSeries = viewModel.series(for: viewModel.selectedCategory)
 
             ZStack {
-                // Ambient Backdrop (isolated observer — grid never re-renders on focus moves)
                 ambientBackdropView
 
                 // Content pushed clearly below the floating tvOS sidebar pill (< Series)
                 VStack(alignment: .leading, spacing: 28) {
                     categoryBar
-                        .padding(.horizontal, 68)
-                        .padding(.top, 92)
+                        .padding(.horizontal, horizontalInset)
+                        .padding(.top, 114)
+                        .focusSection()
 
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVGrid(columns: columns, spacing: 32) {
-                            ForEach(Array(currentSeries.enumerated()), id: \.element.id) { index, series in
-                                SeriesCardView(
-                                    series: series,
-                                    overrideBackdropPath: customBackdrops[series.id],
-                                    isFirstInRow: index % columnCount == 0
-                                )
-                                .equatable()
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVGrid(columns: gridColumns, spacing: 36) {
+                                ForEach(Array(currentSeries.enumerated()), id: \.element.id) { index, series in
+                                    SeriesCardView(
+                                        series: series,
+                                        overrideBackdropPath: customBackdrops[series.id],
+                                        cardWidth: cardWidth,
+                                        isFirstInRow: index % columnCount == 0,
+                                        memoryTabKey: "Series"
+                                    )
+                                    .equatable()
+                                    .id("series_\(series.id)")
+                                }
+                            }
+                            .padding(.horizontal, horizontalInset)
+                            .padding(.top, 8)
+                            .padding(.bottom, 60)
+                        }
+                        .focusSection()
+                        .onChange(of: navMemory.restoreTick(for: "Series")) { _, _ in
+                            if let scrollTarget = AuraNavigationMemory.shared.lastScrollId(for: "Series") {
+                                scrollProxy.scrollTo(scrollTarget, anchor: .center)
                             }
                         }
-                        .padding(.horizontal, 68)
-                        .padding(.top, 8)
-                        .padding(.bottom, 60)
                     }
                 }
             }
@@ -68,6 +83,12 @@ struct SeriesView: View {
                     backdropPath: customBackdrops[first.id] ?? first.backdropPath
                 )
             }
+        }
+        .onChange(of: viewModel.selectedCategory) { _, newCategory in
+            viewModel.prefetchSeries(Array(viewModel.series(for: newCategory).prefix(20)))
+        }
+        .onDisappear {
+            viewModel.stopPrefetchingCurrent()
         }
     }
 
@@ -83,43 +104,68 @@ struct SeriesView: View {
         )
     }
 
-    // MARK: - Category Bar
+    // MARK: - Scaled 56pt Category Bar (Isolated Leaf Focus)
 
     @ViewBuilder
     private var categoryBar: some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 20) {
             ForEach(SeriesCategory.allCases) { category in
-                let isSelected = viewModel.selectedCategory == category
-                let isFocused = focusedCategory == category
-
-                Button(action: {
-                    withAnimation(.easeOut(duration: 0.2)) {
+                SeriesCategoryPillButton(
+                    title: category.rawValue,
+                    isSelected: viewModel.selectedCategory == category,
+                    isFirst: category == SeriesCategory.allCases.first,
+                    itemId: "series_cat_\(category.rawValue)"
+                ) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
                         viewModel.selectedCategory = category
                     }
-                }) {
-                    Text(category.rawValue)
-                        .font(.system(size: 26, weight: isSelected ? .semibold : .medium))
-                        .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 14)
-                        .background(
-                            (isSelected || isFocused)
-                            ? Color.white
-                            : Color.white.opacity(0.1)
-                        )
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2 : 1)
-                        )
-                        .contentShape(Capsule())
                 }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
-                .focused($focusedCategory, equals: category)
-                .auraLeftEdgeSidebarTrigger(category == .popular)
+            }
+        }
+    }
+}
+
+private struct SeriesCategoryPillButton: View {
+    let title: String
+    let isSelected: Bool
+    let isFirst: Bool
+    let itemId: String
+    let action: () -> Void
+
+    @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
+                .padding(.horizontal, 28)
+                .frame(height: 56)
+                .background((isSelected || isFocused) ? Color.white : Color.auraCardSurface)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
+                )
+                .contentShape(Capsule())
                 .scaleEffect(isFocused ? 1.05 : 1.0)
-                .animation(.easeOut(duration: 0.14), value: focusedCategory)
+                .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirst)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Series", itemId: itemId)
+            }
+        }
+        .onChange(of: navMemory.restoreTick(for: "Series")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Series") == itemId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
             }
         }
     }

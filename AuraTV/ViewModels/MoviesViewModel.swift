@@ -70,13 +70,14 @@ final class MoviesViewModel {
 
             Self.logger.notice("Fetching TMDB movies categories...")
             do {
-                async let popular = self.service.fetchPopularMovies(page: 1)
-                async let topRated = self.service.fetchTopRatedMovies(page: 1)
-                async let nowPlaying = self.service.fetchNowPlayingMovies(page: 1)
-                async let upcoming = self.service.fetchUpcomingMovies(page: 1)
-
-                let (popularRes, topRatedRes, nowPlayingRes, upcomingRes) =
-                    try await (popular, topRated, nowPlaying, upcoming)
+                let svc = self.service
+                let (popularRes, topRatedRes, nowPlayingRes, upcomingRes) = try await Task.detached(priority: .userInitiated) {
+                    async let popular = svc.fetchPopularMovies(page: 1)
+                    async let topRated = svc.fetchTopRatedMovies(page: 1)
+                    async let nowPlaying = svc.fetchNowPlayingMovies(page: 1)
+                    async let upcoming = svc.fetchUpcomingMovies(page: 1)
+                    return try await (popular, topRated, nowPlaying, upcoming)
+                }.value
 
                 self.popularMovies = popularRes.results
                 self.popularPage = popularRes.page
@@ -94,7 +95,7 @@ final class MoviesViewModel {
                 self.upcomingPage = upcomingRes.page
                 self.upcomingTotalPages = upcomingRes.totalPages
 
-                self.prefetchMovies(Array(popularRes.results.prefix(20)))
+                self.prefetchMovies(Array(self.movies(for: self.selectedCategory).prefix(20)))
 
                 Self.logger.notice("Loaded \(popularRes.results.count) popular, \(topRatedRes.results.count) topRated, \(nowPlayingRes.results.count) nowPlaying, \(upcomingRes.results.count) upcoming movies")
                 print("[MoviesViewModel] Loaded \(popularRes.results.count) popular movies")
@@ -173,6 +174,14 @@ final class MoviesViewModel {
     func prefetchMovies(_ items: [TMDBMovie]) {
         let posterURLs = items.compactMap { service.imageURL(path: $0.posterPath, size: "w500") }
         AuraImageCache.shared.prefetch(urls: posterURLs, targetSize: CGSize(width: 268, height: 402))
+    }
+
+    @MainActor
+    func stopPrefetchingCurrent() {
+        let posterURLs = movies(for: selectedCategory).prefix(20).compactMap {
+            service.imageURL(path: $0.posterPath, size: "w500")
+        }
+        AuraImageCache.shared.stopPrefetching(urls: posterURLs, targetSize: CGSize(width: 268, height: 402))
     }
 
     // MARK: - Helpers

@@ -29,6 +29,7 @@ struct SpotlightCarouselView: View {
 
     @State private var currentIndex: Int = 0
     @State private var previewStore = HeroTrailerPreviewStore.shared
+    @State private var navMemory = AuraNavigationMemory.shared
     @FocusState private var isHeroFocused: Bool
 
     private var trailerPreview: HomeFocusedTrailerPreview? {
@@ -131,12 +132,39 @@ struct SpotlightCarouselView: View {
             .frame(maxWidth: .infinity, minHeight: 590, maxHeight: 590)
             .clipped()
             .scaleEffect(isHeroFocused ? 1.006 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isHeroFocused)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isHeroFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isHeroFocused)
         .auraLeftEdgeSidebarTrigger()
+        .onChange(of: isHeroFocused) { _, focused in
+            if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: "home_hero", scrollId: "home_top_anchor")
+                AuraNavigationMemory.shared.setHomeScrolledPastHero(false)
+            }
+        }
+        .onChange(of: navMemory.restoreTick(for: "Home")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Home") == "home_hero" {
+                DispatchQueue.main.async {
+                    isHeroFocused = true
+                }
+            }
+        }
+        .onChange(of: navMemory.homeScrollToTopTick) { _, _ in
+            AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: "home_hero", scrollId: "home_top_anchor")
+            AuraNavigationMemory.shared.setHomeScrolledPastHero(false)
+            DispatchQueue.main.async {
+                isHeroFocused = true
+            }
+        }
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: trailerPreview?.tmdbId ?? currentItem.id,
+            mediaType: trailerPreview?.mediaType ?? "movie",
+            title: trailerPreview?.title ?? currentItem.title,
+            posterPath: trailerPreview?.posterPath ?? currentItem.posterPath,
+            backdropPath: trailerPreview?.backdropPath ?? currentItem.backdropPath
+        ))
     }
 
     // MARK: - Style B: Spotlight Rounded Carousel (With Peeking Next Card)
@@ -191,15 +219,42 @@ struct SpotlightCarouselView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 22))
                         .overlay(
                             RoundedRectangle(cornerRadius: 22)
-                                .stroke(isHeroFocused ? Color.white : Color.white.opacity(0.12), lineWidth: isHeroFocused ? 3 : 1)
+                                .stroke(isHeroFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isHeroFocused ? 3.5 : 1)
                         )
                         .scaleEffect(isHeroFocused ? 1.015 : 1.0)
-                        .animation(.easeOut(duration: 0.14), value: isHeroFocused)
+                        .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isHeroFocused)
                     }
                     .buttonStyle(AuraButtonStyle())
                     .focusEffectDisabled()
                     .focused($isHeroFocused)
                     .auraLeftEdgeSidebarTrigger()
+                    .onChange(of: isHeroFocused) { _, focused in
+                        if focused {
+                            AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: "home_hero", scrollId: "home_top_anchor")
+                            AuraNavigationMemory.shared.setHomeScrolledPastHero(false)
+                        }
+                    }
+                    .onChange(of: navMemory.restoreTick(for: "Home")) { _, _ in
+                        if AuraNavigationMemory.shared.lastFocusedId(for: "Home") == "home_hero" {
+                            DispatchQueue.main.async {
+                                isHeroFocused = true
+                            }
+                        }
+                    }
+                    .onChange(of: navMemory.homeScrollToTopTick) { _, _ in
+                        AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: "home_hero", scrollId: "home_top_anchor")
+                        AuraNavigationMemory.shared.setHomeScrolledPastHero(false)
+                        DispatchQueue.main.async {
+                            isHeroFocused = true
+                        }
+                    }
+                    .modifier(MediaPosterContextMenuModifier(
+                        tmdbId: trailerPreview?.tmdbId ?? currentItem.id,
+                        mediaType: trailerPreview?.mediaType ?? "movie",
+                        title: trailerPreview?.title ?? currentItem.title,
+                        posterPath: trailerPreview?.posterPath ?? currentItem.posterPath,
+                        backdropPath: trailerPreview?.backdropPath ?? currentItem.backdropPath
+                    ))
 
                     // Next Peeking Card on the right edge
                     if items.count > 1 {

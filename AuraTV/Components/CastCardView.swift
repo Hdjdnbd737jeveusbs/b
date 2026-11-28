@@ -36,28 +36,28 @@ struct CastCardView: View, Equatable {
                 }
                 .overlay(
                     Circle()
-                        .stroke(isFocused ? Color.white : Color.white.opacity(0.12), lineWidth: isFocused ? 3.5 : 1)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
                 )
 
                 // Actor Name
                 Text(member.name)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .frame(width: max(imageSize, 136))
+                    .frame(width: max(imageSize, 148))
 
                 // Character Name
                 if let character = member.character, !character.isEmpty {
                     Text(character)
-                        .font(.system(size: 17))
+                        .font(.system(size: 18))
                         .foregroundStyle(Color.auraSecondaryText)
                         .lineLimit(1)
-                        .frame(width: max(imageSize, 136))
+                        .frame(width: max(imageSize, 148))
                 }
             }
             .padding(6)
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

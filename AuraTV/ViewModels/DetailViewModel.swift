@@ -183,13 +183,63 @@ final class DetailViewModel {
         episodes: [TMDBEpisode] = []
     ) {
         if let backdrop = service.imageURL(path: backdropPath, size: "w1280") {
-            AuraImageCache.shared.prefetch(urls: [backdrop], targetSize: CGSize(width: 1440, height: 840))
+            AuraImageCache.shared.prefetch(urls: [backdrop], targetSize: CGSize(width: 1920, height: 950))
         }
-        let castURLs = cast.prefix(15).compactMap { service.imageURL(path: $0.profilePath, size: "w185") }
-        AuraImageCache.shared.prefetch(urls: castURLs, targetSize: CGSize(width: 112, height: 112))
+        let castURLs = cast.prefix(15).compactMap { service.imageURL(path: $0.profilePath, size: "w342") }
+        AuraImageCache.shared.prefetch(urls: castURLs, targetSize: CGSize(width: 150, height: 150))
 
         let epURLs = episodes.prefix(16).compactMap { service.imageURL(path: $0.stillPath, size: "w780") }
-        AuraImageCache.shared.prefetch(urls: epURLs, targetSize: CGSize(width: 360, height: 202))
+        AuraImageCache.shared.prefetch(urls: epURLs, targetSize: CGSize(width: 400, height: 225))
+    }
+
+    @MainActor
+    func stopPrefetchingDetailAssets(
+        backdropPath: String? = nil,
+        cast: [TMDBCastMember] = [],
+        episodes: [TMDBEpisode] = []
+    ) {
+        activeLoadTask?.cancel()
+        if let backdrop = service.imageURL(path: backdropPath, size: "w1280") {
+            AuraImageCache.shared.stopPrefetching(urls: [backdrop], targetSize: CGSize(width: 1920, height: 950))
+        }
+        let castURLs = cast.prefix(15).compactMap { service.imageURL(path: $0.profilePath, size: "w342") }
+        AuraImageCache.shared.stopPrefetching(urls: castURLs, targetSize: CGSize(width: 150, height: 150))
+
+        let epURLs = episodes.prefix(16).compactMap { service.imageURL(path: $0.stillPath, size: "w780") }
+        AuraImageCache.shared.stopPrefetching(urls: epURLs, targetSize: CGSize(width: 400, height: 225))
+    }
+
+    /// Resolves the smart primary episode for Play button (advances to next unwatched if current reached 90%+).
+    @MainActor
+    func resolveActiveEpisode(tmdbId: Int) -> TMDBEpisode? {
+        let episodes = seasonDetail?.episodes ?? []
+        if let progress = watchProgress,
+           let ps = progress.seasonNumber,
+           let pe = progress.episodeNumber {
+            let currentDone = progress.isCompleted
+                || progress.progress >= 0.90
+                || EpisodeWatchedStore.isWatched(tmdbId: tmdbId, season: ps, episode: pe)
+
+            if !currentDone,
+               let exact = episodes.first(where: { $0.seasonNumber == ps && $0.episodeNumber == pe }) {
+                return exact
+            }
+
+            if let nextInSeason = episodes.first(where: {
+                $0.seasonNumber == ps && $0.episodeNumber > pe && !isEpisodeWatched(tmdbId: tmdbId, season: $0.seasonNumber, episode: $0.episodeNumber)
+            }) {
+                return nextInSeason
+            }
+        }
+        return episodes.first(where: { !isEpisodeWatched(tmdbId: tmdbId, season: $0.seasonNumber, episode: $0.episodeNumber) })
+            ?? episodes.first
+    }
+
+    @MainActor
+    func resolveNextEpisode(afterSeason season: Int, episode: Int) -> TMDBEpisode? {
+        seasonDetail?.episodes?.first(where: {
+            $0.seasonNumber == season && $0.episodeNumber == episode + 1
+        })
     }
 
     // MARK: - Watchlist Management
@@ -430,7 +480,19 @@ final class DetailViewModel {
             history.episodeStillPath = episodeStillPath
 
             if totalDuration > 0 {
-                history.isCompleted = (currentTime / totalDuration) >= 0.95
+                let ratio = currentTime / totalDuration
+                history.isCompleted = ratio >= 0.90
+                if mediaType == "series",
+                   ratio >= 0.90,
+                   let seasonNumber,
+                   let episodeNumber {
+                    EpisodeWatchedStore.markWatched(
+                        tmdbId: tmdbId,
+                        season: seasonNumber,
+                        episode: episodeNumber,
+                        watched: true
+                    )
+                }
             }
 
             try context.save()

@@ -110,3 +110,104 @@ enum EpisodeWatchedStore {
         return next
     }
 }
+
+// MARK: - Remembered Playback Preferences (Audio Language + Series Addon / Quality)
+
+struct SeriesPlaybackPreference: Codable, Sendable {
+    var audioLanguage: String?
+    var audioTrackNameHint: String?
+    var preferredProvider: String?
+    var preferredResolution: String?
+    var subtitleLanguage: String?
+    var updatedAt: Date = Date()
+}
+
+enum SeriesPlaybackPreferencesStore {
+    private static let globalAudioKey = "auratv.global.preferredAudioLanguage"
+
+    private static func key(for seriesId: Int) -> String {
+        "auratv.seriesPreference.\(seriesId)"
+    }
+
+    static var globalPreferredAudioLanguage: String? {
+        get { UserDefaults.standard.string(forKey: globalAudioKey) }
+        set { UserDefaults.standard.set(newValue, forKey: globalAudioKey) }
+    }
+
+    static func load(seriesId: Int) -> SeriesPlaybackPreference? {
+        guard seriesId > 0, let data = UserDefaults.standard.data(forKey: key(for: seriesId)) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(SeriesPlaybackPreference.self, from: data)
+    }
+
+    static func save(_ pref: SeriesPlaybackPreference, for seriesId: Int) {
+        guard seriesId > 0 else { return }
+        var updated = pref
+        updated.updatedAt = Date()
+        if let data = try? JSONEncoder().encode(updated) {
+            UserDefaults.standard.set(data, forKey: key(for: seriesId))
+        }
+    }
+
+    static func recordAudioChoice(seriesId: Int, mediaType: String, language: String?, trackName: String?) {
+        let normalized = SubtitleLanguageMatcher.canonicalCode(from: language, fallbackName: trackName)
+        if let normalized, !normalized.isEmpty {
+            globalPreferredAudioLanguage = normalized
+        }
+        guard mediaType == "series", seriesId > 0 else { return }
+        var pref = load(seriesId: seriesId) ?? SeriesPlaybackPreference()
+        if let normalized, !normalized.isEmpty {
+            pref.audioLanguage = normalized
+        }
+        if let trackName, !trackName.isEmpty {
+            pref.audioTrackNameHint = trackName
+        }
+        save(pref, for: seriesId)
+    }
+
+    static func recordStreamChoice(seriesId: Int, mediaType: String, provider: String?, resolution: String?) {
+        guard mediaType == "series", seriesId > 0 else { return }
+        var pref = load(seriesId: seriesId) ?? SeriesPlaybackPreference()
+        if let provider, !provider.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            pref.preferredProvider = provider.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let resolution, !resolution.isEmpty, resolution != "Unknown" {
+            pref.preferredResolution = resolution
+        }
+        save(pref, for: seriesId)
+    }
+}
+
+// MARK: - Smart Recent Searches Store
+
+enum RecentSearchStore {
+    private static let key = "auratv.recentSearches"
+    private static let maxEntries = 8
+
+    static func load() -> [String] {
+        UserDefaults.standard.stringArray(forKey: key) ?? []
+    }
+
+    static func add(_ query: String) -> [String] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return load() }
+        var list = load().filter { $0.caseInsensitiveCompare(trimmed) != .orderedSame }
+        list.insert(trimmed, at: 0)
+        if list.count > maxEntries {
+            list = Array(list.prefix(maxEntries))
+        }
+        UserDefaults.standard.set(list, forKey: key)
+        return list
+    }
+
+    static func remove(_ query: String) -> [String] {
+        let list = load().filter { $0.caseInsensitiveCompare(query) != .orderedSame }
+        UserDefaults.standard.set(list, forKey: key)
+        return list
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}

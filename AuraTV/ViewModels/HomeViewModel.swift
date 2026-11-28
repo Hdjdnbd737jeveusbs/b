@@ -186,7 +186,7 @@ final class HomeViewModel {
     func loadContinueWatching(context: ModelContext) {
         let descriptor = FetchDescriptor<WatchHistory>(
             predicate: #Predicate<WatchHistory> { item in
-                !item.isCompleted && item.currentTime > 0
+                !item.isCompleted && (item.currentTime > 0 || (item.mediaType == "series" && item.episodeNumber != nil))
             },
             sortBy: [SortDescriptor(\.lastWatched, order: .reverse)]
         )
@@ -229,6 +229,27 @@ final class HomeViewModel {
             }
         }
         AuraImageCache.shared.prefetch(urls: cardURLs, targetSize: CGSize(width: 400, height: 225))
+    }
+
+    @MainActor
+    func stopPrefetchingHomeImages() {
+        let heroURLs = spotlightItems.compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w1280")
+        }
+        AuraImageCache.shared.stopPrefetching(urls: heroURLs, targetSize: CGSize(width: 1920, height: 590))
+
+        var cardURLs: [URL] = []
+        for movie in trendingMovies.prefix(20) {
+            if let url = service.imageURL(path: movie.backdropPath ?? movie.posterPath, size: "w780") {
+                cardURLs.append(url)
+            }
+        }
+        for show in trendingSeries.prefix(20) {
+            if let url = service.imageURL(path: show.backdropPath ?? show.posterPath, size: "w780") {
+                cardURLs.append(url)
+            }
+        }
+        AuraImageCache.shared.stopPrefetching(urls: cardURLs, targetSize: CGSize(width: 400, height: 225))
     }
 
     @MainActor

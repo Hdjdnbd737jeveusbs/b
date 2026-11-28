@@ -143,12 +143,11 @@ struct SubtitleSyncSheet: View {
             }
             .padding(24)
             .frame(width: 820)
-            .background(Color(red: 22 / 255, green: 24 / 255, blue: 30 / 255).opacity(0.94), in: RoundedRectangle(cornerRadius: 18))
+            .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.75), radius: 28, y: 12)
             .padding(.trailing, 90)
             .padding(.bottom, 44)
         }

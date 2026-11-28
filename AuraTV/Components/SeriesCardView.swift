@@ -1,84 +1,83 @@
 import SwiftUI
 
-// MARK: - Series Card View (16:9 Backdrop Card for Series Tab)
+// MARK: - Series Card View (16:9 Landscape Card with 22pt Title & 18pt Rating Underneath)
 
 struct SeriesCardView: View, Equatable {
     let series: TMDBSeries
     var overrideBackdropPath: String? = nil
+    var cardWidth: CGFloat = 400
     var isFirstInRow: Bool = false
+    var memoryTabKey: String? = "Series"
 
     @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    private var cardHeight: CGFloat { (cardWidth * 9.0 / 16.0).rounded() }
+    private var focusId: String { "series_\(series.id)" }
 
     static func == (lhs: SeriesCardView, rhs: SeriesCardView) -> Bool {
         lhs.series.id == rhs.series.id &&
         lhs.overrideBackdropPath == rhs.overrideBackdropPath &&
-        lhs.isFirstInRow == rhs.isFirstInRow
+        lhs.cardWidth == rhs.cardWidth &&
+        lhs.isFirstInRow == rhs.isFirstInRow &&
+        lhs.memoryTabKey == rhs.memoryTabKey
+    }
+
+    private var subtitleLine: String {
+        var parts: [String] = []
+        if let date = series.firstAirDate, date.count >= 4 {
+            parts.append(String(date.prefix(4)))
+        }
+        if let vote = series.voteAverage, vote > 0 {
+            parts.append("★ \(String(format: "%.1f", vote))")
+        }
+        if let genre = TMDBGenres.tvGenreNames(for: series.genreIds).first {
+            parts.append(genre)
+        }
+        return parts.isEmpty ? "TV Series" : parts.joined(separator: " · ")
     }
 
     var body: some View {
         NavigationLink(destination: SeriesDetailView(tmdbId: series.id)) {
-            VStack(alignment: .leading, spacing: 8) {
-                // 16:9 Backdrop with gradient and title
-                ZStack(alignment: .bottomLeading) {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
                     if let path = overrideBackdropPath ?? series.backdropPath ?? series.posterPath,
                        let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                        AuraCachedImage(url: url, targetSize: CGSize(width: 380, height: 214)) { image in
+                        AuraCachedImage(url: url, targetSize: CGSize(width: cardWidth, height: cardHeight)) { image in
                             image
                                 .resizable()
                                 .aspectRatio(16/9, contentMode: .fill)
-                                .frame(width: 380, height: 214)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .frame(width: cardWidth, height: cardHeight)
+                                .clipped()
                         } placeholder: {
                             backdropPlaceholder
                         }
                     } else {
                         backdropPlaceholder
                     }
-
-                    // Subtle bottom gradient
-                    LinearGradient(
-                        colors: [.black.opacity(0.8), .clear],
-                        startPoint: .bottom,
-                        endPoint: .center
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .frame(width: 380, height: 214)
-
-                    // Title overlay at bottom
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(series.name)
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-
-                        HStack(spacing: 8) {
-                            if let date = series.firstAirDate, date.count >= 4 {
-                                Text(String(date.prefix(4)))
-                                    .font(.system(size: 18))
-                                    .foregroundStyle(.white.opacity(0.75))
-                            }
-
-                            if let vote = series.voteAverage, vote > 0 {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "star.fill")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.yellow)
-                                    Text(String(format: "%.1f", vote))
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.92))
-                                }
-                            }
-                        }
-                    }
-                    .padding(14)
                 }
+                .frame(width: cardWidth, height: cardHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
+                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(series.name)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text(subtitleLine)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
+                        .lineLimit(1)
+                }
+                .frame(width: cardWidth, alignment: .leading)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
-            )
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -86,10 +85,21 @@ struct SeriesCardView: View, Equatable {
         .auraLeftEdgeSidebarTrigger(isFirstInRow)
         .onChange(of: isFocused) { _, focused in
             if focused {
+                if let tabKey = memoryTabKey {
+                    AuraNavigationMemory.shared.recordFocus(tab: tabKey, itemId: focusId)
+                }
                 AppThemeCoordinator.shared.updateFocusedArtwork(
                     posterPath: series.posterPath,
                     backdropPath: overrideBackdropPath ?? series.backdropPath
                 )
+            }
+        }
+        .onChange(of: navMemory.restoreTick(for: memoryTabKey ?? "")) { _, _ in
+            if let tabKey = memoryTabKey,
+               AuraNavigationMemory.shared.lastFocusedId(for: tabKey) == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
             }
         }
         .modifier(MediaPosterContextMenuModifier(
@@ -103,12 +113,12 @@ struct SeriesCardView: View, Equatable {
     }
 
     private var backdropPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 14)
-            .fill(Color.auraSurface)
-            .frame(width: 380, height: 214)
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.auraCardSurface)
+            .frame(width: cardWidth, height: cardHeight)
             .overlay {
                 Image(systemName: "tv")
-                    .font(.system(size: 44))
+                    .font(.system(size: 40))
                     .foregroundStyle(.white.opacity(0.25))
             }
     }

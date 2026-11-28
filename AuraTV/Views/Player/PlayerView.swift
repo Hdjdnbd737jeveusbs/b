@@ -104,6 +104,20 @@ struct PlayerView: View {
                     }
                 )
                 .ignoresSafeArea()
+
+                // Sleek floating Next Episode button near end of episode even while HUD is hidden
+                if viewModel.hasStartedPlayback,
+                   viewModel.showUpNextOverlay,
+                   let nextEp = viewModel.nextEpisode {
+                    FloatingNextEpisodePill(
+                        episode: nextEp,
+                        countdown: viewModel.upNextCountdownRemaining,
+                        onPlayNext: { viewModel.playNextEpisodeNow() },
+                        onDismiss: { viewModel.dismissUpNext() }
+                    )
+                    .focusSection()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
 
             // Live Subtitle Sync Popover (Right-Anchored, no full-screen dark dimmer)
@@ -397,6 +411,8 @@ struct PlayerView: View {
             viewModel.showSubtitlePicker = false
             viewModel.showOptionsMenu = false
             viewModel.showInfoPanel = false
+        } else if viewModel.showUpNextOverlay && !viewModel.isHUDVisible {
+            viewModel.dismissUpNext()
         } else if viewModel.isHUDVisible && !viewModel.isPreviewMode {
             viewModel.hideHUD()
         } else {
@@ -425,6 +441,8 @@ final class AetherPlayerCoordinator: ObservableObject {
     private var lastCues: [SubtitleCue] = []
     private var currentSourceTime: Double = 0
     private var didNotifyReadyForCurrentLoad: Bool = false
+    private var didAutoSelectAudioForCurrentLoad: Bool = false
+    private var didAutoSelectEmbeddedSubtitleForCurrentLoad: Bool = false
 
     func load(url: URL, viewModel: PlayerViewModel) {
         boundViewModel = viewModel
@@ -440,6 +458,8 @@ final class AetherPlayerCoordinator: ObservableObject {
         loadTask?.cancel()
         currentLoadedURL = url
         didNotifyReadyForCurrentLoad = false
+        didAutoSelectAudioForCurrentLoad = false
+        didAutoSelectEmbeddedSubtitleForCurrentLoad = false
         lastCues = []
         viewModel.playbackError = nil
         viewModel.onBufferingStarted()
@@ -828,6 +848,15 @@ final class AetherPlayerCoordinator: ObservableObject {
                     } else if let firstDefault = tracks.first(where: { $0.isDefault }) {
                         vm.selectedAudioTrackId = firstDefault.id
                     }
+
+                    if !self.didAutoSelectAudioForCurrentLoad && !vm.availableAudioTracks.isEmpty {
+                        self.didAutoSelectAudioForCurrentLoad = true
+                        if let preferredAudioId = vm.recommendedInitialAudioTrackId(from: vm.availableAudioTracks),
+                           preferredAudioId != engine?.activeAudioTrackIndex {
+                            vm.selectedAudioTrackId = preferredAudioId
+                            engine?.selectAudioTrack(index: preferredAudioId)
+                        }
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -846,9 +875,9 @@ final class AetherPlayerCoordinator: ObservableObject {
 
         engine.$subtitleTracks
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] tracks in
+            .sink { [weak self, weak engine] tracks in
                 MainActor.assumeIsolated {
-                    guard let vm = self?.boundViewModel else { return }
+                    guard let self, let vm = self.boundViewModel else { return }
                     vm.availableSubtitleTracks = tracks
                         .filter { !$0.isExternal }
                         .map { track in
@@ -867,6 +896,15 @@ final class AetherPlayerCoordinator: ObservableObject {
                                 isDefault: track.isDefault
                             )
                         }
+
+                    if !self.didAutoSelectEmbeddedSubtitleForCurrentLoad && !vm.availableSubtitleTracks.isEmpty {
+                        self.didAutoSelectEmbeddedSubtitleForCurrentLoad = true
+                        if vm.selectedExternalSubtitle == nil && vm.selectedSubtitleTrackId < 0,
+                           let preferredSubId = vm.recommendedEmbeddedSubtitleTrackId(from: vm.availableSubtitleTracks) {
+                            vm.selectSubtitleTrack(preferredSubId)
+                            engine?.selectSubtitleTrack(index: preferredSubId)
+                        }
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -1335,7 +1373,9 @@ final class AVPlayerCoordinator: ObservableObject {
                 MainActor.assumeIsolated {
                     guard let self, self.player.currentItem === playerItem, let vm = self.boundViewModel else { return }
                     switch status {
-                    case .readyToPlay: vm.onPlaybackReady(duration: CMTimeGetSeconds(playerItem.duration))
+                    case .readyToPlay:
+                        self.applyPreferredAVTracks(to: playerItem, viewModel: vm)
+                        vm.onPlaybackReady(duration: CMTimeGetSeconds(playerItem.duration))
                     case .failed:
                         vm.onBufferingEnded()
                         vm.playbackError = playerItem.error?.localizedDescription ?? "Unable to load this stream."
@@ -1388,6 +1428,34 @@ final class AVPlayerCoordinator: ObservableObject {
 
     func setAspectRatio(_ mode: AspectRatioMode) {
         controller.videoGravity = Self.avVideoGravity(for: mode)
+    }
+
+    private func applyPreferredAVTracks(to item: AVPlayerItem, viewModel: PlayerViewModel) {
+        let targetAudio = viewModel.preferredAudioLanguage
+        let targetSubtitle = viewModel.preferredSubtitleLanguage.isEmpty ? "ar" : viewModel.preferredSubtitleLanguage
+        let allowAutoSub = viewModel.subtitleAutoMode != "Off" && viewModel.selectedExternalSubtitle == nil
+
+        Task { @MainActor in
+            if let audioGroup = try? await item.asset.loadMediaSelectionGroup(for: .audible) {
+                if let chosen = audioGroup.options.first(where: { opt in
+                    let code = opt.locale?.language.languageCode?.identifier ?? opt.extendedLanguageTag
+                    return SubtitleLanguageMatcher.matches(code: code, name: opt.displayName, preferred: targetAudio)
+                }) {
+                    item.select(chosen, in: audioGroup)
+                }
+            }
+            if allowAutoSub, let legGroup = try? await item.asset.loadMediaSelectionGroup(for: .legible) {
+                if let subOpt = legGroup.options.first(where: { opt in
+                    let code = opt.locale?.language.languageCode?.identifier ?? opt.extendedLanguageTag
+                    return SubtitleLanguageMatcher.matches(code: code, name: opt.displayName, preferred: targetSubtitle)
+                }) ?? legGroup.options.first(where: { opt in
+                    let code = opt.locale?.language.languageCode?.identifier ?? opt.extendedLanguageTag
+                    return SubtitleLanguageMatcher.isArabic(code: code, name: opt.displayName)
+                }) {
+                    item.select(subOpt, in: legGroup)
+                }
+            }
+        }
     }
 
     func stop() {
@@ -1462,8 +1530,75 @@ private struct PlayerErrorActionButton: View {
                         .stroke(isFocused ? Color.white : Color.auraGlassBorder, lineWidth: isFocused ? 2 : 1)
                 )
                 .scaleEffect(isFocused ? 1.05 : 1.0)
-                .animation(.easeOut(duration: 0.16), value: isFocused)
+                .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
+    }
+}
+
+private struct FloatingNextEpisodePill: View {
+    let episode: TMDBEpisode
+    let countdown: Int
+    let onPlayNext: () -> Void
+    let onDismiss: () -> Void
+
+    @FocusState private var isNextFocused: Bool
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                HStack(spacing: 16) {
+                    Button(action: onPlayNext) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 20, weight: .bold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Next Episode · S\(episode.seasonNumber) · E\(episode.episodeNumber)")
+                                    .font(.system(size: 22, weight: .bold))
+                                Text("\(episode.name) · Starting in \(countdown)s")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .opacity(0.75)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .foregroundStyle(isNextFocused ? Color.black : Color.white)
+                        .padding(.horizontal, 28)
+                        .frame(height: 72)
+                        .background(isNextFocused ? Color.white : Color.auraCardSurface, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(isNextFocused ? 1.0 : 0.22), lineWidth: isNextFocused ? 2 : 1)
+                        )
+                        .scaleEffect(isNextFocused ? 1.05 : 1.0)
+                        .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isNextFocused)
+                    }
+                    .buttonStyle(AuraButtonStyle())
+                    .focusEffectDisabled()
+                    .focused($isNextFocused)
+
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Color.auraCardSurface, in: Circle())
+                            .overlay(
+                                Circle().stroke(Color.white.opacity(0.18), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(AuraButtonStyle())
+                    .focusEffectDisabled()
+                }
+            }
+            .padding(.trailing, 70)
+            .padding(.bottom, 72)
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                isNextFocused = true
+            }
+        }
     }
 }

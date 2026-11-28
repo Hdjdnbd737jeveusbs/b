@@ -8,6 +8,7 @@ struct CollectionsView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @Environment(\.modelContext) private var modelContext
+    @State private var navMemory = AuraNavigationMemory.shared
 
     private var posterOverrideMap: [String: String] {
         Dictionary(
@@ -18,14 +19,14 @@ struct CollectionsView: View {
         )
     }
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 255, maximum: 280), spacing: 28)
-    ]
-
     var body: some View {
         GeometryReader { geometry in
-            let availableWidth = max(geometry.size.width - 136, 255)
-            let columnCount = max(1, Int((availableWidth + 28) / (255 + 28)))
+            let horizontalInset: CGFloat = 80
+            let cardWidth: CGFloat = 260
+            let spacing: CGFloat = 32
+            let availableWidth = max(geometry.size.width - (horizontalInset * 2), cardWidth)
+            let columnCount = max(1, Int((availableWidth + spacing) / (cardWidth + spacing)))
+            let gridColumns = Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: columnCount)
 
             ZStack {
                 AuraDynamicBackgroundView(styleSetting: settingsList.first?.backgroundStyle ?? "Soft Glow")
@@ -44,27 +45,37 @@ struct CollectionsView: View {
                         }
                         Spacer()
                     }
-                    .padding(.horizontal, 68)
-                    .padding(.top, 92)
+                    .padding(.horizontal, horizontalInset)
+                    .padding(.top, 114)
 
                     // Content
                     if watchlist.isEmpty {
                         emptyWatchlistView
+                            .focusSection()
                     } else {
-                        ScrollView(.vertical, showsIndicators: false) {
-                            LazyVGrid(columns: columns, spacing: 32) {
-                                ForEach(Array(watchlist.enumerated()), id: \.element.persistentModelID) { index, item in
-                                    let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
-                                    WatchlistCard(
-                                        item: item,
-                                        overridePosterPath: posterOverrideMap[key],
-                                        isFirstInRow: index % columnCount == 0
-                                    )
-                                    .equatable()
+                        ScrollViewReader { scrollProxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                LazyVGrid(columns: gridColumns, spacing: 36) {
+                                    ForEach(Array(watchlist.enumerated()), id: \.element.persistentModelID) { index, item in
+                                        let key = CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType)
+                                        WatchlistCard(
+                                            item: item,
+                                            overridePosterPath: posterOverrideMap[key],
+                                            isFirstInRow: index % columnCount == 0
+                                        )
+                                        .equatable()
+                                        .id("collection_\(key)")
+                                    }
+                                }
+                                .padding(.horizontal, horizontalInset)
+                                .padding(.bottom, 60)
+                            }
+                            .focusSection()
+                            .onChange(of: navMemory.restoreTick(for: "Collections")) { _, _ in
+                                if let scrollTarget = AuraNavigationMemory.shared.lastScrollId(for: "Collections") {
+                                    scrollProxy.scrollTo(scrollTarget, anchor: .center)
                                 }
                             }
-                            .padding(.horizontal, 68)
-                            .padding(.bottom, 60)
                         }
                     }
                 }
@@ -103,6 +114,11 @@ private struct WatchlistCard: View, Equatable {
     var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    private var focusId: String {
+        "collection_\(CustomArtwork.makeKey(tmdbId: item.tmdbId, mediaType: item.mediaType))"
+    }
 
     static func == (lhs: WatchlistCard, rhs: WatchlistCard) -> Bool {
         lhs.item.tmdbId == rhs.item.tmdbId &&
@@ -134,7 +150,7 @@ private struct WatchlistCard: View, Equatable {
 
                     // Media badge
                     Text(item.mediaType == "series" ? "SERIES" : item.mediaType.uppercased())
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -143,23 +159,43 @@ private struct WatchlistCard: View, Equatable {
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
                 )
 
                 // Title
                 Text(item.title)
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .frame(width: 260, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.055 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
         .focused($isFocused)
         .auraLeftEdgeSidebarTrigger(isFirstInRow)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Collections", itemId: focusId)
+            }
+        }
+        .onChange(of: navMemory.restoreTick(for: "Collections")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Collections") == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
+            }
+        }
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: item.tmdbId,
+            mediaType: item.mediaType,
+            title: item.title,
+            posterPath: overridePosterPath ?? item.posterPath,
+            backdropPath: item.backdropPath,
+            initialWatched: false
+        ))
     }
 
     @ViewBuilder
@@ -173,7 +209,7 @@ private struct WatchlistCard: View, Equatable {
 
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 14)
-            .fill(Color.auraSurface)
+            .fill(Color.auraCardSurface)
             .frame(width: 260, height: 390)
             .overlay {
                 Image(systemName: item.mediaType == "series" ? "tv" : "film")

@@ -12,13 +12,14 @@ final class SearchViewModel {
         }
     }
     var searchResults: [TMDBSearchResult] = []
+    var recentSearches: [String] = RecentSearchStore.load()
     var isSearching: Bool = false
     var error: String?
 
     // MARK: - Debounce
 
     private var searchTask: Task<Void, Never>?
-    private let debounceInterval: Duration = .milliseconds(500)
+    private let debounceInterval: Duration = .milliseconds(300)
 
     // MARK: - Dependencies
 
@@ -26,7 +27,7 @@ final class SearchViewModel {
 
     // MARK: - Search
 
-    /// Performs a debounced multi-search against TMDB.
+    /// Performs a debounced 300ms off-MainActor multi-search against TMDB.
     @MainActor
     func search() async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -41,16 +42,41 @@ final class SearchViewModel {
         error = nil
 
         do {
-            let response = try await service.searchMulti(query: trimmed, page: 1)
-            // Filter out "person" results — keep only movie and tv
-            searchResults = response.results.filter { result in
-                result.mediaType == "movie" || result.mediaType == "tv"
+            let svc = self.service
+            let filtered = try await Task.detached(priority: .userInitiated) {
+                let response = try await svc.searchMulti(query: trimmed, page: 1)
+                return response.results.filter { result in
+                    result.mediaType == "movie" || result.mediaType == "tv"
+                }
+            }.value
+            guard query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+            searchResults = filtered
+            prefetchResults(filtered)
+            if !filtered.isEmpty && trimmed.count >= 2 {
+                recentSearches = RecentSearchStore.add(trimmed)
             }
         } catch {
             self.error = error.localizedDescription
         }
 
         isSearching = false
+    }
+
+    @MainActor
+    func selectRecentSearch(_ term: String) {
+        searchTask?.cancel()
+        query = term
+    }
+
+    @MainActor
+    func recordSelection(_ term: String) {
+        recentSearches = RecentSearchStore.add(term)
+    }
+
+    @MainActor
+    func clearRecentSearches() {
+        RecentSearchStore.clear()
+        recentSearches = []
     }
 
     /// Clears the search state.
@@ -61,6 +87,23 @@ final class SearchViewModel {
         searchResults = []
         isSearching = false
         error = nil
+    }
+
+    @MainActor
+    private func prefetchResults(_ results: [TMDBSearchResult]) {
+        let urls = results.prefix(16).compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w780")
+        }
+        AuraImageCache.shared.prefetch(urls: urls, targetSize: CGSize(width: 380, height: 214))
+    }
+
+    @MainActor
+    func stopPrefetching() {
+        searchTask?.cancel()
+        let urls = searchResults.prefix(16).compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w780")
+        }
+        AuraImageCache.shared.stopPrefetching(urls: urls, targetSize: CGSize(width: 380, height: 214))
     }
 
     // MARK: - Private

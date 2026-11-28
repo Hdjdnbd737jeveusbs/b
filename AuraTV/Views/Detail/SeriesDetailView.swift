@@ -5,12 +5,16 @@ import SwiftData
 
 struct SeriesDetailView: View {
     let tmdbId: Int
+    var autoPlayOnAppear: Bool = false
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = DetailViewModel()
-    @FocusState private var focusedButton: SeriesButton?
+    @State private var detailToken = UUID()
+    @State private var didTriggerAutoPlay = false
+    @State private var prefetchTask: Task<Void, Never>?
 
     // Streaming state
     @State private var showStreamPicker = false
@@ -120,14 +124,17 @@ struct SeriesDetailView: View {
                             actionButtons
                                 .padding(.top, 4)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.54, minHeight: geometry.size.height * 0.66, alignment: .topLeading)
+                        .frame(maxWidth: geometry.size.width * 0.60, minHeight: geometry.size.height * 0.66, alignment: .topLeading)
                         .padding(.leading, 80)
+                        .focusSection()
 
                         // Full-width Episodes section with Season selector pill
                         episodesSection
+                            .focusSection()
 
                         // Full-width circular Cast row
                         castSection
+                            .focusSection()
 
                         Spacer().frame(height: 60)
                     }
@@ -135,12 +142,37 @@ struct SeriesDetailView: View {
             }
         }
         .ignoresSafeArea()
+        .onAppear {
+            AuraNavigationMemory.shared.pushDetail(id: detailToken) { dismiss() }
+        }
+        .onDisappear {
+            AuraNavigationMemory.shared.popDetail(id: detailToken)
+            prefetchTask?.cancel()
+            activeStreamFetchTask?.cancel()
+            viewModel.stopPrefetchingDetailAssets(
+                backdropPath: effectiveBackdropPath,
+                cast: viewModel.cast,
+                episodes: viewModel.seasonDetail?.episodes ?? []
+            )
+        }
         .task {
             await viewModel.loadSeriesDetail(id: tmdbId, context: modelContext)
             AppThemeCoordinator.shared.updateFocusedArtwork(
                 posterPath: effectivePosterPath,
                 backdropPath: effectiveBackdropPath
             )
+            startBackgroundEpisodePrefetch()
+            if autoPlayOnAppear && !didTriggerAutoPlay {
+                didTriggerAutoPlay = true
+                playSeries()
+            }
+        }
+        .onChange(of: showPlayer) { _, isPresented in
+            if !isPresented {
+                viewModel.loadWatchProgress(tmdbId: tmdbId, mediaType: "series", context: modelContext)
+                viewModel.episodeWatchedVersion += 1
+                startBackgroundEpisodePrefetch()
+            }
         }
         .sheet(isPresented: $showStreamPicker) {
             StreamPickerSheet(
@@ -153,6 +185,12 @@ struct SeriesDetailView: View {
                     activeStreamFetchTask?.cancel()
                     isLoadingMoreStreams = false
                     selectedStream = stream
+                    SeriesPlaybackPreferencesStore.recordStreamChoice(
+                        seriesId: tmdbId,
+                        mediaType: "series",
+                        provider: stream.parsedInfo.providerName,
+                        resolution: stream.parsedInfo.resolution.rawValue
+                    )
                     if let urlString = stream.url, let url = URL(string: urlString) {
                         let s = pendingEpisodeSeason ?? 1
                         let e = pendingEpisodeNumber ?? 1
@@ -309,8 +347,8 @@ struct SeriesDetailView: View {
                 mediaType: "tv",
                 tmdbId: detail.id,
                 preloadedLogoPath: effectiveLogoPath,
-                maxWidth: 560,
-                maxHeight: 145,
+                maxWidth: 580,
+                maxHeight: 140,
                 fallbackFontSize: 58,
                 alignment: .leading
             )
@@ -331,50 +369,49 @@ struct SeriesDetailView: View {
                 }
 
                 if let cert = viewModel.certification, !cert.isEmpty {
-                    Text("•")
+                    Text("·")
                         .foregroundStyle(.white.opacity(0.5))
                     Text(cert)
                 }
 
                 if let numSeasons = detail.numberOfSeasons, numSeasons > 0 {
-                    Text("•")
+                    Text("·")
                         .foregroundStyle(.white.opacity(0.5))
                     Text("\(numSeasons) Season\(numSeasons == 1 ? "" : "s")")
                 }
 
                 if let genres = detail.genres, !genres.isEmpty {
-                    Text("•")
+                    Text("·")
                         .foregroundStyle(.white.opacity(0.5))
                     Text(genres.map(\.name).prefix(2).joined(separator: ", "))
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 21, weight: .medium))
-            .foregroundStyle(.white.opacity(0.76))
+            .font(.system(size: 24, weight: .medium))
+            .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
         }
     }
 
-    // MARK: - Technical Badges + Star Rating
+    // MARK: - Technical Badges + Star Rating (16pt Semibold, ~25% Larger)
 
     @ViewBuilder
     private var technicalBadgesRow: some View {
-        HStack(spacing: 8) {
-            BadgeView(text: "4K", style: .filled, fontSize: 12)
+        HStack(spacing: 12) {
+            BadgeView(text: "4K", style: .filled, fontSize: 16)
             DolbyVisionBadgeView()
-            BadgeView(text: "5.1", style: .outlined, fontSize: 12)
-            BadgeView(text: "CC", style: .outlined, fontSize: 12)
-            BadgeView(text: "SDH", style: .outlined, fontSize: 12)
-            BadgeView(text: "AR", style: .outlined, fontSize: 12)
+            BadgeView(text: "5.1", style: .outlined, fontSize: 16)
+            BadgeView(text: "CC", style: .outlined, fontSize: 16)
+            BadgeView(text: "SDH", style: .outlined, fontSize: 16)
+            BadgeView(text: "AR", style: .outlined, fontSize: 16)
 
             if let vote = viewModel.seriesDetail?.voteAverage, vote > 0 {
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Image(systemName: "star.fill")
-                        .foregroundStyle(.white.opacity(0.65))
-                        .font(.system(size: 13))
+                        .font(.system(size: 17))
                     Text(String(format: "%.1f", vote))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .font(.system(size: 21, weight: .semibold))
                 }
+                .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
                 .padding(.leading, 4)
             }
         }
@@ -386,111 +423,75 @@ struct SeriesDetailView: View {
     private var overviewSection: some View {
         if let overview = viewModel.seriesDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 21, weight: .regular))
-                .foregroundStyle(.white.opacity(0.78))
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
                 .lineLimit(3)
-                .lineSpacing(4)
+                .lineSpacing(5)
+                .frame(maxWidth: 740, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: - Current Episode Subtitle ("S2 • E1 - Episode Title")
+    // MARK: - Current Episode Subtitle ("S2 · E1 - Episode Title")
 
     @ViewBuilder
     private var currentEpisodeSubtitle: some View {
         if let ep = activeEpisode {
-            Text("S\(ep.seasonNumber) • E\(ep.episodeNumber) - \(ep.name)")
-                .font(.system(size: 21, weight: .semibold))
+            Text("S\(ep.seasonNumber) · E\(ep.episodeNumber) — \(ep.name)")
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
         }
     }
 
     private var activeEpisode: TMDBEpisode? {
-        if let progress = viewModel.watchProgress,
-           let s = progress.seasonNumber,
-           let e = progress.episodeNumber,
-           let matched = viewModel.seasonDetail?.episodes?.first(where: { $0.seasonNumber == s && $0.episodeNumber == e }) {
-            return matched
-        }
-        return viewModel.seasonDetail?.episodes?.first
+        viewModel.resolveActiveEpisode(tmdbId: tmdbId)
     }
 
-    // MARK: - Action Buttons Row
+    // MARK: - Action Buttons Row (72pt Scale + Smart Queue Label ▶ S1 · E5)
 
     @ViewBuilder
     private var actionButtons: some View {
-        HStack(spacing: 14) {
-            Button(action: { playSeries() }) {
-                HStack(spacing: 12) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 17))
-
-                    if let progress = viewModel.watchProgress,
-                       progress.progress > 0 && !progress.isCompleted,
-                       !progress.remainingTimeFormatted.isEmpty {
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.black.opacity(0.22))
-                                .frame(width: 46, height: 4)
-                            Capsule()
-                                .fill(Color.black.opacity(0.88))
-                                .frame(width: max(8, 46 * min(max(progress.progress, 0), 1)), height: 4)
-                        }
-
-                        Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 22, weight: .bold))
-                    } else {
-                        Text("Play")
-                            .font(.system(size: 22, weight: .bold))
-                    }
-                }
-                .padding(.horizontal, 36)
-                .padding(.vertical, 16)
-                .background(Color.white)
-                .foregroundStyle(.black)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(focusedButton == .play ? Color.white : .clear, lineWidth: 3)
-                        .padding(-4)
-                )
+        let currentEp = activeEpisode
+        let isResumingSameEpisode: Bool = {
+            guard let progress = viewModel.watchProgress,
+                  let ps = progress.seasonNumber,
+                  let pe = progress.episodeNumber,
+                  let currentEp else {
+                return false
             }
-            .buttonStyle(AuraButtonStyle())
-            .focusEffectDisabled()
-            .focused($focusedButton, equals: .play)
-            .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
-            .animation(.easeOut(duration: 0.18), value: focusedButton)
+            return ps == currentEp.seasonNumber
+                && pe == currentEp.episodeNumber
+                && progress.progress > 0
+                && progress.progress < 0.90
+                && !progress.isCompleted
+        }()
 
-            if let progress = viewModel.watchProgress, progress.progress > 0 && !progress.isCompleted {
-                Button(action: { rewatchSeries() }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("Rewatch")
-                            .font(.system(size: 18, weight: .semibold))
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                    .background(focusedButton == .rewatch ? Color.white : Color.white.opacity(0.14))
-                    .foregroundStyle(focusedButton == .rewatch ? .black : .white)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
-                .focused($focusedButton, equals: .rewatch)
-                .scaleEffect(focusedButton == .rewatch ? 1.07 : 1.0)
-                .animation(.easeOut(duration: 0.18), value: focusedButton)
+        let playButtonLabel: String = {
+            guard let currentEp else { return "Play" }
+            if isResumingSameEpisode, let rem = viewModel.watchProgress?.remainingTimeFormatted, !rem.isEmpty {
+                return "S\(currentEp.seasonNumber) · E\(currentEp.episodeNumber) · \(rem)"
+            }
+            return "S\(currentEp.seasonNumber) · E\(currentEp.episodeNumber)"
+        }()
+
+        HStack(spacing: 16) {
+            DetailPlayPillButton(
+                title: playButtonLabel,
+                progress: isResumingSameEpisode ? viewModel.watchProgress?.progress : nil
+            ) {
+                playSeries()
             }
 
-            circleGlassButton(
-                systemName: "checkmark",
-                isActive: viewModel.isWatched,
-                target: .watched
+            if viewModel.watchProgress != nil && (isResumingSameEpisode || (viewModel.watchProgress?.currentTime ?? 0) > 0) {
+                DetailSecondaryPillButton(title: "Rewatch", systemName: "arrow.counterclockwise") {
+                    rewatchSeries()
+                }
+            }
+
+            DetailCircleGlassButton(
+                systemName: viewModel.isWatched ? "checkmark.circle.fill" : "checkmark",
+                isActive: viewModel.isWatched
             ) {
                 viewModel.toggleWatched(
                     tmdbId: tmdbId,
@@ -502,52 +503,20 @@ struct SeriesDetailView: View {
                 )
             }
 
-            circleGlassButton(
+            DetailCircleGlassButton(
                 systemName: "paintpalette",
-                isActive: customArtwork != nil,
-                target: .artwork
+                isActive: customArtwork != nil
             ) {
                 showChangeArtwork = true
             }
 
-            circleGlassButton(
-                systemName: "ellipsis",
-                isActive: false,
-                target: .more
-            ) {
+            DetailCircleGlassButton(systemName: "ellipsis") {
                 showMoreOptions = true
             }
         }
     }
 
-    @ViewBuilder
-    private func circleGlassButton(
-        systemName: String,
-        isActive: Bool,
-        target: SeriesButton,
-        action: @escaping () -> Void
-    ) -> some View {
-        let isFocused = focusedButton == target
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 18, weight: .bold))
-                .frame(width: 52, height: 52)
-                .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.28) : Color.white.opacity(0.14)))
-                .foregroundStyle(isFocused ? Color.black : Color.white)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                )
-        }
-        .buttonStyle(AuraButtonStyle())
-        .focusEffectDisabled()
-        .focused($focusedButton, equals: target)
-        .scaleEffect(isFocused ? 1.1 : 1.0)
-        .animation(.easeOut(duration: 0.18), value: focusedButton)
-    }
-
-    // MARK: - Episodes Section with Season Picker Pill
+    // MARK: - Episodes Section (32pt Bold Header + 56pt Season Picker Pill)
 
     @ViewBuilder
     private var episodesSection: some View {
@@ -556,14 +525,14 @@ struct SeriesDetailView: View {
             ?? []
 
         if !seasons.isEmpty || !(viewModel.seasonDetail?.episodes?.isEmpty ?? true) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("Episodes")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(.white)
 
                     if !seasons.isEmpty || blurUnwatchedThumbnails || hideUnwatchedDescriptions {
-                        HStack(spacing: 12) {
+                        HStack(spacing: 14) {
                             if !seasons.isEmpty {
                                 Menu {
                                     ForEach(seasons) { season in
@@ -584,19 +553,19 @@ struct SeriesDetailView: View {
                                         }
                                     }
                                 } label: {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 10) {
                                         Text("Season \(viewModel.selectedSeasonNumber)")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(size: 24, weight: .semibold))
                                         Image(systemName: "chevron.down")
-                                            .font(.system(size: 12, weight: .bold))
+                                            .font(.system(size: 16, weight: .bold))
                                     }
                                     .foregroundStyle(.white)
-                                    .padding(.horizontal, 18)
-                                    .padding(.vertical, 10)
-                                    .background(Color.white.opacity(0.12), in: Capsule())
+                                    .padding(.horizontal, 24)
+                                    .frame(height: 56)
+                                    .background(Color.auraCardSurface, in: Capsule())
                                     .overlay(
                                         Capsule()
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -606,31 +575,32 @@ struct SeriesDetailView: View {
                                 Button {
                                     viewModel.showAllSpoilers.toggle()
                                 } label: {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 10) {
                                         Image(systemName: viewModel.showAllSpoilers ? "eye.fill" : "eye.slash.fill")
-                                            .font(.system(size: 13, weight: .semibold))
-                                        Text(viewModel.showAllSpoilers ? "Hide Unwatched Spoilers" : "Reveal Spoilers")
-                                            .font(.system(size: 15, weight: .semibold))
+                                            .font(.system(size: 18, weight: .semibold))
+                                        Text(viewModel.showAllSpoilers ? "Hide Spoilers" : "Reveal Spoilers")
+                                            .font(.system(size: 24, weight: .semibold))
                                     }
-                                    .foregroundStyle(.white.opacity(0.9))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .background(Color.white.opacity(0.12), in: Capsule())
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .padding(.horizontal, 22)
+                                    .frame(height: 56)
+                                    .background(Color.auraCardSurface, in: Capsule())
                                     .overlay(
                                         Capsule()
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
                                     )
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
+                        .focusSection()
                     }
                 }
                 .padding(.horizontal, 80)
 
                 if let episodes = viewModel.seasonDetail?.episodes, !episodes.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 22) {
+                        LazyHStack(spacing: 32) {
                             ForEach(episodes) { episode in
                                 EpisodeCardView(
                                     episode: episode,
@@ -665,39 +635,64 @@ struct SeriesDetailView: View {
                             }
                         }
                         .padding(.horizontal, 80)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 14)
                     }
+                    .focusSection()
                 }
             }
         }
     }
 
-    // MARK: - Cast Section (Full-Width Horizontal Row of Circular Portraits)
+    // MARK: - Cast Section (32pt Bold Header + 150x150 Circular Portraits)
 
     @ViewBuilder
     private var castSection: some View {
         if !viewModel.cast.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Cast")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 20) {
+                    LazyHStack(spacing: 32) {
                         ForEach(viewModel.cast.prefix(20)) { member in
-                            CastCardView(member: member)
+                            CastCardView(member: member, imageSize: 150)
                                 .equatable()
                         }
                     }
                     .padding(.horizontal, 80)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                 }
             }
         }
     }
 
-    // MARK: - Playback Helpers
+    // MARK: - Background Preloading & Playback Helpers
+
+    private func startBackgroundEpisodePrefetch() {
+        guard let ep = activeEpisode else { return }
+        let pref = SeriesPlaybackPreferencesStore.load(seriesId: tmdbId)
+        let quality = pref?.preferredResolution ?? preferredQuality
+        let provider = pref?.preferredProvider
+        let seasonNum = ep.seasonNumber
+        let episodeNum = ep.episodeNumber
+        prefetchTask?.cancel()
+        prefetchTask = Task { @MainActor in
+            let streams = await Task.detached(priority: .utility) { [tmdbId] in
+                await AIOStreamsService.shared.prefetchStreamsForEpisode(
+                    tmdbId: tmdbId,
+                    season: seasonNum,
+                    episode: episodeNum,
+                    preferredQuality: quality,
+                    preferredProvider: provider
+                )
+            }.value
+            if !Task.isCancelled && availableStreams.isEmpty && !streams.isEmpty {
+                availableStreams = streams
+            }
+        }
+    }
 
     private var streamPickerTitle: String {
         let name = viewModel.seriesDetail?.name ?? "Series"
@@ -708,12 +703,7 @@ struct SeriesDetailView: View {
     }
 
     private func playSeries(forcePicker: Bool = false) {
-        let s = viewModel.watchProgress?.seasonNumber ?? viewModel.selectedSeasonNumber
-        let e = viewModel.watchProgress?.episodeNumber ?? 1
-        let ep = viewModel.seasonDetail?.episodes?.first(where: { $0.seasonNumber == s && $0.episodeNumber == e })
-            ?? viewModel.seasonDetail?.episodes?.first
-
-        if let ep {
+        if let ep = activeEpisode {
             fetchAndPlayEpisode(
                 season: ep.seasonNumber,
                 episode: ep.episodeNumber,
@@ -722,6 +712,8 @@ struct SeriesDetailView: View {
                 forcePicker: forcePicker
             )
         } else {
+            let s = viewModel.watchProgress?.seasonNumber ?? viewModel.selectedSeasonNumber
+            let e = viewModel.watchProgress?.episodeNumber ?? 1
             fetchAndPlayEpisode(season: s, episode: e, title: nil, stillPath: nil, forcePicker: forcePicker)
         }
     }
@@ -776,11 +768,15 @@ struct SeriesDetailView: View {
                     let ext = try? await TMDBService.shared.fetchSeriesExternalIds(id: tmdbId)
                     seriesImdbId = ext?.imdbId
                 }
+                let seriesPref = SeriesPlaybackPreferencesStore.load(seriesId: tmdbId)
+                let targetQuality = seriesPref?.preferredResolution ?? preferredQuality
+                let targetProvider = seriesPref?.preferredProvider
                 let streams = try await AIOStreamsService.shared.fetchStreamsProgressiveForEpisode(
                     tmdbId: tmdbId,
                     season: season,
                     episode: episode,
-                    preferredQuality: preferredQuality
+                    preferredQuality: targetQuality,
+                    preferredProvider: targetProvider
                 ) { partialStreams, stillLoading in
                     guard !Task.isCancelled else { return }
                     availableStreams = partialStreams
@@ -877,8 +873,9 @@ struct SeriesDetailView: View {
                 return
             }
 
-            playerViewModel = PlayerViewModel()
-            playerViewModel.configure(
+            let playerVM = PlayerViewModel()
+            playerVM.loadSubtitleSettingsFromPreferences(context: modelContext)
+            playerVM.configure(
                 url: url,
                 title: seriesTitle,
                 overview: detail?.overview ?? "",
@@ -897,7 +894,7 @@ struct SeriesDetailView: View {
                 nextEpisode: nextEp,
                 onPlayNextEpisode: { ep in
                     showPlayer = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         fetchAndPlayEpisode(
                             season: ep.seasonNumber,
                             episode: ep.episodeNumber,
@@ -908,6 +905,7 @@ struct SeriesDetailView: View {
                     }
                 }
             )
+            playerViewModel = playerVM
             showStreamPicker = false
             showPlayer = true
         }

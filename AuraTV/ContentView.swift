@@ -65,8 +65,12 @@ struct ContentView: View {
     @State private var deepLinkDestination: DeepLinkDestination?
     @State private var isSidebarExpanded: Bool = false
 
-    @FocusState private var isCollapsedPillFocused: Bool
-    @FocusState private var focusedSidebarTab: AppTab?
+    // Persist tab ViewModels across tab switches so grids, lists, and selected categories stay instant
+    @State private var homeViewModel = HomeViewModel()
+    @State private var seriesViewModel = SeriesViewModel()
+    @State private var moviesViewModel = MoviesViewModel()
+    @State private var searchViewModel = SearchViewModel()
+
     @Namespace private var rootFocusScope
 
     private struct DeepLinkDestination: Identifiable, Hashable {
@@ -121,9 +125,19 @@ struct ContentView: View {
                 }
             case .standard:
                 ZStack(alignment: .topLeading) {
-                    // Main Tab Content Zone (Prefers Initial Focus; preserves scroll position across sidebar opens)
+                    // Main Tab Content Zone (Prefers Initial Focus; preserves scroll & ViewModels across sidebar opens)
                     NavigationStack {
                         activeTabRootView
+                            .navigationDestination(item: Binding(
+                                get: { AuraNavigationMemory.shared.pendingContextNavigation },
+                                set: { AuraNavigationMemory.shared.pendingContextNavigation = $0 }
+                            )) { target in
+                                if target.mediaType == "series" {
+                                    SeriesDetailView(tmdbId: target.tmdbId, autoPlayOnAppear: target.autoPlay)
+                                } else {
+                                    MovieDetailView(tmdbId: target.tmdbId, autoPlayOnAppear: target.autoPlay)
+                                }
+                            }
                     }
                     .id(selectedTab)
                     .environment(\.auraOpenSidebar, openSidebar)
@@ -131,10 +145,15 @@ struct ContentView: View {
                     .focusSection()
                     .prefersDefaultFocus(true, in: rootFocusScope)
 
-                    // Floating Rounded Left Sidebar (Collapsed Pill <-> Expanded Panel)
-                    floatingSidebarOverlay
-                        .frame(maxHeight: .infinity, alignment: .topLeading)
-                        .focusSection()
+                    // Isolated Floating Rounded Left Sidebar (Collapsed 56pt Pill <-> 420pt Panel)
+                    FloatingSidebarOverlay(
+                        selectedTab: $selectedTab,
+                        isSidebarExpanded: $isSidebarExpanded,
+                        onOpenSidebar: openSidebar,
+                        onCloseReturningFocus: closeSidebarReturningFocus
+                    )
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+                    .focusSection()
                 }
                 .focusScope(rootFocusScope)
                 .ignoresSafeArea()
@@ -162,19 +181,22 @@ struct ContentView: View {
             if newTab != .home {
                 AppThemeCoordinator.shared.clearHomePreview()
             }
-        }
-        .onChange(of: focusedSidebarTab) { oldTab, newTab in
-            if oldTab != nil && newTab == nil && isSidebarExpanded {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    isSidebarExpanded = false
-                }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 60_000_000)
+                AuraNavigationMemory.shared.requestRestoreFocus(for: newTab.rawValue)
             }
         }
         .onExitCommand {
             if isSidebarExpanded {
                 closeSidebarReturningFocus()
-            } else if selectedTab == .settings {
+            } else if selectedTab == .settings && !AuraNavigationMemory.shared.hasActiveDetail {
                 openSidebar()
+            } else if selectedTab == .home && !AuraNavigationMemory.shared.hasActiveDetail {
+                if AuraNavigationMemory.shared.homeScrolledPastHero() {
+                    AuraNavigationMemory.shared.requestHomeScrollToTop()
+                } else {
+                    openSidebar()
+                }
             }
         }
         .onOpenURL { url in
@@ -200,128 +222,32 @@ struct ContentView: View {
 
     private func openSidebar() {
         guard !isSidebarExpanded else { return }
-        withAnimation(.easeOut(duration: 0.14)) {
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
             isSidebarExpanded = true
-        }
-        DispatchQueue.main.async {
-            focusedSidebarTab = selectedTab
         }
     }
 
     private func closeSidebarReturningFocus() {
-        withAnimation(.easeOut(duration: 0.14)) {
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
             isSidebarExpanded = false
         }
-        focusedSidebarTab = nil
-        isCollapsedPillFocused = false
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 40_000_000)
+            AuraNavigationMemory.shared.requestRestoreFocus(for: selectedTab.rawValue)
+        }
     }
 
-    // MARK: - Active Tab View & Floating Rounded Left Sidebar
+    // MARK: - Active Tab View
 
     @ViewBuilder
     private var activeTabRootView: some View {
         switch selectedTab {
-        case .search: SearchView()
-        case .home: HomeView()
-        case .series: SeriesView()
-        case .movies: MoviesView()
+        case .search: SearchView(viewModel: searchViewModel)
+        case .home: HomeView(viewModel: homeViewModel)
+        case .series: SeriesView(viewModel: seriesViewModel)
+        case .movies: MoviesView(viewModel: moviesViewModel)
         case .collections: CollectionsView()
         case .settings: SettingsView()
-        }
-    }
-
-    @ViewBuilder
-    private var floatingSidebarOverlay: some View {
-        if isSidebarExpanded {
-            ZStack(alignment: .topLeading) {
-                Color.black.opacity(0.42)
-                    .ignoresSafeArea()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(AppTab.allCases, id: \.self) { tab in
-                        let isFocused = focusedSidebarTab == tab
-                        let isSelected = selectedTab == tab
-
-                        Button {
-                            selectedTab = tab
-                            withAnimation(.easeOut(duration: 0.16)) {
-                                isSidebarExpanded = false
-                            }
-                            focusedSidebarTab = nil
-                        } label: {
-                            HStack(spacing: 18) {
-                                Image(systemName: tab.iconName)
-                                    .font(.system(size: 26, weight: .semibold))
-                                    .frame(width: 34)
-
-                                Text(tab.rawValue)
-                                    .font(.system(size: 29, weight: isFocused ? .semibold : .medium))
-
-                                Spacer(minLength: 0)
-                            }
-                            .foregroundStyle(isFocused ? Color.black : Color.white.opacity(isSelected ? 0.98 : 0.88))
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 18)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.10) : Color.clear))
-                            )
-                        }
-                        .buttonStyle(AuraButtonStyle())
-                        .focusEffectDisabled()
-                        .focused($focusedSidebarTab, equals: tab)
-                        .animation(.easeOut(duration: 0.14), value: focusedSidebarTab)
-                    }
-                }
-                .padding(20)
-                .frame(width: 372)
-                .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-                .padding(.top, 42)
-                .padding(.leading, 48)
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
-            }
-        } else if selectedTab != .settings {
-            Button {
-                openSidebar()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(isCollapsedPillFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.8))
-
-                    ZStack {
-                        Circle()
-                            .fill(isCollapsedPillFocused ? Color.black : Color.white)
-                            .frame(width: 28, height: 28)
-
-                        Image(systemName: selectedTab.iconName)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(isCollapsedPillFocused ? Color.white : Color.black)
-                    }
-
-                    Text(selectedTab.rawValue)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(isCollapsedPillFocused ? Color.black : Color.white)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(isCollapsedPillFocused ? Color.white : Color.black.opacity(0.45), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(isCollapsedPillFocused ? 1.0 : 0.16), lineWidth: isCollapsedPillFocused ? 2 : 0.8)
-                )
-            }
-            .buttonStyle(AuraButtonStyle())
-            .focusEffectDisabled()
-            .focused($isCollapsedPillFocused)
-            .auraLeftEdgeSidebarTrigger()
-            .padding(.top, 44)
-            .padding(.leading, 64)
         }
     }
 
@@ -348,6 +274,141 @@ struct ContentView: View {
         }
 
         return nil
+    }
+}
+
+// MARK: - Isolated Floating Sidebar Overlay (420pt Expanded / 56pt Top-Left Pill)
+
+private struct FloatingSidebarOverlay: View {
+    @Binding var selectedTab: ContentView.AppTab
+    @Binding var isSidebarExpanded: Bool
+    let onOpenSidebar: () -> Void
+    let onCloseReturningFocus: () -> Void
+
+    @FocusState private var isCollapsedPillFocused: Bool
+    @FocusState private var focusedSidebarTab: ContentView.AppTab?
+
+    var body: some View {
+        Group {
+            if isSidebarExpanded {
+                ZStack(alignment: .topLeading) {
+                    Color.black.opacity(0.42)
+                        .ignoresSafeArea()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(ContentView.AppTab.allCases, id: \.self) { tab in
+                            let isFocused = focusedSidebarTab == tab
+                            let isSelected = selectedTab == tab
+
+                            Button {
+                                selectedTab = tab
+                                isCollapsedPillFocused = false
+                                focusedSidebarTab = nil
+                                withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
+                                    isSidebarExpanded = false
+                                }
+                            } label: {
+                                HStack(spacing: 18) {
+                                    Image(systemName: tab.iconName)
+                                        .font(.system(size: 26, weight: .semibold))
+                                        .frame(width: 34)
+
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 30, weight: .semibold))
+
+                                    Spacer(minLength: 0)
+                                }
+                                .foregroundStyle(isFocused ? Color.black : Color.white.opacity(isSelected ? 0.98 : 0.88))
+                                .padding(.horizontal, 22)
+                                .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.12) : Color.clear))
+                                )
+                            }
+                            .buttonStyle(AuraButtonStyle())
+                            .focusEffectDisabled()
+                            .focused($focusedSidebarTab, equals: tab)
+                            .scaleEffect(isFocused ? 1.03 : 1.0)
+                            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
+                        }
+                    }
+                    .padding(24)
+                    .frame(width: 420)
+                    .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+                    .padding(.top, 42)
+                    .padding(.leading, 48)
+                    .onMoveCommand { direction in
+                        if direction == .right {
+                            focusedSidebarTab = nil
+                            isCollapsedPillFocused = false
+                            onCloseReturningFocus()
+                        }
+                    }
+                    .onExitCommand {
+                        focusedSidebarTab = nil
+                        isCollapsedPillFocused = false
+                        onCloseReturningFocus()
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+                }
+                .onAppear {
+                    DispatchQueue.main.async {
+                        focusedSidebarTab = selectedTab
+                    }
+                }
+                .onChange(of: focusedSidebarTab) { oldTab, newTab in
+                    if oldTab != nil && newTab == nil && isSidebarExpanded {
+                        onCloseReturningFocus()
+                    }
+                }
+            } else if selectedTab != .settings {
+                Button {
+                    if !AuraNavigationMemory.shared.dismissTopDetail() {
+                        onOpenSidebar()
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(isCollapsedPillFocused ? Color.black.opacity(0.75) : Color.white.opacity(0.85))
+
+                        ZStack {
+                            Circle()
+                                .fill(isCollapsedPillFocused ? Color.black : Color.white)
+                                .frame(width: 32, height: 32)
+
+                            Image(systemName: selectedTab.iconName)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(isCollapsedPillFocused ? Color.white : Color.black)
+                        }
+
+                        Text(selectedTab.rawValue)
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(isCollapsedPillFocused ? Color.black : Color.white)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(height: 56)
+                    .background(isCollapsedPillFocused ? Color.white : Color.black.opacity(0.45), in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(isCollapsedPillFocused ? 1.0 : 0.16), lineWidth: isCollapsedPillFocused ? 2 : 1)
+                    )
+                    .scaleEffect(isCollapsedPillFocused ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isCollapsedPillFocused)
+                }
+                .buttonStyle(AuraButtonStyle())
+                .focusEffectDisabled()
+                .focused($isCollapsedPillFocused)
+                .auraLeftEdgeSidebarTrigger()
+                .padding(.top, 44)
+                .padding(.leading, 64)
+            }
+        }
     }
 }
 

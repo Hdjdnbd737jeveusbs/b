@@ -5,12 +5,16 @@ import SwiftData
 
 struct MovieDetailView: View {
     let tmdbId: Int
+    var autoPlayOnAppear: Bool = false
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
     @State private var viewModel = DetailViewModel()
-    @FocusState private var focusedButton: DetailButton?
+    @State private var detailToken = UUID()
+    @State private var didTriggerAutoPlay = false
+    @State private var prefetchTask: Task<Void, Never>?
 
     // Streaming & Subtitles state
     @State private var showStreamPicker = false
@@ -98,12 +102,14 @@ struct MovieDetailView: View {
                             actionButtons
                                 .padding(.top, 8)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.56, minHeight: geometry.size.height * 0.85, alignment: .topLeading)
+                        .frame(maxWidth: geometry.size.width * 0.60, minHeight: geometry.size.height * 0.85, alignment: .topLeading)
                         .padding(.leading, 80)
+                        .focusSection()
 
                         // Cast section pinned near bottom of initial viewport
                         castSection
                             .padding(.top, 16)
+                            .focusSection()
 
                         Spacer().frame(height: 60)
                     }
@@ -111,12 +117,47 @@ struct MovieDetailView: View {
             }
         }
         .ignoresSafeArea()
+        .onAppear {
+            AuraNavigationMemory.shared.pushDetail(id: detailToken) { dismiss() }
+        }
+        .onDisappear {
+            AuraNavigationMemory.shared.popDetail(id: detailToken)
+            prefetchTask?.cancel()
+            activeStreamFetchTask?.cancel()
+            viewModel.stopPrefetchingDetailAssets(
+                backdropPath: effectiveBackdropPath,
+                cast: viewModel.cast
+            )
+        }
         .task {
+            let quality = preferredQuality
+            prefetchTask?.cancel()
+            prefetchTask = Task { @MainActor in
+                let streams = await Task.detached(priority: .utility) { [tmdbId] in
+                    await AIOStreamsService.shared.prefetchStreamsForMovie(
+                        tmdbId: tmdbId,
+                        preferredQuality: quality
+                    )
+                }.value
+                if !Task.isCancelled && availableStreams.isEmpty && !streams.isEmpty {
+                    availableStreams = streams
+                }
+            }
+
             await viewModel.loadMovieDetail(id: tmdbId, context: modelContext)
             AppThemeCoordinator.shared.updateFocusedArtwork(
                 posterPath: effectivePosterPath,
                 backdropPath: effectiveBackdropPath
             )
+            if autoPlayOnAppear && !didTriggerAutoPlay {
+                didTriggerAutoPlay = true
+                playMovie()
+            }
+        }
+        .onChange(of: showPlayer) { _, isPresented in
+            if !isPresented {
+                viewModel.loadWatchProgress(tmdbId: tmdbId, mediaType: "movie", context: modelContext)
+            }
         }
         .sheet(isPresented: $showStreamPicker) {
             StreamPickerSheet(
@@ -272,9 +313,9 @@ struct MovieDetailView: View {
                 mediaType: "movie",
                 tmdbId: detail.id,
                 preloadedLogoPath: effectiveLogoPath,
-                maxWidth: 520,
-                maxHeight: 120,
-                fallbackFontSize: 54,
+                maxWidth: 580,
+                maxHeight: 140,
+                fallbackFontSize: 58,
                 alignment: .leading
             )
         } else {
@@ -299,7 +340,7 @@ struct MovieDetailView: View {
 
             if !text.isEmpty {
                 Text(text)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
                     .lineLimit(1)
             }
@@ -310,24 +351,24 @@ struct MovieDetailView: View {
 
     @ViewBuilder
     private var technicalBadgesRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Text("4K")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.black)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255), in: RoundedRectangle(cornerRadius: 4))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255), in: RoundedRectangle(cornerRadius: 5))
 
             DolbyVisionBadgeView()
 
             ForEach(["5.1", "CC", "SDH", "AR"], id: \.self) { label in
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color(red: 229 / 255, green: 229 / 255, blue: 234 / 255))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: 5)
                             .stroke(Color(red: 174 / 255, green: 174 / 255, blue: 178 / 255), lineWidth: 1)
                     )
             }
@@ -335,10 +376,10 @@ struct MovieDetailView: View {
             if let vote = viewModel.movieDetail?.voteAverage, vote > 0 {
                 HStack(spacing: 5) {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: 17))
                     Text(String(format: "%.1f", vote))
                 }
-                .font(.system(size: 19, weight: .medium))
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
                 .padding(.leading, 4)
             }
@@ -351,93 +392,41 @@ struct MovieDetailView: View {
     private var overviewSection: some View {
         if let overview = viewModel.movieDetail?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.system(size: 22, weight: .regular))
+                .font(.system(size: 24, weight: .regular))
                 .foregroundStyle(Color(red: 209 / 255, green: 209 / 255, blue: 214 / 255))
                 .lineLimit(3)
-                .lineSpacing(4)
-                .frame(maxWidth: 680, alignment: .leading)
+                .lineSpacing(5)
+                .frame(maxWidth: 740, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: - Action Buttons Row
+    // MARK: - Action Buttons Row (72pt Scale + Isolated Leaf Focus)
 
     @ViewBuilder
     private var actionButtons: some View {
         HStack(spacing: 16) {
-            // Primary Solid White Pill Button (height 64pt, horizontal padding 36pt)
-            Button(action: { playMovie() }) {
-                HStack(spacing: 12) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 20, weight: .bold))
+            let hasProgress = viewModel.watchProgress.map { $0.progress > 0 && !$0.isCompleted } ?? false
+            let playLabel = hasProgress
+                ? (viewModel.watchProgress?.remainingTimeFormatted.isEmpty == false ? viewModel.watchProgress!.remainingTimeFormatted : "Resume")
+                : "Play"
 
-                    if let progress = viewModel.watchProgress,
-                       progress.progress > 0 && !progress.isCompleted,
-                       !progress.remainingTimeFormatted.isEmpty {
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.black.opacity(0.22))
-                                .frame(width: 46, height: 4)
-                            Capsule()
-                                .fill(Color.black.opacity(0.88))
-                                .frame(width: max(8, 46 * min(max(progress.progress, 0), 1)), height: 4)
-                        }
-
-                        Text(progress.remainingTimeFormatted)
-                            .font(.system(size: 24, weight: .semibold))
-                    } else {
-                        Text("Play")
-                            .font(.system(size: 24, weight: .semibold))
-                    }
-                }
-                .padding(.horizontal, 36)
-                .frame(height: 64)
-                .background(Color.white)
-                .foregroundStyle(.black)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(focusedButton == .play ? Color.white : .clear, lineWidth: 3)
-                        .padding(-4)
-                )
-            }
-            .buttonStyle(AuraButtonStyle())
-            .focusEffectDisabled()
-            .focused($focusedButton, equals: .play)
-            .scaleEffect(focusedButton == .play ? 1.07 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: focusedButton)
-
-            // Rewatch glass pill if currently resuming
-            if let progress = viewModel.watchProgress, progress.progress > 0 && !progress.isCompleted {
-                Button(action: { rewatchMovie() }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text("Rewatch")
-                            .font(.system(size: 20, weight: .semibold))
-                    }
-                    .padding(.horizontal, 26)
-                    .frame(height: 64)
-                    .background(focusedButton == .rewatch ? Color.white : Color.white.opacity(0.14))
-                    .foregroundStyle(focusedButton == .rewatch ? .black : .white)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
-                .focused($focusedButton, equals: .rewatch)
-                .scaleEffect(focusedButton == .rewatch ? 1.07 : 1.0)
-                .animation(.easeOut(duration: 0.14), value: focusedButton)
+            DetailPlayPillButton(
+                title: playLabel,
+                progress: hasProgress ? viewModel.watchProgress?.progress : nil
+            ) {
+                playMovie()
             }
 
-            // Watched Toggle Circular Glass Button
-            circleGlassButton(
+            if hasProgress {
+                DetailSecondaryPillButton(title: "Rewatch", systemName: "arrow.counterclockwise") {
+                    rewatchMovie()
+                }
+            }
+
+            DetailCircleGlassButton(
                 systemName: viewModel.isWatched ? "checkmark.circle.fill" : "checkmark.circle",
-                isActive: viewModel.isWatched,
-                target: .watched
+                isActive: viewModel.isWatched
             ) {
                 viewModel.toggleWatched(
                     tmdbId: tmdbId,
@@ -449,61 +438,27 @@ struct MovieDetailView: View {
                 )
             }
 
-            // Change Artwork Circular Glass Button
-            circleGlassButton(
+            DetailCircleGlassButton(
                 systemName: "paintpalette",
-                isActive: customArtwork != nil,
-                target: .artwork
+                isActive: customArtwork != nil
             ) {
                 showChangeArtwork = true
             }
 
-            // More (...) Circular Glass Button
-            circleGlassButton(
-                systemName: "ellipsis",
-                isActive: false,
-                target: .more
-            ) {
+            DetailCircleGlassButton(systemName: "ellipsis") {
                 showMoreOptions = true
             }
         }
     }
 
-    @ViewBuilder
-    private func circleGlassButton(
-        systemName: String,
-        isActive: Bool,
-        target: DetailButton,
-        action: @escaping () -> Void
-    ) -> some View {
-        let isFocused = focusedButton == target
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 22, weight: .semibold))
-                .frame(width: 64, height: 64)
-                .background(isFocused ? Color.white : (isActive ? Color.white.opacity(0.24) : Color.white.opacity(0.14)))
-                .foregroundStyle(isFocused ? Color.black : Color.white)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                )
-        }
-        .buttonStyle(AuraButtonStyle())
-        .focusEffectDisabled()
-        .focused($focusedButton, equals: target)
-        .scaleEffect(isFocused ? 1.08 : 1.0)
-        .animation(.easeOut(duration: 0.14), value: focusedButton)
-    }
-
-    // MARK: - Cast Section (Full-Width Horizontal Row of 150x150 Circular Portraits)
+    // MARK: - Cast Section (32pt Bold Header + 150x150 Circular Portraits)
 
     @ViewBuilder
     private var castSection: some View {
         if !viewModel.cast.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Cast")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 80)
 
@@ -626,8 +581,9 @@ struct MovieDetailView: View {
                 return
             }
 
-            playerViewModel = PlayerViewModel()
-            playerViewModel.configure(
+            let playerVM = PlayerViewModel()
+            playerVM.loadSubtitleSettingsFromPreferences(context: modelContext)
+            playerVM.configure(
                 url: url,
                 title: movieTitle,
                 overview: detail?.overview ?? "",
@@ -640,6 +596,7 @@ struct MovieDetailView: View {
                 availableStreams: availableStreams,
                 selectedStream: stream ?? selectedStream
             )
+            playerViewModel = playerVM
             showStreamPicker = false
             showPlayer = true
         }

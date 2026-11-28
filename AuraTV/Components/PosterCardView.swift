@@ -11,9 +11,11 @@ struct PosterCardView: View, Equatable {
     var autoPlayTrailersOnFocus: Bool = false
     var isFirstInRow: Bool = false
     var posterWidth: CGFloat = 268
+    var memoryTabKey: String? = "Movies"
 
     @FocusState private var isFocused: Bool
     @State private var isTrailerExpanded: Bool = false
+    @State private var navMemory = AuraNavigationMemory.shared
 
     static func == (lhs: PosterCardView, rhs: PosterCardView) -> Bool {
         lhs.movie.id == rhs.movie.id &&
@@ -21,8 +23,11 @@ struct PosterCardView: View, Equatable {
         lhs.isWatched == rhs.isWatched &&
         lhs.showWatchedBadge == rhs.showWatchedBadge &&
         lhs.autoPlayTrailersOnFocus == rhs.autoPlayTrailersOnFocus &&
-        lhs.isFirstInRow == rhs.isFirstInRow && lhs.posterWidth == rhs.posterWidth
+        lhs.isFirstInRow == rhs.isFirstInRow && lhs.posterWidth == rhs.posterWidth &&
+        lhs.memoryTabKey == rhs.memoryTabKey
     }
+
+    private var focusId: String { "movie_\(movie.id)" }
 
     var body: some View {
         NavigationLink(destination: MovieDetailView(tmdbId: movie.id)) {
@@ -77,11 +82,11 @@ struct PosterCardView: View, Equatable {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
             )
-            .scaleEffect(isTrailerExpanded ? 1.09 : (isFocused ? 1.055 : 1.0))
-            .animation(.easeOut(duration: 0.14), value: isFocused)
-            .animation(.easeOut(duration: 0.25), value: isTrailerExpanded)
+            .scaleEffect(isTrailerExpanded ? 1.08 : (isFocused ? 1.05 : 1.0))
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: isTrailerExpanded)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -91,6 +96,9 @@ struct PosterCardView: View, Equatable {
             guard isFocused else {
                 isTrailerExpanded = false
                 return
+            }
+            if let tabKey = memoryTabKey {
+                AuraNavigationMemory.shared.recordFocus(tab: tabKey, itemId: focusId)
             }
             AppThemeCoordinator.shared.onHomeCardFocused(
                 mediaType: "movie",
@@ -107,6 +115,14 @@ struct PosterCardView: View, Equatable {
                 try? await Task.sleep(for: .seconds(2.0))
                 if !Task.isCancelled && isFocused {
                     isTrailerExpanded = true
+                }
+            }
+        }
+        .onChange(of: navMemory.restoreTick(for: memoryTabKey ?? "")) { _, _ in
+            if let tabKey = memoryTabKey,
+               AuraNavigationMemory.shared.lastFocusedId(for: tabKey) == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
                 }
             }
         }
@@ -128,7 +144,7 @@ struct PosterCardView: View, Equatable {
 
     private var posterPlaceholder: some View {
         RoundedRectangle(cornerRadius: 14)
-            .fill(Color.auraSurface)
+            .fill(Color.auraCardSurface)
             .frame(width: posterWidth, height: posterWidth * 1.5)
             .overlay {
                 VStack(spacing: 10) {
@@ -173,11 +189,21 @@ struct MediaPosterContextMenuModifier: ViewModifier {
         content
             .contextMenu {
                 Button {
+                    AuraNavigationMemory.shared.pendingContextNavigation = AuraContextNavigationTarget(
+                        tmdbId: tmdbId,
+                        mediaType: mediaType,
+                        autoPlay: true
+                    )
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                }
+
+                Button {
                     toggleWatched()
                 } label: {
                     Label(
                         isWatched ? "Mark as Unwatched" : "Mark as Watched",
-                        systemImage: "checkmark.circle"
+                        systemImage: isWatched ? "checkmark.circle.fill" : "checkmark.circle"
                     )
                 }
 
@@ -185,19 +211,19 @@ struct MediaPosterContextMenuModifier: ViewModifier {
                     toggleFavorite()
                 } label: {
                     Label(
-                        isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                        systemImage: "star"
+                        isFavorite ? "Remove from Collection" : "Add to Collection",
+                        systemImage: isFavorite ? "bookmark.fill" : "bookmark"
                     )
                 }
 
-                Menu {
-                    Button {
-                        toggleFavorite()
-                    } label: {
-                        Label("Watchlist", systemImage: "bookmark")
-                    }
+                Button {
+                    AuraNavigationMemory.shared.pendingContextNavigation = AuraContextNavigationTarget(
+                        tmdbId: tmdbId,
+                        mediaType: mediaType,
+                        autoPlay: false
+                    )
                 } label: {
-                    Label("Add to Collection", systemImage: "square.3.layers.3d")
+                    Label("Details", systemImage: "info.circle")
                 }
 
                 Button {
@@ -207,29 +233,10 @@ struct MediaPosterContextMenuModifier: ViewModifier {
                 }
 
                 Button {
-                    Task { await applyArtworkSet() }
-                } label: {
-                    Label("Apply Set", systemImage: "square.3.layers.3d")
-                }
-
-                Button {
                     Task { await refreshMetadata() }
                 } label: {
                     Label("Refresh Metadata", systemImage: "arrow.clockwise")
                 }
-
-                Button {
-                    // Trigger intro scan placeholder for series
-                } label: {
-                    Label("Detect Intros in All Seasons", systemImage: "waveform")
-                }
-
-                Button {
-                    // Export marks action
-                } label: {
-                    Label("Export Marks for IntroDB", systemImage: "square.and.arrow.up")
-                }
-                .disabled(true)
             }
             .fullScreenCover(isPresented: $showChangeArtwork) {
                 ChangeArtworkView(

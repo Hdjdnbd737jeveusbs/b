@@ -76,11 +76,11 @@ struct SeriesPosterCardView: View, Equatable {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
             )
-            .scaleEffect(isTrailerExpanded ? 1.09 : (isFocused ? 1.055 : 1.0))
-            .animation(.easeOut(duration: 0.14), value: isFocused)
-            .animation(.easeOut(duration: 0.25), value: isTrailerExpanded)
+            .scaleEffect(isTrailerExpanded ? 1.08 : (isFocused ? 1.05 : 1.0))
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: isTrailerExpanded)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()

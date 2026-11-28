@@ -10,7 +10,7 @@ struct MediaRowView<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 80)
 
@@ -22,6 +22,7 @@ struct MediaRowView<Content: View>: View {
                 .padding(.horizontal, 80)
                 .padding(.vertical, 14)
             }
+            .focusSection()
         }
     }
 }

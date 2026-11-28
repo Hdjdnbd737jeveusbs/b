@@ -89,6 +89,10 @@ final class AIOStreamsService {
 
     private let session: URLSession
     private let decoder: JSONDecoder
+    private let cacheLock = NSLock()
+    private var prefetchedStreamsCache: [String: (streams: [StremioStream], timestamp: Date)] = [:]
+    private var cachedImdbByTmdbKey: [String: String] = [:]
+    private let streamCacheTTL: TimeInterval = 480
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -97,6 +101,41 @@ final class AIOStreamsService {
         self.session = URLSession(configuration: config)
         self.decoder = JSONDecoder()
         self.decoder.keyDecodingStrategy = .convertFromSnakeCase
+    }
+
+    private func cachedImdbId(for key: String) -> String? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cachedImdbByTmdbKey[key]
+    }
+
+    private func storeImdbId(_ imdbId: String, for key: String) {
+        cacheLock.lock()
+        cachedImdbByTmdbKey[key] = imdbId
+        cacheLock.unlock()
+    }
+
+    private func cachedStreams(for cacheKey: String) -> [StremioStream]? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        guard let entry = prefetchedStreamsCache[cacheKey] else { return nil }
+        if Date().timeIntervalSince(entry.timestamp) > streamCacheTTL {
+            prefetchedStreamsCache.removeValue(forKey: cacheKey)
+            return nil
+        }
+        return entry.streams
+    }
+
+    private func storeStreams(_ streams: [StremioStream], for cacheKey: String) {
+        cacheLock.lock()
+        prefetchedStreamsCache[cacheKey] = (streams, Date())
+        cacheLock.unlock()
+    }
+
+    func invalidatePrefetchCache() {
+        cacheLock.lock()
+        prefetchedStreamsCache.removeAll()
+        cacheLock.unlock()
     }
 
     // MARK: - Manifest Validation
@@ -213,30 +252,127 @@ final class AIOStreamsService {
 
     // MARK: - High-Level: Movie & Series
 
+    private func resolveMovieImdbId(tmdbId: Int) async throws -> String {
+        let key = "movie-\(tmdbId)"
+        if let hit = cachedImdbId(for: key) { return hit }
+        let externalIds = try await TMDBService.shared.fetchMovieExternalIds(id: tmdbId)
+        guard let imdbId = externalIds.imdbId, !imdbId.isEmpty else {
+            throw AIOStreamsError.missingIMDbId
+        }
+        storeImdbId(imdbId, for: key)
+        return imdbId
+    }
+
+    private func resolveSeriesImdbId(tmdbId: Int) async throws -> String {
+        let key = "series-\(tmdbId)"
+        if let hit = cachedImdbId(for: key) { return hit }
+        let externalIds = try await TMDBService.shared.fetchSeriesExternalIds(id: tmdbId)
+        guard let imdbId = externalIds.imdbId, !imdbId.isEmpty else {
+            throw AIOStreamsError.missingIMDbId
+        }
+        storeImdbId(imdbId, for: key)
+        return imdbId
+    }
+
+    func cachedPrefetchedMovieStreams(tmdbId: Int) -> [StremioStream]? {
+        cachedStreams(for: "movie-\(tmdbId)")
+    }
+
+    func cachedPrefetchedEpisodeStreams(tmdbId: Int, season: Int, episode: Int) -> [StremioStream]? {
+        cachedStreams(for: "series-\(tmdbId)-S\(season)E\(episode)")
+    }
+
+    /// Silently fetches and sorts movie streams in the background (never sets error/loading flags).
+    @discardableResult
+    func prefetchStreamsForMovie(
+        tmdbId: Int,
+        preferredQuality: String = "4K",
+        preferredProvider: String? = nil
+    ) async -> [StremioStream] {
+        guard !allManifestURLs.isEmpty else { return [] }
+        let cacheKey = "movie-\(tmdbId)"
+        if let hit = cachedStreams(for: cacheKey), !hit.isEmpty {
+            return hit
+        }
+        do {
+            let imdbId = try await resolveMovieImdbId(tmdbId: tmdbId)
+            let raw = try await fetchStreamsProgressive(type: "movie", stremioId: imdbId)
+            let sorted = await Task.detached(priority: .utility) {
+                Self.sortStreams(raw, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
+            }.value
+            if !sorted.isEmpty {
+                storeStreams(sorted, for: cacheKey)
+            }
+            return sorted
+        } catch {
+            return []
+        }
+    }
+
+    /// Silently fetches and sorts episode streams in the background (never sets error/loading flags).
+    @discardableResult
+    func prefetchStreamsForEpisode(
+        tmdbId: Int,
+        season: Int,
+        episode: Int,
+        preferredQuality: String = "4K",
+        preferredProvider: String? = nil
+    ) async -> [StremioStream] {
+        guard !allManifestURLs.isEmpty else { return [] }
+        let cacheKey = "series-\(tmdbId)-S\(season)E\(episode)"
+        if let hit = cachedStreams(for: cacheKey), !hit.isEmpty {
+            return hit
+        }
+        do {
+            let imdbId = try await resolveSeriesImdbId(tmdbId: tmdbId)
+            let raw = try await fetchStreamsProgressive(type: "series", stremioId: "\(imdbId):\(season):\(episode)")
+            let sorted = await Task.detached(priority: .utility) {
+                Self.sortStreams(raw, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
+            }.value
+            if !sorted.isEmpty {
+                storeStreams(sorted, for: cacheKey)
+            }
+            return sorted
+        } catch {
+            return []
+        }
+    }
+
     @MainActor
     func fetchStreamsProgressiveForMovie(
         tmdbId: Int,
         preferredQuality: String = "4K",
+        preferredProvider: String? = nil,
+        bypassCache: Bool = false,
         onUpdate: @escaping @MainActor ([StremioStream], Bool) -> Void
     ) async throws -> [StremioStream] {
+        let cacheKey = "movie-\(tmdbId)"
+        if !bypassCache, let hit = cachedStreams(for: cacheKey), !hit.isEmpty {
+            streams = hit
+            onUpdate(hit, false)
+            return hit
+        }
+
         isLoading = true
         error = nil
         streams = []
         defer { isLoading = false }
 
-        let externalIds = try await TMDBService.shared.fetchMovieExternalIds(id: tmdbId)
-        guard let imdbId = externalIds.imdbId, !imdbId.isEmpty else {
-            throw AIOStreamsError.missingIMDbId
-        }
+        let imdbId = try await resolveMovieImdbId(tmdbId: tmdbId)
 
-        let result = try await fetchStreamsProgressive(type: "movie", stremioId: imdbId) { partial, stillLoading in
-            self.streams = partial
-            onUpdate(partial, stillLoading)
+        let rawResult = try await fetchStreamsProgressive(type: "movie", stremioId: imdbId) { partial, stillLoading in
+            let sortedPartial = Self.sortStreams(partial, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
+            self.streams = sortedPartial
+            onUpdate(sortedPartial, stillLoading)
         }
+        let result = await Task.detached(priority: .userInitiated) {
+            Self.sortStreams(rawResult, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
+        }.value
         guard !result.isEmpty else {
             throw AIOStreamsError.noStreamsFound
         }
 
+        storeStreams(result, for: cacheKey)
         streams = result
         return result
     }
@@ -247,27 +383,38 @@ final class AIOStreamsService {
         season: Int,
         episode: Int,
         preferredQuality: String = "4K",
+        preferredProvider: String? = nil,
+        bypassCache: Bool = false,
         onUpdate: @escaping @MainActor ([StremioStream], Bool) -> Void
     ) async throws -> [StremioStream] {
+        let cacheKey = "series-\(tmdbId)-S\(season)E\(episode)"
+        if !bypassCache, let hit = cachedStreams(for: cacheKey), !hit.isEmpty {
+            streams = hit
+            onUpdate(hit, false)
+            return hit
+        }
+
         isLoading = true
         error = nil
         streams = []
         defer { isLoading = false }
 
-        let externalIds = try await TMDBService.shared.fetchSeriesExternalIds(id: tmdbId)
-        guard let imdbId = externalIds.imdbId, !imdbId.isEmpty else {
-            throw AIOStreamsError.missingIMDbId
-        }
+        let imdbId = try await resolveSeriesImdbId(tmdbId: tmdbId)
 
         let stremioId = "\(imdbId):\(season):\(episode)"
-        let result = try await fetchStreamsProgressive(type: "series", stremioId: stremioId) { partial, stillLoading in
-            self.streams = partial
-            onUpdate(partial, stillLoading)
+        let rawResult = try await fetchStreamsProgressive(type: "series", stremioId: stremioId) { partial, stillLoading in
+            let sortedPartial = Self.sortStreams(partial, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
+            self.streams = sortedPartial
+            onUpdate(sortedPartial, stillLoading)
         }
+        let result = await Task.detached(priority: .userInitiated) {
+            Self.sortStreams(rawResult, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
+        }.value
         guard !result.isEmpty else {
             throw AIOStreamsError.noStreamsFound
         }
 
+        storeStreams(result, for: cacheKey)
         streams = result
         return result
     }
@@ -292,39 +439,57 @@ final class AIOStreamsService {
         ) { _, _ in }
     }
 
-    // MARK: - Auto-Selection & Sorting
+    // MARK: - Auto-Selection & Off-MainActor Sorting
 
-    /// Returns the best playable stream honoring `preferredQuality` ("4K", "1080p", "720p", "480p").
-    func bestStream(matching preferredQuality: String, in candidates: [StremioStream]) -> StremioStream? {
-        sortedStreams(candidates, preferredQuality: preferredQuality)
+    /// Returns the best playable stream honoring `preferredProvider` and `preferredQuality`.
+    nonisolated func bestStream(matching preferredQuality: String, preferredProvider: String? = nil, in candidates: [StremioStream]) -> StremioStream? {
+        Self.sortStreams(candidates, preferredQuality: preferredQuality, preferredProvider: preferredProvider)
             .first(where: { $0.url != nil && !($0.url?.isEmpty ?? true) })
     }
 
-    func sortedStreams(_ streams: [StremioStream], preferredQuality: String = "4K") -> [StremioStream] {
+    nonisolated func sortedStreams(_ streams: [StremioStream], preferredQuality: String = "4K") -> [StremioStream] {
+        Self.sortStreams(streams, preferredQuality: preferredQuality, preferredProvider: nil)
+    }
+
+    nonisolated static func sortStreams(
+        _ streams: [StremioStream],
+        preferredQuality: String = "4K",
+        preferredProvider: String? = nil
+    ) -> [StremioStream] {
         let targetRes = StreamResolution(rawValue: preferredQuality) ?? .uhd4k
+        let normalizedProvider = preferredProvider?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         return streams.sorted { a, b in
             let infoA = a.parsedInfo
             let infoB = b.parsedInfo
 
-            // 1. Exact preferred quality tier comes first
+            // 1. Remembered series addon/provider match comes first when configured
+            if let normalizedProvider, !normalizedProvider.isEmpty {
+                let provA = infoA.providerName?.lowercased() == normalizedProvider
+                let provB = infoB.providerName?.lowercased() == normalizedProvider
+                if provA != provB {
+                    return provA
+                }
+            }
+
+            // 2. Exact preferred quality tier
             let matchA = infoA.resolution == targetRes
             let matchB = infoB.resolution == targetRes
             if matchA != matchB {
                 return matchA
             }
 
-            // 2. Otherwise sort descending resolution order (4K -> 1080p -> 720p -> ...)
+            // 3. Otherwise sort descending resolution order (4K -> 1080p -> 720p -> ...)
             if infoA.qualitySortOrder != infoB.qualitySortOrder {
                 return infoA.qualitySortOrder < infoB.qualitySortOrder
             }
 
-            // 3. Cached debrid streams first
+            // 4. Cached debrid streams first
             if infoA.isCached != infoB.isCached {
                 return infoA.isCached
             }
 
-            // 4. REMUX / HDR boost
+            // 5. REMUX / HDR boost
             let remuxA = infoA.releaseType == "REMUX"
             let remuxB = infoB.releaseType == "REMUX"
             if remuxA != remuxB {

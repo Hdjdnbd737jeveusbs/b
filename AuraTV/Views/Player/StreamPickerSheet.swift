@@ -68,16 +68,18 @@ struct StreamPickerSheet: View {
                             .padding(.vertical, 16)
                             .background(Color.white, in: Capsule())
                             .scaleEffect(focusedControl == .autoBest ? 1.05 : 1.0)
-                            .animation(.easeOut(duration: 0.14), value: focusedControl)
+                            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: focusedControl)
                         }
                         .buttonStyle(AuraButtonStyle())
                         .focusEffectDisabled()
                         .focused($focusedControl, equals: .autoBest)
                     }
                 }
+                .focusSection()
 
-                // Stream list (LazyVStack for locked 60fps scrolling)
+                // Stream list (LazyVStack + isolated leaf @FocusState for locked 60fps scrolling)
                 streamsList
+                    .focusSection()
 
                 Button(action: onDismiss) {
                     Text("Close")
@@ -86,8 +88,8 @@ struct StreamPickerSheet: View {
                         .padding(.horizontal, 40)
                         .padding(.vertical, 15)
                         .background(focusedControl == .cancel ? Color.white : Color.auraCardSurface, in: Capsule())
-                        .scaleEffect(focusedControl == .cancel ? 1.04 : 1.0)
-                        .animation(.easeOut(duration: 0.14), value: focusedControl)
+                        .scaleEffect(focusedControl == .cancel ? 1.05 : 1.0)
+                        .animation(.spring(response: 0.22, dampingFraction: 0.85), value: focusedControl)
                 }
                 .buttonStyle(AuraButtonStyle())
                 .focusEffectDisabled()
@@ -126,16 +128,14 @@ struct StreamPickerSheet: View {
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(streams.enumerated()), id: \.offset) { index, stream in
+                    ForEach(Array(streams.enumerated()), id: \.offset) { _, stream in
                         StreamRowView(
                             stream: stream,
                             parsed: stream.parsedInfo,
                             isActive: selectedStream?.id == stream.id,
-                            isFocused: focusedControl == .stream("\(index)_\(stream.id)"),
                             onSelect: { onSelect(stream) }
                         )
                         .equatable()
-                        .focused($focusedControl, equals: .stream("\(index)_\(stream.id)"))
                     }
                 }
             }
@@ -143,20 +143,20 @@ struct StreamPickerSheet: View {
     }
 }
 
-// MARK: - Stream Row View
+// MARK: - Stream Row View (Isolated Leaf @FocusState for 60fps Scrolling)
 
 private struct StreamRowView: View, Equatable {
     let stream: StremioStream
     let parsed: ParsedStreamInfo
     let isActive: Bool
-    let isFocused: Bool
     let onSelect: () -> Void
+
+    @FocusState private var isFocused: Bool
 
     static func == (lhs: StreamRowView, rhs: StreamRowView) -> Bool {
         lhs.stream.id == rhs.stream.id &&
         lhs.parsed == rhs.parsed &&
-        lhs.isActive == rhs.isActive &&
-        lhs.isFocused == rhs.isFocused
+        lhs.isActive == rhs.isActive
     }
 
     var body: some View {
@@ -218,12 +218,13 @@ private struct StreamRowView: View, Equatable {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
             )
-            .scaleEffect(isFocused ? 1.015 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .scaleEffect(isFocused ? 1.02 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
+        .focused($isFocused)
     }
 }

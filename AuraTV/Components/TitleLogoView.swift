@@ -43,6 +43,10 @@ struct TitleLogoView: View {
             fetchedPath = nil
             loadLogoIfNeeded()
         }
+        .onDisappear {
+            activeTask?.cancel()
+            activeTask = nil
+        }
     }
 
     private var fallbackTitleView: some View {
@@ -54,7 +58,6 @@ struct TitleLogoView: View {
             .minimumScaleFactor(0.65)
             .multilineTextAlignment(alignment == .center ? .center : .leading)
             .frame(maxWidth: maxWidth, alignment: alignment)
-            .shadow(color: .black.opacity(0.85), radius: 10, x: 0, y: 4)
     }
 
     private func loadLogoIfNeeded() {

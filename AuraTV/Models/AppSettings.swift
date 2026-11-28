@@ -15,9 +15,9 @@ class AppSettings {
     // MARK: - Subtitles & Arabic Settings
     var subdlApiKey: String = ""
     var openSubtitlesApiKey: String = ""
-    var subtitleFontSize: Double = 44.0
-    var subtitleFontWeight: String = "Bold"
-    var subtitleFontName: String = "System"
+    var subtitleFontSize: Double = 58.0
+    var subtitleFontWeight: String = "Medium"
+    var subtitleFontName: String = "The Year of The Camel"
     var subtitleTextColor: String = "Light Gray"
     var subtitleTextOpacity: Double = 0.80
     var subtitleBackgroundOpacity: Double = 0.0
@@ -89,9 +89,9 @@ class AppSettings {
         subtitleLanguage: String = "ar",
         subdlApiKey: String = "",
         openSubtitlesApiKey: String = "",
-        subtitleFontSize: Double = 44.0,
-        subtitleFontWeight: String = "Bold",
-        subtitleFontName: String = "System",
+        subtitleFontSize: Double = 58.0,
+        subtitleFontWeight: String = "Medium",
+        subtitleFontName: String = "The Year of The Camel",
         subtitleTextColor: String = "Light Gray",
         subtitleTextOpacity: Double = 0.80,
         subtitleBackgroundOpacity: Double = 0.0,

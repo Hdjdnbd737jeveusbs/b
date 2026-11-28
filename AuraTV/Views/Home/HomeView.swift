@@ -7,9 +7,14 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
-    @State private var viewModel = HomeViewModel()
+    @Bindable var viewModel: HomeViewModel
+
+    init(viewModel: HomeViewModel = HomeViewModel()) {
+        self.viewModel = viewModel
+    }
 
     @State private var artworkDate = Date()
+    @State private var navMemory = AuraNavigationMemory.shared
 
     private var heroStyle: HomeHeroStyle {
         HomeHeroStyle(settingValue: settingsList.first?.homeHeroStyle ?? "Ambient")
@@ -88,67 +93,93 @@ struct HomeView: View {
                     .focusable()
                     .auraLeftEdgeSidebarTrigger()
             } else {
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 36) {
-                        // Hero Spotlight / Ambient Banner
-                        SpotlightCarouselView(
-                            items: viewModel.spotlightItems,
-                            style: heroStyle,
-                            logos: viewModel.spotlightLogos.merging(customMovieLogos) { _, custom in custom },
-                            runtimes: viewModel.spotlightRuntimes,
-                            certifications: viewModel.spotlightCertifications,
-                            customBackdrops: customMovieBackdrops,
-                            showLogos: includeLogos,
-                            autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
-                        )
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 36) {
+                            // Hero Spotlight / Ambient Banner (zero top spacing offset so backdrop stays full-bleed)
+                            SpotlightCarouselView(
+                                items: viewModel.spotlightItems,
+                                style: heroStyle,
+                                logos: viewModel.spotlightLogos.merging(customMovieLogos) { _, custom in custom },
+                                runtimes: viewModel.spotlightRuntimes,
+                                certifications: viewModel.spotlightCertifications,
+                                customBackdrops: customMovieBackdrops,
+                                showLogos: includeLogos,
+                                autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
+                            )
+                            .id("home_top_anchor")
+                            .background(
+                                GeometryReader { geo in
+                                    let y = geo.frame(in: .named("homeScroll")).minY
+                                    Color.clear
+                                        .onChange(of: y) { _, newY in
+                                            AuraNavigationMemory.shared.setHomeScrolledPastHero(newY < -140)
+                                        }
+                                }
+                            )
+                            .focusSection()
 
-                        // Continue Watching Row (16:9 400x225 cards)
-                        ContinueWatchingRow(
-                            items: viewModel.continueWatching,
-                            backdropOverrides: customContinueBackdrops,
-                            autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
-                        )
+                            // Continue Watching Row (16:9 400x225 cards)
+                            ContinueWatchingRow(
+                                items: viewModel.continueWatching,
+                                backdropOverrides: customContinueBackdrops,
+                                autoPlayTrailersOnFocus: autoPlayTrailersOnFocus
+                            )
 
-                        // TV Shows Shelf (16:9 400x225 horizontal landscape cards)
-                        let firstSeriesId = viewModel.trendingSeries.first?.id
-                        MediaRowView(title: "TV Shows") {
-                            ForEach(viewModel.trendingSeries) { series in
-                                HomeLandscapeSeriesCard(
-                                    series: series,
-                                    overrideBackdropPath: customSeriesBackdrops[series.id],
-                                    overrideLogoPath: customSeriesLogos[series.id] ?? viewModel.rowLogos["series_\(series.id)"],
-                                    isWatched: viewModel.watchedSeriesIds.contains(series.id),
-                                    showWatchedBadge: showWatchedIndicators,
-                                    includeLogo: includeLogos,
-                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
-                                    isFirstInRow: series.id == firstSeriesId
-                                )
-                                .equatable()
+                            // TV Shows Shelf (16:9 400x225 horizontal landscape cards)
+                            let firstSeriesId = viewModel.trendingSeries.first?.id
+                            MediaRowView(title: "TV Shows") {
+                                ForEach(viewModel.trendingSeries) { series in
+                                    HomeLandscapeSeriesCard(
+                                        series: series,
+                                        overrideBackdropPath: customSeriesBackdrops[series.id],
+                                        overrideLogoPath: customSeriesLogos[series.id] ?? viewModel.rowLogos["series_\(series.id)"],
+                                        isWatched: viewModel.watchedSeriesIds.contains(series.id),
+                                        showWatchedBadge: showWatchedIndicators,
+                                        includeLogo: includeLogos,
+                                        autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                        isFirstInRow: series.id == firstSeriesId
+                                    )
+                                    .equatable()
+                                    .id("home_series_\(series.id)")
+                                }
                             }
-                        }
 
-                        // Movies Shelf (16:9 400x225 horizontal landscape cards)
-                        let firstMovieId = viewModel.trendingMovies.first?.id
-                        MediaRowView(title: "Movies") {
-                            ForEach(viewModel.trendingMovies) { movie in
-                                HomeLandscapeMovieCard(
-                                    movie: movie,
-                                    overrideBackdropPath: customMovieBackdrops[movie.id],
-                                    overrideLogoPath: customMovieLogos[movie.id] ?? viewModel.rowLogos["movie_\(movie.id)"] ?? viewModel.spotlightLogos[movie.id],
-                                    isWatched: viewModel.watchedMovieIds.contains(movie.id),
-                                    showWatchedBadge: showWatchedIndicators,
-                                    includeLogo: includeLogos,
-                                    autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
-                                    isFirstInRow: movie.id == firstMovieId
-                                )
-                                .equatable()
+                            // Movies Shelf (16:9 400x225 horizontal landscape cards)
+                            let firstMovieId = viewModel.trendingMovies.first?.id
+                            MediaRowView(title: "Movies") {
+                                ForEach(viewModel.trendingMovies) { movie in
+                                    HomeLandscapeMovieCard(
+                                        movie: movie,
+                                        overrideBackdropPath: customMovieBackdrops[movie.id],
+                                        overrideLogoPath: customMovieLogos[movie.id] ?? viewModel.rowLogos["movie_\(movie.id)"] ?? viewModel.spotlightLogos[movie.id],
+                                        isWatched: viewModel.watchedMovieIds.contains(movie.id),
+                                        showWatchedBadge: showWatchedIndicators,
+                                        includeLogo: includeLogos,
+                                        autoPlayTrailersOnFocus: autoPlayTrailersOnFocus,
+                                        isFirstInRow: movie.id == firstMovieId
+                                    )
+                                    .equatable()
+                                    .id("home_movie_\(movie.id)")
+                                }
                             }
-                        }
 
-                        Spacer().frame(height: 60)
+                            Spacer().frame(height: 60)
+                        }
+                    }
+                    .coordinateSpace(name: "homeScroll")
+                    .ignoresSafeArea(.container, edges: [.top, .horizontal])
+                    .onChange(of: navMemory.homeScrollToTopTick) { _, _ in
+                        withAnimation(.easeOut(duration: 0.35)) {
+                            scrollProxy.scrollTo("home_top_anchor", anchor: .top)
+                        }
+                    }
+                    .onChange(of: navMemory.restoreTick(for: "Home")) { _, _ in
+                        if let scrollTarget = AuraNavigationMemory.shared.lastScrollId(for: "Home") {
+                            scrollProxy.scrollTo(scrollTarget, anchor: .center)
+                        }
                     }
                 }
-                .ignoresSafeArea(.container, edges: [.top, .horizontal])
             }
         }
         .task {
@@ -166,6 +197,7 @@ struct HomeView: View {
         }
         .onDisappear {
             AppThemeCoordinator.shared.clearHomePreview()
+            viewModel.stopPrefetchingHomeImages()
         }
     }
 }
@@ -183,6 +215,9 @@ private struct HomeLandscapeMovieCard: View, Equatable {
     var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    private var focusId: String { "home_movie_\(movie.id)" }
 
     static func == (lhs: HomeLandscapeMovieCard, rhs: HomeLandscapeMovieCard) -> Bool {
         lhs.movie.id == rhs.movie.id &&
@@ -197,8 +232,9 @@ private struct HomeLandscapeMovieCard: View, Equatable {
 
     private var subtitleLine: String {
         let year = movie.releaseDate.flatMap { $0.count >= 4 ? String($0.prefix(4)) : nil }
+        let vote = movie.voteAverage.flatMap { $0 > 0 ? "★ \(String(format: "%.1f", $0))" : nil }
         let genre = TMDBGenres.movieGenreNames(for: movie.genreIds).first
-        let joined = [year, genre].compactMap { $0 }.joined(separator: " · ")
+        let joined = [year, vote, genre].compactMap { $0 }.joined(separator: " · ")
         return joined.isEmpty ? "Movie" : joined
     }
 
@@ -220,6 +256,8 @@ private struct HomeLandscapeMovieCard: View, Equatable {
         .auraLeftEdgeSidebarTrigger(isFirstInRow)
         .onChange(of: isFocused) { _, focused in
             if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: focusId)
+                AuraNavigationMemory.shared.setHomeScrolledPastHero(true)
                 AppThemeCoordinator.shared.onHomeCardFocused(
                     mediaType: "movie",
                     tmdbId: movie.id,
@@ -235,6 +273,21 @@ private struct HomeLandscapeMovieCard: View, Equatable {
                 AppThemeCoordinator.shared.onHomeCardBlurred(mediaType: "movie", tmdbId: movie.id)
             }
         }
+        .onChange(of: navMemory.restoreTick(for: "Home")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Home") == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
+            }
+        }
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: movie.id,
+            mediaType: "movie",
+            title: movie.title,
+            posterPath: movie.posterPath,
+            backdropPath: overrideBackdropPath ?? movie.backdropPath,
+            initialWatched: isWatched
+        ))
     }
 }
 
@@ -249,6 +302,9 @@ private struct HomeLandscapeSeriesCard: View, Equatable {
     var isFirstInRow: Bool = false
 
     @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    private var focusId: String { "home_series_\(series.id)" }
 
     static func == (lhs: HomeLandscapeSeriesCard, rhs: HomeLandscapeSeriesCard) -> Bool {
         lhs.series.id == rhs.series.id &&
@@ -263,8 +319,9 @@ private struct HomeLandscapeSeriesCard: View, Equatable {
 
     private var subtitleLine: String {
         let year = series.firstAirDate.flatMap { $0.count >= 4 ? String($0.prefix(4)) : nil }
+        let vote = series.voteAverage.flatMap { $0 > 0 ? "★ \(String(format: "%.1f", $0))" : nil }
         let genre = TMDBGenres.tvGenreNames(for: series.genreIds).first
-        let joined = [year, genre].compactMap { $0 }.joined(separator: " · ")
+        let joined = [year, vote, genre].compactMap { $0 }.joined(separator: " · ")
         return joined.isEmpty ? "TV Series" : joined
     }
 
@@ -286,6 +343,8 @@ private struct HomeLandscapeSeriesCard: View, Equatable {
         .auraLeftEdgeSidebarTrigger(isFirstInRow)
         .onChange(of: isFocused) { _, focused in
             if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Home", itemId: focusId)
+                AuraNavigationMemory.shared.setHomeScrolledPastHero(true)
                 AppThemeCoordinator.shared.onHomeCardFocused(
                     mediaType: "series",
                     tmdbId: series.id,
@@ -301,6 +360,21 @@ private struct HomeLandscapeSeriesCard: View, Equatable {
                 AppThemeCoordinator.shared.onHomeCardBlurred(mediaType: "series", tmdbId: series.id)
             }
         }
+        .onChange(of: navMemory.restoreTick(for: "Home")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Home") == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
+            }
+        }
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: series.id,
+            mediaType: "series",
+            title: series.name,
+            posterPath: series.posterPath,
+            backdropPath: overrideBackdropPath ?? series.backdropPath,
+            initialWatched: isWatched
+        ))
     }
 }
 
@@ -370,29 +444,29 @@ private struct HomeLandscapeCardContent: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isFocused ? Color.white : Color.clear, lineWidth: isFocused ? 4 : 0)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
                     .lineLimit(1)
             }
             .frame(width: 400, alignment: .leading)
         }
         .scaleEffect(isFocused ? 1.05 : 1.0)
-        .animation(.easeOut(duration: 0.14), value: isFocused)
+        .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
     }
 
     private var cardPlaceholder: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.auraSurface)
+            .fill(Color.auraCardSurface)
             .frame(width: 400, height: 225)
             .overlay {
                 Image(systemName: placeholderIcon)

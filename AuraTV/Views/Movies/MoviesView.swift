@@ -8,12 +8,12 @@ struct MoviesView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
 
-    @State private var viewModel = MoviesViewModel()
-    @FocusState private var focusedCategory: MovieCategory?
+    @Bindable var viewModel: MoviesViewModel
+    @State private var navMemory = AuraNavigationMemory.shared
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 255, maximum: 280), spacing: 28)
-    ]
+    init(viewModel: MoviesViewModel = MoviesViewModel()) {
+        self.viewModel = viewModel
+    }
 
     private var watchedMovieIds: Set<Int> {
         Set(historyItems.filter { $0.mediaType == "movie" && $0.isCompleted }.map(\.tmdbId))
@@ -51,53 +51,69 @@ struct MoviesView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let availableWidth = max(geometry.size.width - 136, 255)
-            let columnCount = max(1, Int((availableWidth + 28) / (255 + 28)))
+            let horizontalInset: CGFloat = 80
+            let cardWidth: CGFloat = 268
+            let spacing: CGFloat = 32
+            let availableWidth = max(geometry.size.width - (horizontalInset * 2), cardWidth)
+            let columnCount = max(1, Int((availableWidth + spacing) / (cardWidth + spacing)))
+            let gridColumns = Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: columnCount)
             let currentMovies = viewModel.movies(for: viewModel.selectedCategory)
 
             ZStack {
-                // Ambient Backdrop (isolated observer — grid never re-renders on focus moves)
                 ambientBackdropView
 
                 // Content pushed clearly below the floating tvOS sidebar pill (< Movies)
                 VStack(alignment: .leading, spacing: 28) {
                     categoryBar
-                        .padding(.horizontal, 68)
-                        .padding(.top, 92)
+                        .padding(.horizontal, horizontalInset)
+                        .padding(.top, 114)
+                        .focusSection()
 
-                    ScrollView(.vertical, showsIndicators: false) {
-                        if useListLayout {
-                            LazyVStack(spacing: 18) {
-                                ForEach(currentMovies) { movie in
-                                    MovieListRowView(
-                                        movie: movie,
-                                        overridePosterPath: customPosters[movie.id],
-                                        overrideBackdropPath: customBackdrops[movie.id],
-                                        isWatched: watchedMovieIds.contains(movie.id),
-                                        showWatchedBadge: showWatchedIndicators
-                                    )
-                                    .equatable()
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            if useListLayout {
+                                LazyVStack(spacing: 18) {
+                                    ForEach(currentMovies) { movie in
+                                        MovieListRowView(
+                                            movie: movie,
+                                            overridePosterPath: customPosters[movie.id],
+                                            overrideBackdropPath: customBackdrops[movie.id],
+                                            isWatched: watchedMovieIds.contains(movie.id),
+                                            showWatchedBadge: showWatchedIndicators
+                                        )
+                                        .equatable()
+                                        .id("movie_\(movie.id)")
+                                    }
                                 }
-                            }
-                            .padding(.horizontal, 68)
-                            .padding(.top, 8)
-                            .padding(.bottom, 60)
-                        } else {
-                            LazyVGrid(columns: columns, spacing: 32) {
-                                ForEach(Array(currentMovies.enumerated()), id: \.element.id) { index, movie in
-                                    PosterCardView(
-                                        movie: movie,
-                                        overridePosterPath: customPosters[movie.id],
-                                        isWatched: watchedMovieIds.contains(movie.id),
-                                        showWatchedBadge: showWatchedIndicators,
-                                        isFirstInRow: index % columnCount == 0
-                                    )
-                                    .equatable()
+                                .padding(.horizontal, horizontalInset)
+                                .padding(.top, 8)
+                                .padding(.bottom, 60)
+                            } else {
+                                LazyVGrid(columns: gridColumns, spacing: 36) {
+                                    ForEach(Array(currentMovies.enumerated()), id: \.element.id) { index, movie in
+                                        PosterCardView(
+                                            movie: movie,
+                                            overridePosterPath: customPosters[movie.id],
+                                            isWatched: watchedMovieIds.contains(movie.id),
+                                            showWatchedBadge: showWatchedIndicators,
+                                            isFirstInRow: index % columnCount == 0,
+                                            posterWidth: cardWidth,
+                                            memoryTabKey: "Movies"
+                                        )
+                                        .equatable()
+                                        .id("movie_\(movie.id)")
+                                    }
                                 }
+                                .padding(.horizontal, horizontalInset)
+                                .padding(.top, 8)
+                                .padding(.bottom, 60)
                             }
-                            .padding(.horizontal, 68)
-                            .padding(.top, 8)
-                            .padding(.bottom, 60)
+                        }
+                        .focusSection()
+                        .onChange(of: navMemory.restoreTick(for: "Movies")) { _, _ in
+                            if let scrollTarget = AuraNavigationMemory.shared.lastScrollId(for: "Movies") {
+                                scrollProxy.scrollTo(scrollTarget, anchor: .center)
+                            }
                         }
                     }
                 }
@@ -111,6 +127,12 @@ struct MoviesView: View {
                     backdropPath: customBackdrops[first.id] ?? first.backdropPath
                 )
             }
+        }
+        .onChange(of: viewModel.selectedCategory) { _, newCategory in
+            viewModel.prefetchMovies(Array(viewModel.movies(for: newCategory).prefix(20)))
+        }
+        .onDisappear {
+            viewModel.stopPrefetchingCurrent()
         }
     }
 
@@ -126,43 +148,68 @@ struct MoviesView: View {
         )
     }
 
-    // MARK: - Category Bar
+    // MARK: - Scaled 56pt Category Bar (Isolated Leaf Focus)
 
     @ViewBuilder
     private var categoryBar: some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 20) {
             ForEach(MovieCategory.allCases) { category in
-                let isSelected = viewModel.selectedCategory == category
-                let isFocused = focusedCategory == category
-
-                Button(action: {
-                    withAnimation(.easeOut(duration: 0.2)) {
+                MovieCategoryPillButton(
+                    title: category.rawValue,
+                    isSelected: viewModel.selectedCategory == category,
+                    isFirst: category == MovieCategory.allCases.first,
+                    itemId: "movie_cat_\(category.rawValue)"
+                ) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
                         viewModel.selectedCategory = category
                     }
-                }) {
-                    Text(category.rawValue)
-                        .font(.system(size: 26, weight: isSelected ? .semibold : .medium))
-                        .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 14)
-                        .background(
-                            (isSelected || isFocused)
-                            ? Color.white
-                            : Color.white.opacity(0.1)
-                        )
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2 : 1)
-                        )
-                        .contentShape(Capsule())
                 }
-                .buttonStyle(AuraButtonStyle())
-                .focusEffectDisabled()
-                .focused($focusedCategory, equals: category)
-                .auraLeftEdgeSidebarTrigger(category == .popular)
+            }
+        }
+    }
+}
+
+private struct MovieCategoryPillButton: View {
+    let title: String
+    let isSelected: Bool
+    let isFirst: Bool
+    let itemId: String
+    let action: () -> Void
+
+    @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(isSelected || isFocused ? Color.black : Color.white)
+                .padding(.horizontal, 28)
+                .frame(height: 56)
+                .background((isSelected || isFocused) ? Color.white : Color.auraCardSurface)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
+                )
+                .contentShape(Capsule())
                 .scaleEffect(isFocused ? 1.05 : 1.0)
-                .animation(.easeOut(duration: 0.14), value: focusedCategory)
+                .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
+        }
+        .buttonStyle(AuraButtonStyle())
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .auraLeftEdgeSidebarTrigger(isFirst)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Movies", itemId: itemId)
+            }
+        }
+        .onChange(of: navMemory.restoreTick(for: "Movies")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Movies") == itemId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
             }
         }
     }
@@ -176,6 +223,9 @@ private struct MovieListRowView: View, Equatable {
     let showWatchedBadge: Bool
 
     @FocusState private var isFocused: Bool
+    @State private var navMemory = AuraNavigationMemory.shared
+
+    private var focusId: String { "movie_\(movie.id)" }
 
     static func == (lhs: MovieListRowView, rhs: MovieListRowView) -> Bool {
         lhs.movie.id == rhs.movie.id &&
@@ -248,13 +298,13 @@ private struct MovieListRowView: View, Equatable {
                     .foregroundStyle(.white.opacity(0.5))
             }
             .padding(18)
-            .background(Color.white.opacity(isFocused ? 0.14 : 0.06), in: RoundedRectangle(cornerRadius: 18))
+            .background(Color.white.opacity(isFocused ? 0.16 : 0.08), in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
-                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 2.5 : 1)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 2.5 : 1)
             )
             .scaleEffect(isFocused ? 1.02 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -262,11 +312,27 @@ private struct MovieListRowView: View, Equatable {
         .auraLeftEdgeSidebarTrigger()
         .onChange(of: isFocused) { _, focused in
             if focused {
+                AuraNavigationMemory.shared.recordFocus(tab: "Movies", itemId: focusId)
                 AppThemeCoordinator.shared.updateFocusedArtwork(
                     posterPath: overridePosterPath ?? movie.posterPath,
                     backdropPath: overrideBackdropPath ?? movie.backdropPath
                 )
             }
         }
+        .onChange(of: navMemory.restoreTick(for: "Movies")) { _, _ in
+            if AuraNavigationMemory.shared.lastFocusedId(for: "Movies") == focusId {
+                DispatchQueue.main.async {
+                    isFocused = true
+                }
+            }
+        }
+        .modifier(MediaPosterContextMenuModifier(
+            tmdbId: movie.id,
+            mediaType: "movie",
+            title: movie.title,
+            posterPath: overridePosterPath ?? movie.posterPath,
+            backdropPath: overrideBackdropPath ?? movie.backdropPath,
+            initialWatched: isWatched
+        ))
     }
 }

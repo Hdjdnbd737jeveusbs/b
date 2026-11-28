@@ -70,13 +70,14 @@ final class SeriesViewModel {
 
             Self.logger.notice("Fetching TMDB series categories...")
             do {
-                async let popular = self.service.fetchPopularSeries(page: 1)
-                async let topRated = self.service.fetchTopRatedSeries(page: 1)
-                async let airingToday = self.service.fetchAiringTodaySeries(page: 1)
-                async let onTheAir = self.service.fetchOnTheAirSeries(page: 1)
-
-                let (popularRes, topRatedRes, airingTodayRes, onTheAirRes) =
-                    try await (popular, topRated, airingToday, onTheAir)
+                let svc = self.service
+                let (popularRes, topRatedRes, airingTodayRes, onTheAirRes) = try await Task.detached(priority: .userInitiated) {
+                    async let popular = svc.fetchPopularSeries(page: 1)
+                    async let topRated = svc.fetchTopRatedSeries(page: 1)
+                    async let airingToday = svc.fetchAiringTodaySeries(page: 1)
+                    async let onTheAir = svc.fetchOnTheAirSeries(page: 1)
+                    return try await (popular, topRated, airingToday, onTheAir)
+                }.value
 
                 self.popularSeries = popularRes.results
                 self.popularPage = popularRes.page
@@ -94,7 +95,7 @@ final class SeriesViewModel {
                 self.onTheAirPage = onTheAirRes.page
                 self.onTheAirTotalPages = onTheAirRes.totalPages
 
-                self.prefetchSeries(Array(popularRes.results.prefix(20)))
+                self.prefetchSeries(Array(self.series(for: self.selectedCategory).prefix(20)))
 
                 Self.logger.notice("Loaded \(popularRes.results.count) popular, \(topRatedRes.results.count) topRated, \(airingTodayRes.results.count) airingToday, \(onTheAirRes.results.count) onTheAir series")
                 print("[SeriesViewModel] Loaded \(popularRes.results.count) popular series")
@@ -174,7 +175,15 @@ final class SeriesViewModel {
         let backdropURLs = items.compactMap {
             service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w780")
         }
-        AuraImageCache.shared.prefetch(urls: backdropURLs, targetSize: CGSize(width: 380, height: 214))
+        AuraImageCache.shared.prefetch(urls: backdropURLs, targetSize: CGSize(width: 400, height: 225))
+    }
+
+    @MainActor
+    func stopPrefetchingCurrent() {
+        let backdropURLs = series(for: selectedCategory).prefix(20).compactMap {
+            service.imageURL(path: $0.backdropPath ?? $0.posterPath, size: "w780")
+        }
+        AuraImageCache.shared.stopPrefetching(urls: backdropURLs, targetSize: CGSize(width: 400, height: 225))
     }
 
     // MARK: - Helpers

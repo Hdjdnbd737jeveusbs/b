@@ -54,16 +54,16 @@ struct EpisodeCardView: View, Equatable {
     var body: some View {
         Button(action: { onPlay?() }) {
             VStack(alignment: .leading, spacing: 10) {
-                // Episode still image (16:9)
+                // Episode still image (16:9 400x225)
                 ZStack(alignment: .bottomTrailing) {
                     Group {
                         if let path = episode.stillPath,
                            let url = TMDBService.shared.imageURL(path: path, size: "w780") {
-                            AuraCachedImage(url: url, targetSize: CGSize(width: 360, height: 202)) { image in
+                            AuraCachedImage(url: url, targetSize: CGSize(width: 400, height: 225)) { image in
                                 image
                                     .resizable()
                                     .aspectRatio(16/9, contentMode: .fill)
-                                    .frame(width: 360, height: 202)
+                                    .frame(width: 400, height: 225)
                             } placeholder: {
                                 episodePlaceholder
                             }
@@ -71,18 +71,18 @@ struct EpisodeCardView: View, Equatable {
                             episodePlaceholder
                         }
                     }
-                    .frame(width: 360, height: 202)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .frame(width: 400, height: 225)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                     .overlay {
                         if shouldBlurThumbnail {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.95))
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.auraCardSurface)
                                 .overlay {
                                     VStack(spacing: 6) {
                                         Image(systemName: "eye.slash.fill")
                                             .font(.system(size: 22, weight: .semibold))
                                         Text("Spoiler Shield")
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .font(.system(size: 14, weight: .semibold))
                                     }
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 14)
@@ -110,11 +110,11 @@ struct EpisodeCardView: View, Equatable {
 
                     if let runtime = episode.runtime, runtime > 0 {
                         Text(formatRuntime(runtime))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
                             .padding(8)
                     }
                 }
@@ -127,7 +127,7 @@ struct EpisodeCardView: View, Equatable {
                             .foregroundStyle(Color.auraAccent)
 
                         Text(episode.name)
-                            .font(.system(size: 23, weight: .semibold))
+                            .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                     }
@@ -146,16 +146,16 @@ struct EpisodeCardView: View, Equatable {
                             .lineSpacing(2)
                     }
                 }
-                .frame(width: 360, alignment: .leading)
+                .frame(width: 400, alignment: .leading)
             }
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isFocused ? Color.white : Color.white.opacity(0.08), lineWidth: isFocused ? 3 : 1)
-                    .frame(width: 360, height: 202),
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isFocused ? Color.white : Color.white.opacity(0.14), lineWidth: isFocused ? 3.5 : 1)
+                    .frame(width: 400, height: 225),
                 alignment: .top
             )
             .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isFocused)
         }
         .buttonStyle(AuraButtonStyle())
         .focusEffectDisabled()
@@ -178,16 +178,16 @@ struct EpisodeCardView: View, Equatable {
     }
 
     private var episodePlaceholder: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color.auraSurface)
-            .frame(width: 360, height: 202)
+        RoundedRectangle(cornerRadius: 14)
+            .fill(Color.auraCardSurface)
+            .frame(width: 400, height: 225)
             .overlay {
                 VStack(spacing: 8) {
                     Image(systemName: "play.rectangle")
                         .font(.system(size: 36))
                         .foregroundStyle(.white.opacity(0.25))
                     Text("Episode \(episode.episodeNumber)")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .foregroundStyle(.white.opacity(0.35))
                 }
             }

@@ -124,6 +124,9 @@ final class PlayerViewModel {
     var availableSubtitleTracks: [MediaTrack] = []
     var selectedAudioTrackId: Int = 0
     var selectedSubtitleTrackId: Int = -1 // -1 = off
+    var preferredAudioLanguage: String = "en"
+    var preferredAudioTrackNameHint: String? = nil
+    var subtitleAutoMode: String = "Preferred Languages"
 
     // MARK: - Subtitles, Styling & Sync State
 
@@ -148,6 +151,9 @@ final class PlayerViewModel {
     var aiTranslationConfig: SubtitleTranslationConfig = .disabled
     var translatedCueTexts: [Int: String] = [:]
     private var translationTask: Task<Void, Never>?
+    private var nextEpisodePrefetchTask: Task<Void, Never>?
+    private var didStartSubtitleFetchForCurrentLoad: Bool = false
+    private var isPreferencesLoaded: Bool = false
     private var inFlightTranslationIds: Set<Int> = []
     private var activeEmbeddedTrackLanguageCode: String?
     var subtitleSearchText: String = ""
@@ -231,7 +237,7 @@ final class PlayerViewModel {
             && !upNextDismissed
             && nextEpisodeBehavior != "Off"
             && totalDuration > 180
-            && (totalDuration - currentTime) <= 45
+            && ((totalDuration - currentTime) <= 60 || (currentTime / totalDuration) >= 0.90)
     }
 
     var upNextCountdownRemaining: Int {
@@ -347,6 +353,9 @@ final class PlayerViewModel {
         self.inFlightTranslationIds = []
         self.translationTask?.cancel()
         self.translationTask = nil
+        self.nextEpisodePrefetchTask?.cancel()
+        self.nextEpisodePrefetchTask = nil
+        self.didStartSubtitleFetchForCurrentLoad = false
         self.activeEmbeddedTrackLanguageCode = nil
         self.availableAudioTracks = []
         self.availableSubtitleTracks = []
@@ -358,8 +367,22 @@ final class PlayerViewModel {
         self.didAutoSkipIntro = false
         self.upNextTriggered = false
 
-        Task {
-            await fetchSubtitles()
+        if mediaType == "series", let seriesPref = SeriesPlaybackPreferencesStore.load(seriesId: tmdbId) {
+            if let audioLang = seriesPref.audioLanguage, !audioLang.isEmpty {
+                self.preferredAudioLanguage = audioLang
+            } else if let globalAudio = SeriesPlaybackPreferencesStore.globalPreferredAudioLanguage, !globalAudio.isEmpty {
+                self.preferredAudioLanguage = globalAudio
+            }
+            self.preferredAudioTrackNameHint = seriesPref.audioTrackNameHint
+        } else if let globalAudio = SeriesPlaybackPreferencesStore.globalPreferredAudioLanguage, !globalAudio.isEmpty {
+            self.preferredAudioLanguage = globalAudio
+        }
+
+        if isPreferencesLoaded {
+            didStartSubtitleFetchForCurrentLoad = true
+            Task {
+                await fetchSubtitles()
+            }
         }
     }
 
@@ -462,6 +485,7 @@ final class PlayerViewModel {
 
     func pause() {
         isPlaying = false
+        saveProgress()
         showHUD()
     }
 
@@ -571,10 +595,58 @@ final class PlayerViewModel {
         onPlayNextEpisode?(nextEpisode)
     }
 
-    // MARK: - Track Selection
+    // MARK: - Track Selection & Smart Preferences Memory
 
     func selectAudioTrack(_ trackId: Int) {
         selectedAudioTrackId = trackId
+        if let track = availableAudioTracks.first(where: { $0.id == trackId }) {
+            SeriesPlaybackPreferencesStore.recordAudioChoice(
+                seriesId: tmdbId,
+                mediaType: mediaType,
+                language: track.language,
+                trackName: track.name
+            )
+            if let canonical = SubtitleLanguageMatcher.canonicalCode(from: track.language, fallbackName: track.name) {
+                preferredAudioLanguage = canonical
+            }
+            preferredAudioTrackNameHint = track.name
+        }
+    }
+
+    /// Picks the user's remembered audio language (series-specific first, then global preferred).
+    func recommendedInitialAudioTrackId(from tracks: [MediaTrack]) -> Int? {
+        guard !tracks.isEmpty else { return nil }
+        let targetLang = preferredAudioLanguage
+        if let hint = preferredAudioTrackNameHint, !hint.isEmpty,
+           let exactHint = tracks.first(where: {
+               $0.name.localizedCaseInsensitiveCompare(hint) == .orderedSame &&
+               SubtitleLanguageMatcher.matches(code: $0.language, name: $0.name, preferred: targetLang)
+           }) {
+            return exactHint.id
+        }
+        if let matchingLang = tracks.first(where: {
+            SubtitleLanguageMatcher.matches(code: $0.language, name: $0.name, preferred: targetLang)
+        }) {
+            return matchingLang.id
+        }
+        return nil
+    }
+
+    /// Picks the best embedded subtitle matching user's saved subtitle language (Arabic ar/ara first).
+    func recommendedEmbeddedSubtitleTrackId(from tracks: [MediaTrack]) -> Int? {
+        guard subtitleAutoMode != "Off", !tracks.isEmpty else { return nil }
+        let primary = preferredSubtitleLanguage.isEmpty ? "ar" : preferredSubtitleLanguage
+        if let match = tracks.first(where: {
+            SubtitleLanguageMatcher.matches(code: $0.language, name: $0.name, preferred: primary)
+        }) {
+            return match.id
+        }
+        if let arabicMatch = tracks.first(where: {
+            SubtitleLanguageMatcher.isArabic(code: $0.language, name: $0.name)
+        }) {
+            return arabicMatch.id
+        }
+        return nil
     }
 
     func selectSubtitleTrack(_ trackId: Int) {
@@ -826,6 +898,26 @@ final class PlayerViewModel {
            (totalDuration - currentTime) <= 2 {
             playNextEpisodeNow()
         }
+
+        // Silently pre-resolve streams for the next episode when nearing the end
+        if mediaType == "series",
+           let nextEp = nextEpisode,
+           totalDuration > 180,
+           (totalDuration - currentTime) <= 120,
+           nextEpisodePrefetchTask == nil {
+            let showId = tmdbId
+            let quality = preferredQuality
+            let provider = SeriesPlaybackPreferencesStore.load(seriesId: showId)?.preferredProvider
+            nextEpisodePrefetchTask = Task.detached(priority: .utility) {
+                _ = await AIOStreamsService.shared.prefetchStreamsForEpisode(
+                    tmdbId: showId,
+                    season: nextEp.seasonNumber,
+                    episode: nextEp.episodeNumber,
+                    preferredQuality: quality,
+                    preferredProvider: provider
+                )
+            }
+        }
     }
 
     // MARK: - O(log n) Cue Binary Search
@@ -865,20 +957,27 @@ final class PlayerViewModel {
     func fetchSubtitles() async {
         isFetchingSubtitles = true
         let queryId = imdbId.isEmpty ? "\(tmdbId)" : imdbId
+        let primaryLang = preferredSubtitleLanguage.isEmpty ? "ar" : preferredSubtitleLanguage
 
         let externalTracks = await SubtitleService.shared.fetchSubtitles(
             imdbId: queryId,
             season: seasonNumber,
             episode: episodeNumber,
-            preferredLanguage: preferredSubtitleLanguage
+            preferredLanguage: primaryLang
         )
 
         externalSubtitleTracks = externalTracks
 
-        if selectedExternalSubtitle == nil {
-            if let preferredTrack = externalTracks.first(where: { $0.languageCode.lowercased() == preferredSubtitleLanguage.lowercased() })
-                ?? externalTracks.first(where: { $0.languageCode == "ar" }) {
+        if subtitleAutoMode != "Off", selectedExternalSubtitle == nil {
+            if let preferredTrack = externalTracks.first(where: {
+                SubtitleLanguageMatcher.matches(code: $0.languageCode, name: $0.language, preferred: primaryLang)
+            }) ?? externalTracks.first(where: {
+                SubtitleLanguageMatcher.isArabic(code: $0.languageCode, name: $0.language)
+            }) {
                 await selectExternalSubtitleTrack(preferredTrack)
+            } else if selectedSubtitleTrackId < 0,
+                      let embeddedId = recommendedEmbeddedSubtitleTrackId(from: availableSubtitleTracks) {
+                selectSubtitleTrack(embeddedId)
             }
         }
 
@@ -1085,8 +1184,12 @@ final class PlayerViewModel {
             subtitleSyncSettings.fixReversedPunctuation = settings.fixReversedPunctuation
             subtitleSyncSettings.autoSyncEnabled = settings.autoSyncSubtitles
 
-            preferredSubtitleLanguage = settings.subtitleLanguage
+            preferredSubtitleLanguage = settings.subtitleLanguage.isEmpty ? "ar" : settings.subtitleLanguage
+            subtitleAutoMode = settings.subtitleAutoMode
             preferredQuality = settings.preferredQuality
+            if mediaType != "series" || preferredAudioTrackNameHint == nil {
+                preferredAudioLanguage = SeriesPlaybackPreferencesStore.globalPreferredAudioLanguage ?? settings.preferredLanguage
+            }
             skipIntroMode = settings.skipIntroMode
             skipRecapMode = settings.skipRecapMode
             skipCreditsMode = settings.skipCreditsMode
@@ -1121,6 +1224,13 @@ final class PlayerViewModel {
                 customEndpoint: settings.aiTranslationCustomEndpoint,
                 modelOverride: settings.aiTranslationModel
             )
+        }
+        isPreferencesLoaded = true
+        if !didStartSubtitleFetchForCurrentLoad, streamURL != nil {
+            didStartSubtitleFetchForCurrentLoad = true
+            Task {
+                await fetchSubtitles()
+            }
         }
     }
 
@@ -1157,7 +1267,7 @@ final class PlayerViewModel {
         self.saveContext = context
         progressSaveTimer?.invalidate()
         guard !isPreviewMode else { return }
-        progressSaveTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+        progressSaveTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.saveProgress()
             }
@@ -1198,21 +1308,11 @@ final class PlayerViewModel {
                 context.insert(history)
             }
 
-            history.currentTime = currentTime
-            history.totalDuration = totalDuration
+            let ratio = currentTime / totalDuration
             history.lastWatched = Date()
-            history.seasonNumber = seasonNumber
-            history.episodeNumber = episodeNumber
-            history.episodeTitle = episodeTitle
-            history.episodeStillPath = episodeStillPath
 
-            if totalDuration > 0 {
-                let completed = (currentTime / totalDuration) >= 0.95
-                history.isCompleted = completed
-                if mediaType == "series",
-                   (currentTime / totalDuration) >= 0.90,
-                   let seasonNumber,
-                   let episodeNumber {
+            if mediaType == "series", ratio >= 0.90 {
+                if let seasonNumber, let episodeNumber {
                     EpisodeWatchedStore.markWatched(
                         tmdbId: tmdbId,
                         season: seasonNumber,
@@ -1220,6 +1320,32 @@ final class PlayerViewModel {
                         watched: true
                     )
                 }
+
+                if let nextEpisode {
+                    history.seasonNumber = nextEpisode.seasonNumber
+                    history.episodeNumber = nextEpisode.episodeNumber
+                    history.episodeTitle = nextEpisode.name
+                    history.episodeStillPath = nextEpisode.stillPath
+                    history.currentTime = 0
+                    history.totalDuration = Double((nextEpisode.runtime ?? 45) * 60)
+                    history.isCompleted = false
+                } else {
+                    history.currentTime = currentTime
+                    history.totalDuration = totalDuration
+                    history.seasonNumber = seasonNumber
+                    history.episodeNumber = episodeNumber
+                    history.episodeTitle = episodeTitle
+                    history.episodeStillPath = episodeStillPath
+                    history.isCompleted = true
+                }
+            } else {
+                history.currentTime = currentTime
+                history.totalDuration = totalDuration
+                history.seasonNumber = seasonNumber
+                history.episodeNumber = episodeNumber
+                history.episodeTitle = episodeTitle
+                history.episodeStillPath = episodeStillPath
+                history.isCompleted = ratio >= 0.90
             }
 
             try context.save()
@@ -1234,6 +1360,8 @@ final class PlayerViewModel {
     func cleanup() {
         translationTask?.cancel()
         translationTask = nil
+        nextEpisodePrefetchTask?.cancel()
+        nextEpisodePrefetchTask = nil
         seekCommitTask?.cancel()
         seekCommitTask = nil
         hudHideTimer?.invalidate()

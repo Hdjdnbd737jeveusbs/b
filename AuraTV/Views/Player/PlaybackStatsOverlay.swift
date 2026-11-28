@@ -50,12 +50,11 @@ struct PlaybackStatsOverlay: View {
         }
         .padding(18)
         .frame(width: 390)
-        .background(Color(red: 16 / 255, green: 19 / 255, blue: 26 / 255).opacity(0.88), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.auraCardSurface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.auraGlassBorder, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.6), radius: 20, y: 8)
     }
 
     private func statSectionHeader(_ title: String) -> some View {
