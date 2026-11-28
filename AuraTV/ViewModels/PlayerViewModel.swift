@@ -380,7 +380,7 @@ final class PlayerViewModel {
 
         if isPreferencesLoaded {
             didStartSubtitleFetchForCurrentLoad = true
-            Task {
+            Task { @MainActor in
                 await fetchSubtitles()
             }
         }
@@ -478,17 +478,20 @@ final class PlayerViewModel {
 
     // MARK: - Playback Controls
 
+    @MainActor
     func play() {
         isPlaying = true
         resetHUDTimer()
     }
 
+    @MainActor
     func pause() {
         isPlaying = false
         saveProgress()
         showHUD()
     }
 
+    @MainActor
     func togglePlayPause() {
         if isPlaying {
             pause()
@@ -827,6 +830,7 @@ final class PlayerViewModel {
         isBuffering = false
     }
 
+    @MainActor
     func onPlaybackReady(duration: Double) {
         if duration.isFinite, duration > 0, duration < Double(Int.max) {
             totalDuration = duration
@@ -1228,7 +1232,7 @@ final class PlayerViewModel {
         isPreferencesLoaded = true
         if !didStartSubtitleFetchForCurrentLoad, streamURL != nil {
             didStartSubtitleFetchForCurrentLoad = true
-            Task {
+            Task { @MainActor in
                 await fetchSubtitles()
             }
         }

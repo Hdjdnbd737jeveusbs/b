@@ -5,7 +5,7 @@ import SwiftData
 
 struct SearchView: View {
     @Query private var settingsList: [AppSettings]
-    @Bindable var viewModel: SearchViewModel
+    let viewModel: SearchViewModel
     @State private var navMemory = AuraNavigationMemory.shared
     @FocusState private var isFieldFocused: Bool
     @State private var jumpToFirstResultTick: Int = 0
@@ -33,7 +33,10 @@ struct SearchView: View {
                             .font(.system(size: 26, weight: .semibold))
                             .foregroundStyle(Color.auraSecondaryText)
 
-                        TextField("Search movies, series...", text: $viewModel.query)
+                        TextField("Search movies, series...", text: Binding(
+                            get: { viewModel.query },
+                            set: { viewModel.query = $0 }
+                        ))
                             .font(.system(size: 26, weight: .medium))
                             .foregroundStyle(.white)
                             .focused($isFieldFocused)

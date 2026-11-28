@@ -8,7 +8,7 @@ struct MoviesView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
 
-    @Bindable var viewModel: MoviesViewModel
+    let viewModel: MoviesViewModel
     @State private var navMemory = AuraNavigationMemory.shared
 
     init(viewModel: MoviesViewModel = MoviesViewModel()) {

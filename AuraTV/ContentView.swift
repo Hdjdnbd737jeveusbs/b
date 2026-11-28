@@ -70,6 +70,7 @@ struct ContentView: View {
     @State private var seriesViewModel = SeriesViewModel()
     @State private var moviesViewModel = MoviesViewModel()
     @State private var searchViewModel = SearchViewModel()
+    @State private var navMemory = AuraNavigationMemory.shared
 
     @Namespace private var rootFocusScope
 
@@ -129,8 +130,8 @@ struct ContentView: View {
                     NavigationStack {
                         activeTabRootView
                             .navigationDestination(item: Binding(
-                                get: { AuraNavigationMemory.shared.pendingContextNavigation },
-                                set: { AuraNavigationMemory.shared.pendingContextNavigation = $0 }
+                                get: { navMemory.pendingContextNavigation },
+                                set: { navMemory.pendingContextNavigation = $0 }
                             )) { target in
                                 if target.mediaType == "series" {
                                     SeriesDetailView(tmdbId: target.tmdbId, autoPlayOnAppear: target.autoPlay)

@@ -818,7 +818,7 @@ final class AetherPlayerCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self, weak engine] tracks in
                 MainActor.assumeIsolated {
-                    guard let vm = self?.boundViewModel else { return }
+                    guard let self, let vm = self.boundViewModel else { return }
                     vm.availableAudioTracks = tracks.map { track in
                         var details: [String] = []
                         if !track.name.isEmpty {

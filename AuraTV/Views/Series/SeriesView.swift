@@ -6,7 +6,7 @@ import SwiftData
 struct SeriesView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
-    @Bindable var viewModel: SeriesViewModel
+    let viewModel: SeriesViewModel
     @State private var navMemory = AuraNavigationMemory.shared
 
     init(viewModel: SeriesViewModel = SeriesViewModel()) {

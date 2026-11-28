@@ -7,7 +7,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsList: [AppSettings]
     @Query private var artworkOverrides: [CustomArtwork]
-    @Bindable var viewModel: HomeViewModel
+    let viewModel: HomeViewModel
 
     init(viewModel: HomeViewModel = HomeViewModel()) {
         self.viewModel = viewModel
